@@ -1,0 +1,1 @@
+export { EmpresaDetalle } from './Empresas'

@@ -1,0 +1,609 @@
+import { useMemo, useState } from 'react'
+import {
+  AlertTriangle,
+  ArrowLeft,
+  Columns2,
+  FilePlus2,
+  FileText,
+  History,
+  Link2,
+  MessageSquare,
+  Plus,
+  Save,
+  Send,
+  Table2,
+  Trash2,
+} from 'lucide-react'
+import { useApp } from '../context/AppContext'
+import { Button } from '../components/ui/Button'
+import { Modal } from '../components/ui/Modal'
+import { StatusBadge } from '../components/ui/StatusBadge'
+import type {
+  CategoriaDocumento,
+  Documento,
+  SeccionDocumento,
+  VersionDocumento,
+} from '../types'
+
+const PENDIENTE = 'Información pendiente de confirmar'
+const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
+const labelClass = 'mb-1.5 block text-sm font-medium text-slate-700'
+
+const CATEGORIAS: Array<{ id: CategoriaDocumento; titulo: string; elementos: string }> = [
+  {
+    id: 'A',
+    titulo: 'Información general del sistema',
+    elementos: 'Alcance, política, objetivos, contexto, partes interesadas, riesgos y oportunidades',
+  },
+  {
+    id: 'B',
+    titulo: 'Documentación operativa',
+    elementos: 'Procedimientos, instrucciones, fichas de proceso, formatos, matrices y planes',
+  },
+  {
+    id: 'C',
+    titulo: 'Seguimiento y evaluación',
+    elementos: 'No conformidades, auditorías internas y revisión por la dirección',
+  },
+]
+
+const PLANTILLAS: Record<string, string[]> = {
+  'Procedimiento': [
+    'Encabezado y control documental',
+    'Objetivo',
+    'Alcance',
+    'Responsabilidades',
+    'Definiciones',
+    'Recursos',
+    'Desarrollo',
+    'Registros',
+    'Indicadores',
+    'Riesgos',
+    'Referencias',
+    'Historial',
+    'Revisión y aprobación',
+  ],
+  'Instrucción de trabajo': [
+    'Encabezado y control documental',
+    'Objetivo',
+    'Alcance',
+    'Responsable',
+    'Materiales y equipo',
+    'Instrucciones',
+    'Criterios de aceptación',
+    'Registros',
+    'Revisión y aprobación',
+  ],
+  'Ficha de proceso': [
+    'Identificación',
+    'Objetivo',
+    'Alcance',
+    'Entradas',
+    'Actividades',
+    'Salidas',
+    'Recursos',
+    'Controles',
+    'Indicadores',
+    'Riesgos',
+  ],
+  'Formato / lista de verificación': [
+    'Encabezado y control',
+    'Instrucciones de uso',
+    'Datos de identificación',
+    'Criterios de verificación',
+    'Resultado',
+    'Firmas y aprobación',
+  ],
+}
+
+interface Generador {
+  empresaId: string
+  proyectoId: string
+  procesoId: string
+  tipo: Documento['tipo']
+  plantilla: string
+  codigo: string
+  titulo: string
+  edicionNorma: NonNullable<Documento['referenciaNormativa']>
+}
+
+const GENERADOR_VACIO: Generador = {
+  empresaId: '',
+  proyectoId: '',
+  procesoId: '',
+  tipo: 'Procedimiento',
+  plantilla: 'Procedimiento',
+  codigo: '',
+  titulo: '',
+  edicionNorma: 'ISO 9001:2026',
+}
+
+function textoLista(datos?: string[]) {
+  return datos?.length ? datos.join('\n') : PENDIENTE
+}
+
+function crearSecciones(
+  plantilla: string,
+  proceso: ReturnType<typeof useApp>['state']['procesos'][number],
+  codigo: string,
+  edicionNorma: NonNullable<Documento['referenciaNormativa']>,
+): SeccionDocumento[] {
+  const encabezado = `Código: ${codigo || PENDIENTE}\nReferencia normativa: ${edicionNorma}`
+  const contenido: Record<string, string> = {
+    'Encabezado y control documental': encabezado,
+    'Encabezado y control': encabezado,
+    'Identificación': proceso.nombre || PENDIENTE,
+    'Objetivo': proceso.objetivo || proceso.descripcion || PENDIENTE,
+    'Alcance': proceso.alcance || PENDIENTE,
+    'Responsabilidades': proceso.puestoResponsable || PENDIENTE,
+    'Responsable': proceso.puestoResponsable || PENDIENTE,
+    'Recursos': [...(proceso.recursosMateriales || []), ...(proceso.equipos || []), ...(proceso.sistemas || [])].join('\n') || PENDIENTE,
+    'Materiales y equipo': [...(proceso.recursosMateriales || []), ...(proceso.equipos || [])].join('\n') || PENDIENTE,
+    'Desarrollo': proceso.actividades?.map((actividad) => `${actividad.orden}. ${actividad.descripcion}`).join('\n') || PENDIENTE,
+    'Instrucciones': proceso.actividades?.map((actividad) => `${actividad.orden}. ${actividad.descripcion}`).join('\n') || PENDIENTE,
+    'Actividades': proceso.actividades?.map((actividad) => `${actividad.orden}. ${actividad.descripcion}`).join('\n') || PENDIENTE,
+    'Entradas': textoLista(proceso.entradas),
+    'Salidas': textoLista(proceso.salidas),
+    'Registros': textoLista(proceso.registros),
+    'Controles': textoLista(proceso.controles),
+    'Indicadores': textoLista(proceso.indicadores),
+    'Riesgos': textoLista(proceso.riesgos),
+  }
+  return (PLANTILLAS[plantilla] || []).map((titulo, index) => {
+    const esTabla = titulo.includes('Criterios') || titulo.includes('Datos de identificación')
+    return {
+      id: `sec-${Date.now()}-${index}`,
+      titulo,
+      contenido: esTabla ? '' : contenido[titulo] || PENDIENTE,
+      tipo: esTabla ? 'tabla' : 'texto',
+      filas: esTabla ? [['', '']] : undefined,
+    }
+  })
+}
+
+function versionSiguiente(version: string) {
+  const [major = '0', minor = '0'] = version.split('.')
+  return `${major}.${Number(minor) + 1}`
+}
+
+export default function Documentacion() {
+  const { state, dispatch, getEmpresa, getProyecto, getUsuario, showToast } = useApp()
+  const [vista, setVista] = useState<'lista' | 'editor'>('lista')
+  const [documentoId, setDocumentoId] = useState<string | null>(null)
+  const [generadorOpen, setGeneradorOpen] = useState(false)
+  const [generador, setGenerador] = useState<Generador>(GENERADOR_VACIO)
+  const [compararOpen, setCompararOpen] = useState(false)
+  const [versionA, setVersionA] = useState('')
+  const [versionB, setVersionB] = useState('')
+  const [errores, setErrores] = useState<string[]>([])
+  const [comentarioSeccion, setComentarioSeccion] = useState('')
+  const [comentarioTexto, setComentarioTexto] = useState('')
+  const [filtros, setFiltros] = useState({
+    empresa: '',
+    proyecto: '',
+    tipo: '',
+    estado: '',
+    responsable: '',
+    desde: '',
+    hasta: '',
+  })
+
+  const usuarioSesion = state.usuarios.find((item) => item.email === state.currentUser?.email)
+  const usuarioCliente = usuarioSesion?.empresaId ? usuarioSesion : state.usuarios.find((item) => item.rol === 'Usuario Cliente' && item.activo)
+  const empresaClienteId = state.currentRole === 'Usuario Cliente' ? usuarioCliente?.empresaId : undefined
+  const empresasDisponibles = state.empresas.filter((item) => !empresaClienteId || item.id === empresaClienteId)
+  const proyectosDisponibles = state.proyectos.filter((item) => !empresaClienteId || item.empresaId === empresaClienteId)
+  const proyectoIdsDisponibles = new Set(proyectosDisponibles.map((item) => item.id))
+  const documentosDisponibles = state.documentos.filter(
+    (item) =>
+      proyectoIdsDisponibles.has(item.proyectoId) &&
+      (
+        state.currentRole !== 'Usuario Cliente' ||
+        ['Aprobado', 'En corrección', 'Rechazado'].includes(item.estado)
+      ),
+  )
+  const documento = state.documentos.find((item) => item.id === documentoId)
+  const proyectosGenerador = proyectosDisponibles.filter((item) => !generador.empresaId || item.empresaId === generador.empresaId)
+  const procesosGenerador = state.procesos.filter((item) => !generador.proyectoId || item.proyectoId === generador.proyectoId)
+
+  const documentos = useMemo(() => documentosDisponibles.filter((item) => {
+    const proyecto = getProyecto(item.proyectoId)
+    const empresaId = item.empresaId || proyecto?.empresaId
+    if (filtros.empresa && empresaId !== filtros.empresa) return false
+    if (filtros.proyecto && item.proyectoId !== filtros.proyecto) return false
+    if (filtros.tipo && item.tipo !== filtros.tipo) return false
+    if (filtros.estado && item.estado !== filtros.estado) return false
+    if (filtros.responsable && item.creadoPorId !== filtros.responsable) return false
+    if (filtros.desde && fechaISO(item.fechaCreacion) < filtros.desde) return false
+    if (filtros.hasta && fechaISO(item.fechaCreacion) > filtros.hasta) return false
+    return true
+  }), [documentosDisponibles, filtros, getProyecto])
+
+  function generar() {
+    const proceso = state.procesos.find((item) => item.id === generador.procesoId)
+    if (!proceso || !generador.empresaId || !generador.proyectoId || !generador.titulo.trim() || !generador.codigo.trim()) return
+    const ahora = new Date().toLocaleDateString('es-MX')
+    const nuevo: Documento = {
+      id: `doc-${Date.now()}`,
+      codigo: generador.codigo.trim(),
+      nombre: generador.titulo.trim(),
+      tipo: generador.tipo,
+      categoria: 'B',
+      empresaId: generador.empresaId,
+      proyectoId: generador.proyectoId,
+      procesoId: generador.procesoId,
+      estado: 'Borrador',
+      version: '0.1',
+      fechaCreacion: ahora,
+      fechaModificacion: ahora,
+      creadoPorId: state.currentUser?.id || 'usr-001',
+      plantilla: generador.plantilla,
+      referenciaNormativa: generador.edicionNorma,
+      secciones: crearSecciones(generador.plantilla, proceso, generador.codigo, generador.edicionNorma),
+      evidenciasVinculadas: [],
+      comentarios: [],
+      historialVersiones: [],
+      historial: [{
+        id: `evento-${Date.now()}`,
+        fecha: new Date().toLocaleString('es-MX'),
+        autorId: state.currentUser?.id || 'usr-001',
+        accion: 'Borrador generado',
+        detalle: `Creado con la plantilla ${generador.plantilla}.`,
+      }],
+      contenidoPendiente: true,
+      bloqueado: false,
+    }
+    dispatch({ type: 'UPSERT_DOCUMENTO', documento: nuevo })
+    setDocumentoId(nuevo.id)
+    setVista('editor')
+    setGeneradorOpen(false)
+    setGenerador(GENERADOR_VACIO)
+    showToast('Borrador generado con la información disponible del proceso.', 'success')
+  }
+
+  function actualizar(updates: Partial<Documento>) {
+    if (!documento || documento.bloqueado || documento.estado === 'Aprobado') return
+    dispatch({
+      type: 'UPSERT_DOCUMENTO',
+      documento: { ...documento, ...updates, fechaModificacion: new Date().toLocaleDateString('es-MX') },
+    })
+  }
+
+  function guardarBorrador() {
+    if (!documento) return
+    actualizar({
+      estado: 'Borrador',
+      historial: [...(documento.historial || []), {
+        id: `evento-${Date.now()}`,
+        fecha: new Date().toLocaleString('es-MX'),
+        autorId: state.currentUser?.id || 'usr-001',
+        accion: 'Borrador guardado',
+        detalle: 'Cambios conservados en la sesión local.',
+      }],
+    })
+    showToast('Borrador guardado en esta sesión.', 'success')
+  }
+
+  function enviarRevision() {
+    if (!documento) return
+    const faltantes: string[] = []
+    if (!documento.codigo?.trim() || documento.codigo.includes(PENDIENTE)) faltantes.push('Código')
+    if (!documento.nombre.trim()) faltantes.push('Título')
+    if (!documento.empresaId) faltantes.push('Empresa')
+    if (!documento.proyectoId) faltantes.push('Proyecto')
+    if (!documento.creadoPorId) faltantes.push('Elaborador')
+    if (!documento.motivoCambio?.trim()) faltantes.push('Motivo de creación o cambio')
+    if (!documento.secciones?.length) faltantes.push('Secciones')
+    if (documento.secciones?.some((seccion) =>
+      seccion.tipo === 'tabla'
+        ? !seccion.filas?.length || seccion.filas.some((fila) => fila.some((celda) => !celda.trim()))
+        : !seccion.contenido.trim() || seccion.contenido.includes(PENDIENTE)
+    )) {
+      faltantes.push('Información pendiente de confirmar')
+    }
+    setErrores(faltantes)
+    if (faltantes.length) return
+    const snapshot: VersionDocumento = {
+      version: documento.version,
+      fecha: new Date().toLocaleDateString('es-MX'),
+      autorId: state.currentUser?.id || 'usr-001',
+      comentario: documento.motivoCambio || 'Envío a revisión',
+      motivo: documento.motivoCambio || 'Envío a revisión',
+      secciones: documento.secciones?.map((seccion) => ({ ...seccion, filas: seccion.filas?.map((fila) => [...fila]) })),
+      estado: 'Pendiente de revisión',
+    }
+    actualizar({
+      estado: 'Pendiente de revisión',
+      fechaRevision: new Date().toLocaleDateString('es-MX'),
+      historialVersiones: [...documento.historialVersiones.filter((item) => item.version !== snapshot.version), snapshot],
+      historial: [...(documento.historial || []), {
+        id: `evento-${Date.now()}`,
+        fecha: new Date().toLocaleString('es-MX'),
+        autorId: state.currentUser?.id || 'usr-001',
+        accion: 'Enviado a revisión',
+        detalle: `Versión ${documento.version}.`,
+      }],
+    })
+    showToast('Documento enviado al flujo de revisión.', 'success')
+  }
+
+  function nuevaVersion() {
+    if (!documento) return
+    const nueva: Documento = {
+      ...documento,
+      id: `doc-${Date.now()}`,
+      version: versionSiguiente(documento.version),
+      estado: 'Borrador',
+      bloqueado: false,
+      aprobadoPorId: undefined,
+      fechaAprobacion: undefined,
+      fechaRevision: undefined,
+      motivoCambio: '',
+      comentarios: [],
+      historial: [{
+        id: `evento-${Date.now()}`,
+        fecha: new Date().toLocaleString('es-MX'),
+        autorId: state.currentUser?.id || 'usr-001',
+        accion: 'Nueva versión creada',
+        detalle: `Derivada de la versión ${documento.version}.`,
+      }],
+    }
+    dispatch({ type: 'UPSERT_DOCUMENTO', documento: nueva })
+    setDocumentoId(nueva.id)
+    showToast(`Versión ${nueva.version} creada como borrador.`, 'success')
+  }
+
+  function abrirDocumento(item: Documento) {
+    const proyecto = getProyecto(item.proyectoId)
+    const normalizado: Documento = {
+      ...item,
+      codigo: item.codigo || PENDIENTE,
+      empresaId: item.empresaId || proyecto?.empresaId,
+      categoria: item.categoria || 'B',
+      secciones: item.secciones || [{
+        id: `sec-${item.id}`,
+        titulo: 'Contenido disponible',
+        contenido: PENDIENTE,
+        tipo: 'texto',
+      }],
+      evidenciasVinculadas: item.evidenciasVinculadas || [],
+      comentarios: item.comentarios || [],
+      historial: item.historial || [],
+      bloqueado: item.bloqueado ?? item.estado === 'Aprobado',
+    }
+    dispatch({ type: 'UPSERT_DOCUMENTO', documento: normalizado })
+    setDocumentoId(item.id)
+    setVista('editor')
+  }
+
+  if (vista === 'editor' && documento) {
+    return (
+      <EditorDocumento
+        documento={documento}
+        actualizar={actualizar}
+        volver={() => { setVista('lista'); setErrores([]) }}
+        guardar={guardarBorrador}
+        enviar={enviarRevision}
+        nuevaVersion={nuevaVersion}
+        errores={errores}
+        evidencias={state.evidencias.filter((item) => item.proyectoId === documento.proyectoId)}
+        usuarioId={state.currentUser?.id || 'usr-001'}
+        comentarioSeccion={comentarioSeccion}
+        setComentarioSeccion={setComentarioSeccion}
+        comentarioTexto={comentarioTexto}
+        setComentarioTexto={setComentarioTexto}
+        abrirComparacion={() => {
+          const versiones = documento.historialVersiones
+          setVersionA(versiones[0]?.version || '')
+          setVersionB(versiones.at(-1)?.version || '')
+          setCompararOpen(true)
+        }}
+      >
+        <Comparador
+          open={compararOpen}
+          onClose={() => setCompararOpen(false)}
+          documento={documento}
+          referenciaNormativa={documento.referenciaNormativa || getProyecto(documento.proyectoId)?.edicionNorma || 'ISO 9001:2026'}
+          versionA={versionA}
+          versionB={versionB}
+          setVersionA={setVersionA}
+          setVersionB={setVersionB}
+          getUsuario={getUsuario}
+        />
+      </EditorDocumento>
+    )
+  }
+
+  return (
+    <div className="p-4 sm:p-6">
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wider text-blue-600">Flujo E</p>
+          <h2 className="mt-1 text-xl font-bold text-navy">Documentación del SGC</h2>
+          <p className="mt-1 text-sm text-slate-500">Control de borradores, versiones y documentos aprobados.</p>
+        </div>
+        {state.currentRole !== 'Usuario Cliente' && <Button onClick={() => setGeneradorOpen(true)} icon={<FilePlus2 className="h-4 w-4" />}>Generar borrador</Button>}
+      </div>
+
+      <div className="mb-5 rounded-xl border border-blue-200 bg-blue-50 p-4">
+        <p className="font-semibold text-blue-900">Categorías documentales</p>
+        <p className="mt-1 text-sm text-blue-700">No todos los documentos son obligatorios. Cada organización determina cuáles necesita según su contexto, procesos, riesgos y requisitos aplicables.</p>
+        <div className="mt-4 grid gap-3 lg:grid-cols-3">
+          {CATEGORIAS.map((categoria) => <div key={categoria.id} className="rounded-lg border border-blue-100 bg-white p-3"><p className="text-sm font-semibold text-slate-800">({categoria.id}) {categoria.titulo}</p><p className="mt-1 text-xs leading-relaxed text-slate-500">{categoria.elementos}</p></div>)}
+        </div>
+      </div>
+
+      <div className="mb-4 grid gap-2 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
+        <select className={inputClass} value={filtros.empresa} onChange={(event) => setFiltros({ ...filtros, empresa: event.target.value, proyecto: '' })}><option value="">Empresa</option>{empresasDisponibles.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select>
+        <select className={inputClass} value={filtros.proyecto} onChange={(event) => setFiltros({ ...filtros, proyecto: event.target.value })}><option value="">Proyecto</option>{proyectosDisponibles.filter((item) => !filtros.empresa || item.empresaId === filtros.empresa).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select>
+        <select className={inputClass} value={filtros.tipo} onChange={(event) => setFiltros({ ...filtros, tipo: event.target.value })}><option value="">Tipo</option>{[...new Set(documentosDisponibles.map((item) => item.tipo))].map((item) => <option key={item}>{item}</option>)}</select>
+        <select className={inputClass} value={filtros.estado} onChange={(event) => setFiltros({ ...filtros, estado: event.target.value })}><option value="">Estado</option>{['Borrador', 'En elaboración', 'Pendiente de revisión', 'En corrección', 'Aprobado', 'Rechazado', 'Obsoleto'].map((item) => <option key={item}>{item}</option>)}</select>
+        <select className={inputClass} value={filtros.responsable} onChange={(event) => setFiltros({ ...filtros, responsable: event.target.value })}><option value="">Responsable</option>{[...new Set(documentosDisponibles.map((item) => item.creadoPorId))].map((id) => <option key={id} value={id}>{getUsuario(id)?.nombre || id}</option>)}</select>
+        <input type="date" className={inputClass} value={filtros.desde} onChange={(event) => setFiltros({ ...filtros, desde: event.target.value })} aria-label="Fecha inicial" />
+        <input type="date" className={inputClass} value={filtros.hasta} onChange={(event) => setFiltros({ ...filtros, hasta: event.target.value })} aria-label="Fecha final" />
+      </div>
+
+      <div className="overflow-x-auto rounded-xl border border-line bg-white">
+        <table className="min-w-[1500px] w-full text-sm">
+          <thead><tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">{['Código', 'Título', 'Tipo', 'Empresa', 'Proyecto', 'Referencia normativa', 'Proceso', 'Elaborador', 'Creación', 'Versión', 'Estado', 'Revisión', 'Aprobador'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead>
+          <tbody>{documentos.map((item) => {
+            const proyecto = getProyecto(item.proyectoId)
+            const empresa = getEmpresa(item.empresaId || proyecto?.empresaId || '')
+            const proceso = state.procesos.find((procesoItem) => procesoItem.id === item.procesoId)
+            return <tr key={item.id} onClick={() => abrirDocumento(item)} className="cursor-pointer border-b border-line last:border-0 hover:bg-blue-50/40"><td className="px-4 py-3 font-mono text-xs text-blue-600">{item.codigo || PENDIENTE}</td><td className="max-w-64 px-4 py-3 font-medium text-slate-800">{item.nombre}</td><td className="px-4 py-3">{item.tipo}</td><td className="px-4 py-3">{empresa?.nombreComercial || empresa?.nombre || '—'}</td><td className="max-w-52 truncate px-4 py-3">{proyecto?.nombre || '—'}</td><td className="whitespace-nowrap px-4 py-3">{item.referenciaNormativa || proyecto?.edicionNorma || '—'}</td><td className="px-4 py-3">{proceso?.nombre || '—'}</td><td className="px-4 py-3">{getUsuario(item.creadoPorId)?.nombre || '—'}</td><td className="px-4 py-3">{item.fechaCreacion}</td><td className="px-4 py-3">{item.version}</td><td className="px-4 py-3"><StatusBadge status={item.estado} size="sm" /></td><td className="px-4 py-3">{item.fechaRevision || (item.revisadoPorId ? getUsuario(item.revisadoPorId)?.nombre : '—')}</td><td className="px-4 py-3">{item.aprobadoPorId ? getUsuario(item.aprobadoPorId)?.nombre : '—'}</td></tr>
+          })}</tbody>
+        </table>
+      </div>
+
+      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={!generador.empresaId || !generador.proyectoId || !generador.procesoId || !generador.codigo.trim() || !generador.titulo.trim()}>Generar borrador</Button></>}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label><span className={labelClass}>Empresa *</span><select className={inputClass} value={generador.empresaId} onChange={(event) => setGenerador({ ...GENERADOR_VACIO, empresaId: event.target.value })}><option value="">Selecciona</option>{state.empresas.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+          <label><span className={labelClass}>Proyecto *</span><select className={inputClass} value={generador.proyectoId} disabled={!generador.empresaId} onChange={(event) => { const proyecto = state.proyectos.find((item) => item.id === event.target.value); setGenerador({ ...generador, proyectoId: event.target.value, procesoId: '', edicionNorma: proyecto?.edicionNorma || 'ISO 9001:2026' }) }}><option value="">Selecciona</option>{proyectosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+          <label><span className={labelClass}>Referencia normativa *</span><select className={inputClass} value={generador.edicionNorma} disabled={Boolean(generador.proyectoId)} onChange={(event) => setGenerador({ ...generador, edicionNorma: event.target.value as Generador['edicionNorma'] })}><option value="ISO 9001:2026">ISO 9001:2026 (vigente)</option><option value="ISO 9001:2015">ISO 9001:2015 (en transición)</option></select></label>
+          <label><span className={labelClass}>Proceso *</span><select className={inputClass} value={generador.procesoId} disabled={!generador.proyectoId} onChange={(event) => setGenerador({ ...generador, procesoId: event.target.value })}><option value="">Selecciona</option>{procesosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+          <label><span className={labelClass}>Tipo *</span><select className={inputClass} value={generador.tipo} onChange={(event) => setGenerador({ ...generador, tipo: event.target.value as Documento['tipo'] })}>{['Procedimiento', 'Instrucción de trabajo', 'Ficha de proceso', 'Formato', 'Lista de verificación', 'Manual', 'Política'].map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label><span className={labelClass}>Plantilla *</span><select className={inputClass} value={generador.plantilla} onChange={(event) => setGenerador({ ...generador, plantilla: event.target.value })}>{Object.keys(PLANTILLAS).map((item) => <option key={item}>{item}</option>)}</select></label>
+          <label><span className={labelClass}>Código *</span><input className={inputClass} value={generador.codigo} onChange={(event) => setGenerador({ ...generador, codigo: event.target.value })} placeholder="Ej. PR-COM-01" /></label>
+          <label className="sm:col-span-2"><span className={labelClass}>Título *</span><input className={inputClass} value={generador.titulo} onChange={(event) => setGenerador({ ...generador, titulo: event.target.value })} /></label>
+          {generador.edicionNorma === 'ISO 9001:2015' && <p className="sm:col-span-2 text-xs text-amber-700">Este proyecto usa la edición ISO 9001:2015 (en transición).</p>}
+          <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">La plantilla se precargará exclusivamente con información existente. Los datos ausentes se marcarán como “{PENDIENTE}”.</div>
+        </div>
+      </Modal>
+    </div>
+  )
+}
+
+interface EditorProps {
+  documento: Documento
+  referenciaNormativa: NonNullable<Documento['referenciaNormativa']>
+  actualizar: (updates: Partial<Documento>) => void
+  volver: () => void
+  guardar: () => void
+  enviar: () => void
+  nuevaVersion: () => void
+  errores: string[]
+  evidencias: ReturnType<typeof useApp>['state']['evidencias']
+  usuarioId: string
+  comentarioSeccion: string
+  setComentarioSeccion: (value: string) => void
+  comentarioTexto: string
+  setComentarioTexto: (value: string) => void
+  abrirComparacion: () => void
+  children: React.ReactNode
+}
+
+function EditorDocumento(props: EditorProps) {
+  const { documento, actualizar } = props
+  const bloqueado = documento.bloqueado || documento.estado === 'Aprobado'
+
+  function actualizarSeccion(id: string, updates: Partial<SeccionDocumento>) {
+    actualizar({ secciones: documento.secciones?.map((item) => item.id === id ? { ...item, ...updates } : item) })
+  }
+
+  function agregarSeccion(tipo: 'texto' | 'tabla') {
+    actualizar({
+      secciones: [...(documento.secciones || []), {
+        id: `sec-${Date.now()}`,
+        titulo: '',
+        contenido: '',
+        tipo,
+        filas: tipo === 'tabla' ? [['', '']] : undefined,
+      }],
+    })
+  }
+
+  function agregarComentario() {
+    if (!props.comentarioSeccion || !props.comentarioTexto.trim()) return
+    actualizar({
+      comentarios: [...(documento.comentarios || []), {
+        id: `comentario-${Date.now()}`,
+        seccionId: props.comentarioSeccion,
+        autorId: props.usuarioId,
+        fecha: new Date().toLocaleString('es-MX'),
+        texto: props.comentarioTexto.trim(),
+      }],
+    })
+    props.setComentarioTexto('')
+  }
+
+  return (
+    <div className="p-4 sm:p-6">
+      <div className="sticky top-14 z-10 mb-5 flex items-start gap-3 rounded-xl border border-amber-300 bg-amber-50 p-4 text-sm text-amber-900 shadow-sm">
+        <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0" />
+        <p className="font-semibold">Documento preliminar. Requiere revisión y aprobación de los responsables autorizados antes de su uso oficial.</p>
+      </div>
+      <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <Button variant="ghost" size="sm" onClick={props.volver} icon={<ArrowLeft className="h-4 w-4" />}>Volver al listado</Button>
+          <div className="mt-2 flex items-center gap-2"><StatusBadge status={documento.estado} /><span className="text-xs text-slate-400">{documento.codigo} · Versión {documento.version}</span></div>
+          <h2 className="mt-2 text-xl font-bold text-navy">{documento.nombre}</h2>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={props.abrirComparacion} disabled={documento.historialVersiones.length < 1} icon={<Columns2 className="h-4 w-4" />}>Comparar versiones</Button>
+          <Button variant="outline" disabled>Exportar PDF · Requiere integración</Button>
+          <Button variant="outline" disabled>Exportar Word · Requiere integración</Button>
+          {bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
+        </div>
+      </div>
+
+      {bloqueado && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">La versión aprobada está bloqueada para edición directa. Crea una nueva versión para realizar cambios.</div>}
+      {props.errores.length > 0 && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p className="font-semibold">No se puede enviar a revisión:</p><p>{props.errores.join(', ')}.</p></div>}
+      <div className="mb-5 grid gap-4 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
+        <label><span className={labelClass}>Código documental *</span><input disabled={bloqueado} className={inputClass} value={documento.codigo || ''} onChange={(event) => actualizar({ codigo: event.target.value })} /></label>
+        <label><span className={labelClass}>Referencia normativa</span><input disabled className={inputClass} value={props.referenciaNormativa} /></label>
+        <label><span className={labelClass}>Título *</span><input disabled={bloqueado} className={inputClass} value={documento.nombre} onChange={(event) => actualizar({ nombre: event.target.value })} /></label>
+        {props.referenciaNormativa === 'ISO 9001:2015' && <p className="sm:col-span-2 lg:col-span-3 text-xs text-amber-700">Este proyecto usa la edición ISO 9001:2015 (en transición).</p>}
+        <label className="sm:col-span-2 lg:col-span-3"><span className={labelClass}>Motivo de creación o cambio</span><input disabled={bloqueado} className={inputClass} value={documento.motivoCambio || ''} onChange={(event) => actualizar({ motivoCambio: event.target.value })} placeholder="Describe brevemente el motivo de esta versión." /></label>
+      </div>
+
+      <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <main className="space-y-4">
+          {(documento.secciones || []).map((seccion, index) => (
+            <section key={seccion.id} className="rounded-xl border border-line bg-white p-5 shadow-sm">
+              <div className="mb-3 flex items-center gap-3">
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-600">{index + 1}</span>
+                <input disabled={bloqueado} value={seccion.titulo} onChange={(event) => actualizarSeccion(seccion.id, { titulo: event.target.value })} className="flex-1 border-0 bg-transparent text-base font-semibold text-slate-800 outline-none" placeholder="Título de la sección" />
+                {!bloqueado && <Button variant="ghost" size="sm" onClick={() => actualizar({ secciones: documento.secciones?.filter((item) => item.id !== seccion.id) })} aria-label="Eliminar sección" icon={<Trash2 className="h-4 w-4 text-red-500" />} />}
+              </div>
+              {seccion.tipo === 'texto' ? <textarea disabled={bloqueado} rows={5} value={seccion.contenido} onChange={(event) => actualizarSeccion(seccion.id, { contenido: event.target.value })} className={`${inputClass} leading-relaxed ${seccion.contenido.includes(PENDIENTE) ? 'border-amber-300 bg-amber-50' : ''}`} /> : <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>{(seccion.filas || []).map((fila, filaIndex) => <tr key={filaIndex}>{fila.map((celda, columnaIndex) => <td key={columnaIndex} className="border border-line p-1"><input disabled={bloqueado} value={celda} onChange={(event) => { const filas = seccion.filas?.map((item) => [...item]) || []; filas[filaIndex][columnaIndex] = event.target.value; actualizarSeccion(seccion.id, { filas }) }} className="w-full px-2 py-1 outline-none" placeholder={PENDIENTE} /></td>)}</tr>)}</tbody></table>{!bloqueado && <Button variant="ghost" size="sm" className="mt-2" onClick={() => actualizarSeccion(seccion.id, { filas: [...(seccion.filas || []), Array(seccion.filas?.[0]?.length || 2).fill('')] })} icon={<Plus className="h-4 w-4" />}>Agregar fila</Button>}</div>}
+              {(documento.comentarios || []).filter((item) => item.seccionId === seccion.id).map((item) => <div key={item.id} className="mt-3 flex gap-2 rounded-lg bg-violet-50 p-3 text-xs text-violet-800"><MessageSquare className="h-4 w-4 shrink-0" /><span>{item.texto}</span></div>)}
+            </section>
+          ))}
+          {!bloqueado && <div className="flex gap-2"><Button variant="outline" onClick={() => agregarSeccion('texto')} icon={<Plus className="h-4 w-4" />}>Agregar sección</Button><Button variant="outline" onClick={() => agregarSeccion('tabla')} icon={<Table2 className="h-4 w-4" />}>Agregar tabla</Button></div>}
+        </main>
+
+        <aside className="space-y-4">
+          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><Link2 className="h-4 w-4" />Evidencias vinculadas</p><div className="max-h-56 space-y-2 overflow-y-auto">{props.evidencias.length === 0 ? <p className="text-xs text-slate-400">No hay evidencias del proyecto.</p> : props.evidencias.map((item) => <label key={item.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-xs"><input disabled={bloqueado} type="checkbox" checked={documento.evidenciasVinculadas?.includes(item.id)} onChange={(event) => actualizar({ evidenciasVinculadas: event.target.checked ? [...(documento.evidenciasVinculadas || []), item.id] : documento.evidenciasVinculadas?.filter((id) => id !== item.id) })} /><span>{item.nombre}</span></label>)}</div></div>
+          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><MessageSquare className="h-4 w-4" />Agregar comentario</p><select disabled={bloqueado} className={inputClass} value={props.comentarioSeccion} onChange={(event) => props.setComentarioSeccion(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea disabled={bloqueado} rows={3} className={`${inputClass} mt-2`} value={props.comentarioTexto} onChange={(event) => props.setComentarioTexto(event.target.value)} placeholder="Escribe un comentario anclado..." /><Button disabled={bloqueado || !props.comentarioSeccion || !props.comentarioTexto.trim()} className="mt-2 w-full" size="sm" onClick={agregarComentario}>Agregar comentario</Button></div>
+          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><History className="h-4 w-4" />Historial completo</p><div className="space-y-3">{(documento.historial || []).length === 0 ? <p className="text-xs text-slate-400">Sin eventos registrados.</p> : documento.historial?.slice().reverse().map((item) => <div key={item.id} className="border-l-2 border-blue-200 pl-3"><p className="text-xs font-medium text-slate-700">{item.accion}</p><p className="mt-0.5 text-[10px] text-slate-400">{item.fecha}</p><p className="mt-1 text-xs text-slate-500">{item.detalle}</p></div>)}</div></div>
+        </aside>
+      </div>
+      {props.children}
+    </div>
+  )
+}
+
+function Comparador({ open, onClose, documento, versionA, versionB, setVersionA, setVersionB, getUsuario }: {
+  open: boolean
+  onClose: () => void
+  documento: Documento
+  versionA: string
+  versionB: string
+  setVersionA: (value: string) => void
+  setVersionB: (value: string) => void
+  getUsuario: ReturnType<typeof useApp>['getUsuario']
+}) {
+  const a = documento.historialVersiones.find((item) => item.version === versionA)
+  const b = documento.historialVersiones.find((item) => item.version === versionB)
+  return <Modal open={open} onClose={onClose} title="Comparación de versiones" size="xl"><div className="space-y-4"><div className="grid gap-3 sm:grid-cols-2"><select className={inputClass} value={versionA} onChange={(event) => setVersionA(event.target.value)}>{documento.historialVersiones.map((item) => <option key={item.version}>{item.version}</option>)}</select><select className={inputClass} value={versionB} onChange={(event) => setVersionB(event.target.value)}>{documento.historialVersiones.map((item) => <option key={item.version}>{item.version}</option>)}</select></div><div className="grid gap-4 lg:grid-cols-2"><VersionPanel version={a} otra={b} getUsuario={getUsuario} /><VersionPanel version={b} otra={a} getUsuario={getUsuario} /></div></div></Modal>
+}
+
+function VersionPanel({ version, otra, getUsuario }: { version?: VersionDocumento; otra?: VersionDocumento; getUsuario: ReturnType<typeof useApp>['getUsuario'] }) {
+  if (!version) return <div className="rounded-lg border border-dashed border-line p-8 text-center text-sm text-slate-400">Selecciona una versión.</div>
+  return <div className="rounded-xl border border-line"><div className="border-b border-line bg-slate-50 p-4"><p className="font-semibold">Versión {version.version}</p><p className="mt-1 text-xs text-slate-400">{version.fecha} · {getUsuario(version.autorId)?.nombre || version.autorId}</p><p className="mt-1 text-xs text-slate-500">Motivo: {version.motivo || version.comentario}</p></div><div className="space-y-3 p-4">{version.secciones?.length ? version.secciones.map((seccion) => { const comparada = otra?.secciones?.find((item) => item.titulo === seccion.titulo); const cambio = comparada?.contenido !== seccion.contenido; return <div key={seccion.id} className={`rounded-lg border p-3 ${cambio ? 'border-amber-300 bg-amber-50' : 'border-line'}`}><p className="text-xs font-semibold text-slate-700">{seccion.titulo}</p><p className="mt-2 whitespace-pre-wrap text-xs text-slate-600">{seccion.contenido}</p>{cambio && <p className="mt-2 text-[10px] font-semibold uppercase text-amber-700">Cambio detectado</p>}</div> }) : <p className="text-sm text-slate-400">Esta versión histórica no contiene una instantánea de secciones.</p>}</div></div>
+}
+
+function fechaISO(fecha: string) {
+  const [dia, mes, anio] = fecha.split('/')
+  return anio && mes && dia ? `${anio}-${mes.padStart(2, '0')}-${dia.padStart(2, '0')}` : fecha
+}
