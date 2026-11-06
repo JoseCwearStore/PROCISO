@@ -142,24 +142,19 @@ from (values
 ) as f (proyecto_id, nombre, estado, avance, orden)
 join public.proyectos p on p.id = f.proyecto_id;
 
--- ─── Procesos y actividades (Marketino) ─────────────────────────────────────
+-- ─── Procesos (los mismos 6 de src/data/demo.ts) ─────────────────────────────
 
-insert into public.procesos (id, consultoria_id, proyecto_id, responsable_id, nombre, descripcion, estado, objetivo,
-                             entradas, salidas, clientes, indicadores, riesgos) values
-  ('55555555-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   'aaaaaaaa-0000-0000-0000-000000000005', 'Ventas', 'Atención a prospectos y cierre de contratos', 'Documentado',
-   'Convertir prospectos en clientes con propuestas claras',
-   '{"Solicitud del cliente","Brief de campaña"}', '{"Propuesta comercial","Contrato firmado"}',
-   '{"Clientes corporativos"}', '{"Tasa de cierre","Tiempo de respuesta"}', '{"Propuesta con alcance mal definido"}'),
-  ('55555555-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   'aaaaaaaa-0000-0000-0000-000000000005', 'Compras', 'Adquisición de servicios y licencias', 'En levantamiento',
-   'Asegurar proveedores confiables', '{"Requisición"}', '{"Orden de compra"}', '{}', '{"Entregas a tiempo"}', '{}');
-
-insert into public.actividades (consultoria_id, proyecto_id, proceso_id, tipo, descripcion, resultado, orden) values
-  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Inicio',    'Recibir solicitud del cliente',          'Solicitud registrada', 1),
-  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Actividad', 'Elaborar propuesta comercial',           'Propuesta',            2),
-  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Decisión',  '¿El cliente acepta la propuesta?',       'Sí / No',              3),
-  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Fin',       'Firmar contrato',                        'Contrato firmado',     4);
+-- Generado desde src/data/demo.ts (PROCESOS). proc-00N → 5555…00N.
+insert into public.procesos (id, consultoria_id, proyecto_id, responsable_id, nombre, descripcion, estado, fecha_levantamiento,
+                             objetivo, alcance, puesto_responsable, personal_involucrado,
+                             entradas, salidas, proveedores, clientes, recursos_materiales, equipos, sistemas, controles,
+                             registros, indicadores, riesgos, problemas, observaciones, mejoras, no_aplica) values
+  ('55555555-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Gestión de compras y proveedores', 'Proceso para la selección, evaluación y seguimiento de proveedores.', 'Documentado', '2024-03-20', null, null, null, null, array['Necesidad de compra', 'Catálogo de proveedores aprobados']::text[], array['Orden de compra autorizada', 'Evaluación de proveedor']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
+  ('55555555-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Control de producción', 'Proceso de planificación, control y seguimiento de la producción.', 'Revisado', '2024-04-05', null, null, null, null, array['Plan de producción', 'Materias primas']::text[], array['Producto terminado', 'Registros de producción']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
+  ('55555555-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Atención al cliente y postventa', 'Proceso para la recepción y atención de quejas y reclamaciones de clientes.', 'En levantamiento', '2024-05-18', null, null, null, null, array['Solicitud del cliente']::text[], array['Respuesta al cliente', 'Registro de satisfacción']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
+  ('55555555-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Gestión de recursos humanos', 'Proceso de reclutamiento, selección, capacitación y evaluación del personal.', 'Pendiente', null, null, null, null, null, array['Requerimiento de personal']::text[], array['Personal contratado']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
+  ('55555555-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000006', 'Recepción y almacenamiento de mercancía', 'Recepción, inspección y almacenamiento de productos.', 'En levantamiento', '2024-09-10', null, null, null, null, array['Guía de remisión']::text[], array['Producto almacenado']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
+  ('55555555-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000006', 'Despacho y entrega a clientes', 'Preparación de pedidos y entrega de mercancía a clientes.', 'Pendiente', null, null, null, null, null, array['Pedido confirmado']::text[], array['Entrega confirmada']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb);
 
 -- ─── Evidencias (solo metadatos; los archivos llegan con la integración de Storage) ─
 

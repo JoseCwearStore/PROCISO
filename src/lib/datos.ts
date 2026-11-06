@@ -1,4 +1,5 @@
 import type {
+  ActividadProceso,
   Consultoria,
   Documento,
   Empresa,
@@ -99,6 +100,48 @@ export interface FilaMiembro {
   usuario_id: string
 }
 
+export interface FilaProceso {
+  id: string
+  proyecto_id: string
+  responsable_id: string | null
+  nombre: string
+  descripcion: string | null
+  estado: Proceso['estado']
+  fecha_levantamiento: string | null
+  objetivo: string | null
+  alcance: string | null
+  puesto_responsable: string | null
+  personal_involucrado: string | null
+  entradas: string[]
+  salidas: string[]
+  proveedores: string[]
+  clientes: string[]
+  recursos_materiales: string[]
+  equipos: string[]
+  sistemas: string[]
+  controles: string[]
+  registros: string[]
+  indicadores: string[]
+  riesgos: string[]
+  problemas: string[]
+  observaciones: string | null
+  mejoras: string | null
+  no_aplica: Record<string, string>
+}
+
+export interface FilaActividad {
+  id: string
+  proceso_id: string
+  responsable_id: string | null
+  tipo: ActividadProceso['tipo']
+  descripcion: string
+  entradas: string | null
+  recursos: string | null
+  controles: string | null
+  resultado: string | null
+  orden: number
+}
+
 export interface FilasSesion {
   consultorias: FilaConsultoria[]
   empresas: FilaEmpresa[]
@@ -106,11 +149,12 @@ export interface FilasSesion {
   proyectos: FilaProyecto[]
   fases: FilaFase[]
   miembros: FilaMiembro[]
+  procesos: FilaProceso[]
+  actividades: FilaActividad[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
 export interface DatosDemo {
-  procesos: Proceso[]
   evidencias: Evidencia[]
   documentos: Documento[]
   tareas: Tarea[]
@@ -125,6 +169,7 @@ export interface DatosSesion extends DatosDemo {
   empresas: Empresa[]
   usuarios: Usuario[]
   proyectos: Proyecto[]
+  procesos: Proceso[]
 }
 
 // ─── Lectura ────────────────────────────────────────────────────────────────
@@ -142,6 +187,8 @@ const CONSULTAS = {
   proyectos: ['proyectos', '*'],
   fases: ['fases', 'id, proyecto_id, nombre, estado, avance, orden'],
   miembros: ['proyecto_miembros', 'proyecto_id, usuario_id'],
+  procesos: ['procesos', '*'],
+  actividades: ['actividades', 'id, proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden'],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
@@ -249,6 +296,62 @@ export function traducirProyecto(fila: FilaProyecto, fases: FilaFase[], miembros
   }
 }
 
+function traducirActividad(fila: FilaActividad): ActividadProceso {
+  return {
+    id: fila.id,
+    tipo: fila.tipo,
+    responsableId: opcional(fila.responsable_id),
+    descripcion: fila.descripcion,
+    entradas: fila.entradas ?? '',
+    recursos: fila.recursos ?? '',
+    controles: fila.controles ?? '',
+    resultado: fila.resultado ?? '',
+    orden: fila.orden,
+  }
+}
+
+export function traducirProceso(
+  fila: FilaProceso,
+  actividades: FilaActividad[],
+  evidencias: { id: string; procesoId?: string }[],
+  documentos: { id: string; procesoId?: string }[],
+): Proceso {
+  return {
+    id: fila.id,
+    nombre: fila.nombre,
+    proyectoId: fila.proyecto_id,
+    responsableId: fila.responsable_id ?? '',
+    estado: fila.estado,
+    descripcion: fila.descripcion ?? '',
+    fechaLevantamiento: fila.fecha_levantamiento ? formatearFecha(fila.fecha_levantamiento) : undefined,
+    evidenciasIds: evidencias.filter((e) => e.procesoId === fila.id).map((e) => e.id),
+    documentosIds: documentos.filter((d) => d.procesoId === fila.id).map((d) => d.id),
+    entradas: fila.entradas,
+    salidas: fila.salidas,
+    objetivo: opcional(fila.objetivo),
+    alcance: opcional(fila.alcance),
+    puestoResponsable: opcional(fila.puesto_responsable),
+    personalInvolucrado: opcional(fila.personal_involucrado),
+    proveedores: fila.proveedores,
+    clientes: fila.clientes,
+    recursosMateriales: fila.recursos_materiales,
+    equipos: fila.equipos,
+    sistemas: fila.sistemas,
+    controles: fila.controles,
+    registros: fila.registros,
+    indicadores: fila.indicadores,
+    riesgos: fila.riesgos,
+    problemas: fila.problemas,
+    observaciones: opcional(fila.observaciones),
+    mejoras: opcional(fila.mejoras),
+    noAplica: fila.no_aplica,
+    actividades: actividades
+      .filter((a) => a.proceso_id === fila.id)
+      .sort((a, b) => a.orden - b.orden)
+      .map(traducirActividad),
+  }
+}
+
 function proyectosDelUsuario(perfil: FilaPerfil, filas: FilasSesion): string[] {
   const { proyectos, miembros } = filas
   switch (perfil.rol) {
@@ -286,7 +389,6 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
   const delProyectoVisible = <T extends { proyectoId: string }>(lista: T[]) =>
     lista.filter((item) => proyectosVisibles.has(item.proyectoId))
 
-  const procesos = delProyectoVisible(demo.procesos)
   const evidencias = delProyectoVisible(demo.evidencias)
   const documentos = delProyectoVisible(demo.documentos)
   const tareas = delProyectoVisible(demo.tareas)
@@ -304,7 +406,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     empresas: filas.empresas.map((fila) => traducirEmpresa(fila, filas.proyectos)),
     usuarios: filas.perfiles.map((perfil) => traducirUsuario(perfil, filas)),
     proyectos: filas.proyectos.map((fila) => traducirProyecto(fila, filas.fases, filas.miembros)),
-    procesos,
+    procesos: filas.procesos.map((fila) => traducirProceso(fila, filas.actividades, evidencias, documentos)),
     evidencias,
     documentos,
     tareas,

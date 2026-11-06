@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type NuevoProyecto } from './escrituras'
 import type { FilaEmpresa, FilaProyecto } from './datos'
+import type { Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
 const E_NUEVA = '22222222-0000-0000-0000-0000000000aa'
@@ -37,7 +38,7 @@ type Respuesta = { data: unknown; error: { code?: string; message: string } | nu
 
 interface Llamada {
   tabla: string
-  operacion: 'insert' | 'update'
+  operacion: 'insert' | 'update' | 'rpc'
   datos: Record<string, unknown>
   id?: string
 }
@@ -60,6 +61,10 @@ function crearClienteDoble(respuestas: Record<string, Respuesta> = {}) {
         },
       }),
     }),
+    rpc: async (funcion, args) => {
+      llamadas.push({ tabla: funcion, operacion: 'rpc', datos: args })
+      return { error: responder(`${funcion}.rpc`).error }
+    },
   }
   return { cliente, llamadas }
 }
@@ -173,6 +178,54 @@ describe('crearProyecto', () => {
 
     expect(await escrituras.crearProyecto(C1, NUEVO_PROYECTO)).toEqual({ ok: false, error: 'sin_permiso' })
     expect(llamadas.map((l) => l.tabla)).toEqual(['proyectos'])
+  })
+})
+
+describe('guardarProceso', () => {
+  const PROCESO: Proceso = {
+    id: '55555555-0000-0000-0000-0000000000aa', nombre: 'Compras', proyectoId: P_NUEVO, responsableId: ROBERTO,
+    estado: 'En levantamiento', descripcion: 'Comprar bien', fechaLevantamiento: '05/11/2026',
+    evidenciasIds: ['ev-1'], documentosIds: [], entradas: ['Requisición'], salidas: [], objetivo: 'Comprar bien',
+    proveedores: ['Papelería'], noAplica: { equipos: 'No aplica' },
+    actividades: [
+      { id: 'a1', tipo: 'Inicio', responsableId: ROBERTO, descripcion: 'Recibir', entradas: '', recursos: '', controles: '', resultado: '', orden: 1 },
+    ],
+  }
+
+  it('guarda el proceso y sus actividades en una sola llamada, en snake_case', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarProceso(PROCESO)).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      {
+        tabla: 'guardar_proceso',
+        operacion: 'rpc',
+        datos: {
+          p_proceso: expect.objectContaining({
+            id: PROCESO.id,
+            proyecto_id: P_NUEVO,
+            responsable_id: ROBERTO,
+            estado: 'En levantamiento',
+            entradas: ['Requisición'],
+            proveedores: ['Papelería'],
+            // Las listas que el formulario no completó van vacías, no undefined.
+            clientes: [],
+            no_aplica: { equipos: 'No aplica' },
+          }),
+          p_actividades: [
+            { id: 'a1', tipo: 'Inicio', responsable_id: ROBERTO, descripcion: 'Recibir', entradas: '', recursos: '', controles: '', resultado: '', orden: 1 },
+          ],
+        },
+      },
+    ])
+  })
+
+  it('traduce el rechazo del RLS a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'guardar_proceso.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarProceso(PROCESO)).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })
 

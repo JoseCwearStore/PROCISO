@@ -51,6 +51,7 @@ function adaptarClienteEscritura(cliente: SupabaseClient): ClienteEscritura {
         }),
       }),
     }),
+    rpc: (funcion, args) => cliente.rpc(funcion, args),
   }
 }
 

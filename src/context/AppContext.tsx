@@ -27,7 +27,6 @@ import type {
   LoginReason,
 } from '../types'
 import {
-  PROCESOS,
   EVIDENCIAS,
   DOCUMENTOS,
   TAREAS,
@@ -40,7 +39,6 @@ import { canAccess } from '../config/permissions'
 
 // Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
 const DEMO: DatosDemo = {
-  procesos: PROCESOS,
   evidencias: EVIDENCIAS,
   documentos: DOCUMENTOS,
   tareas: TAREAS,
@@ -354,7 +352,7 @@ interface AppContextType {
   getEmpresa: (id: string) => Empresa | undefined
   getProyecto: (id: string) => Proyecto | undefined
   getUsuario: (id: string) => Usuario | undefined
-  getProcesos: (proyectoId: string) => typeof PROCESOS
+  getProcesos: (proyectoId: string) => Proceso[]
   getDocumentos: (proyectoId: string) => typeof DOCUMENTOS
   getNCs: (proyectoId?: string) => NoConformidad[]
   getEntregables: (proyectoId: string) => Entregable[]

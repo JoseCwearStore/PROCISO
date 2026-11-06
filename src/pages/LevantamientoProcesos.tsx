@@ -13,6 +13,9 @@ import {
   Trash2,
 } from "lucide-react"
 import { useApp } from "../context/AppContext"
+import { servicioEscritura } from "../lib/servicios"
+import { MENSAJES_ERROR_ESCRITURA } from "../lib/escrituras"
+import { formatearFecha } from "../lib/datos"
 import { Button } from "../components/ui/Button"
 import { ConfirmDialog } from "../components/ui/ConfirmDialog"
 import { Modal } from "../components/ui/Modal"
@@ -296,8 +299,9 @@ export default function LevantamientoProcesos() {
     return faltantes.length === 0
   }
 
-  function guardar(esFinal = false) {
-    const id = borrador.id || `proc-${Date.now()}`
+  async function guardar(esFinal = false) {
+    // UUID desde el navegador: el mismo id sirve para crear y para volver a guardar (upsert).
+    const id = borrador.id || crypto.randomUUID()
     const proceso: Proceso = {
       id,
       nombre: borrador.nombre,
@@ -305,7 +309,8 @@ export default function LevantamientoProcesos() {
       responsableId: borrador.responsableId,
       estado: esFinal ? "Documentado" : "En levantamiento",
       descripcion: borrador.objetivo,
-      fechaLevantamiento: new Date().toLocaleDateString("es-MX"),
+      // Igual que la BD (current_date, en UTC) y con el formato del resto de la app.
+      fechaLevantamiento: formatearFecha(new Date().toISOString()),
       evidenciasIds: state.evidencias
         .filter((evidencia) => evidencia.procesoId === id)
         .map((evidencia) => evidencia.id),
@@ -331,12 +336,17 @@ export default function LevantamientoProcesos() {
       noAplica: borrador.noAplica,
       actividades: borrador.actividades,
     }
+    const resultado = await servicioEscritura.guardarProceso(proceso)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], "error")
+      return
+    }
     dispatch({ type: "UPSERT_PROCESO", proceso })
     setBorrador((actual) => ({ ...actual, id }))
     showToast(
       esFinal
         ? "Levantamiento completado y disponible en Procesos."
-        : "Borrador guardado en esta sesión.",
+        : "Borrador guardado.",
       "success",
     )
     if (esFinal) navigate("procesos", { id })
@@ -377,7 +387,7 @@ export default function LevantamientoProcesos() {
             ...actual.actividades,
             {
               ...actividad,
-              id: `act-${Date.now()}`,
+              id: crypto.randomUUID(),
               orden: actual.actividades.length + 1,
             },
           ]

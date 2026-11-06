@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, EntradaHistorial, Notificacion, Proceso, Tarea } from '../types'
+import type { Documento, EntradaHistorial, Evidencia, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -18,6 +18,7 @@ const P2 = '33333333-0000-0000-0000-000000000002'
 const ANA = 'aaaaaaaa-0000-0000-0000-000000000002'
 const ROBERTO = 'aaaaaaaa-0000-0000-0000-000000000003'
 const CARLOS = 'aaaaaaaa-0000-0000-0000-000000000005'
+const PROC1 = '55555555-0000-0000-0000-000000000001'
 
 // Lo que devuelve la BD a un usuario que solo ve la empresa E1 y el proyecto P1.
 function filasBase(): FilasSesion {
@@ -58,15 +59,27 @@ function filasBase(): FilasSesion {
       { proyecto_id: P1, usuario_id: ROBERTO },
       { proyecto_id: P1, usuario_id: CARLOS },
     ],
+    procesos: [
+      {
+        id: PROC1, proyecto_id: P1, responsable_id: CARLOS, nombre: 'Compras', descripcion: null, estado: 'Documentado',
+        fecha_levantamiento: '2024-03-20', objetivo: 'Comprar bien', alcance: null, puesto_responsable: null,
+        personal_involucrado: null, entradas: ['Requisición'], salidas: ['Orden'], proveedores: [], clientes: [],
+        recursos_materiales: [], equipos: [], sistemas: [], controles: [], registros: [], indicadores: [], riesgos: [],
+        problemas: [], observaciones: null, mejoras: null, no_aplica: { equipos: 'No usa equipos' },
+      },
+    ],
+    actividades: [
+      { id: 'act-2', proceso_id: PROC1, responsable_id: null, tipo: 'Fin', descripcion: 'Emitir orden', entradas: null, recursos: null, controles: null, resultado: 'Orden', orden: 2 },
+      { id: 'act-1', proceso_id: PROC1, responsable_id: ROBERTO, tipo: 'Inicio', descripcion: 'Recibir requisición', entradas: 'Requisición', recursos: null, controles: null, resultado: null, orden: 1 },
+    ],
   }
 }
 
 // Datos de demo de DOS proyectos: P1 (visible) y P2 (de otra empresa, no visible).
 function demoBase(): DatosDemo {
   return {
-    procesos: [{ id: 'proc-p1', proyectoId: P1 }, { id: 'proc-p2', proyectoId: P2 }] as Proceso[],
-    evidencias: [],
-    documentos: [{ id: 'doc-p1', proyectoId: P1 }, { id: 'doc-p2', proyectoId: P2 }] as Documento[],
+    evidencias: [{ id: 'ev-p1', proyectoId: P1, procesoId: PROC1 }, { id: 'ev-p2', proyectoId: P2 }] as Evidencia[],
+    documentos: [{ id: 'doc-p1', proyectoId: P1, procesoId: PROC1 }, { id: 'doc-p2', proyectoId: P2 }] as Documento[],
     tareas: [{ id: 'tar-p2', proyectoId: P2 }] as Tarea[],
     entregables: [],
     noConformidades: [],
@@ -161,9 +174,32 @@ describe('combinarDatosSesion', () => {
   it('descarta los datos de demo de proyectos que la BD no deja ver', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
-    expect(ids(datos.procesos)).toEqual(['proc-p1'])
+    expect(ids(datos.evidencias)).toEqual(['ev-p1'])
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
     expect(datos.tareas).toEqual([])
+  })
+
+  it('traduce los procesos de la BD con sus actividades ordenadas y sus vínculos', () => {
+    const { procesos } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(procesos).toHaveLength(1)
+    expect(procesos[0]).toMatchObject({
+      id: PROC1,
+      proyectoId: P1,
+      responsableId: CARLOS,
+      descripcion: '',
+      fechaLevantamiento: '20/03/2024',
+      entradas: ['Requisición'],
+      salidas: ['Orden'],
+      noAplica: { equipos: 'No usa equipos' },
+      evidenciasIds: ['ev-p1'],
+      documentosIds: ['doc-p1'],
+    })
+    expect(procesos[0].alcance).toBeUndefined()
+    expect(procesos[0].actividades).toEqual([
+      { id: 'act-1', tipo: 'Inicio', responsableId: ROBERTO, descripcion: 'Recibir requisición', entradas: 'Requisición', recursos: '', controles: '', resultado: '', orden: 1 },
+      { id: 'act-2', tipo: 'Fin', responsableId: undefined, descripcion: 'Emitir orden', entradas: '', recursos: '', controles: '', resultado: 'Orden', orden: 2 },
+    ])
   })
 
   it('conserva las notificaciones generales y descarta las de proyectos no visibles', () => {
@@ -189,6 +225,8 @@ describe('cargarFilasSesion', () => {
       proyectos: filas.proyectos,
       fases: filas.fases,
       proyecto_miembros: filas.miembros,
+      procesos: filas.procesos,
+      actividades: filas.actividades,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -199,13 +237,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las seis tablas y devuelve sus filas', async () => {
+  it('lee las ocho tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(6)
+    expect(cliente.from).toHaveBeenCalledTimes(8)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

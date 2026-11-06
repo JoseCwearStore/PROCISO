@@ -155,7 +155,7 @@ export const PROYECTOS: Proyecto[] = [
       { id: 'f001-4', nombre: 'Implementación y capacitación', estado: 'Pendiente', avance: 0, orden: 4 },
       { id: 'f001-5', nombre: 'Auditoría interna', estado: 'Pendiente', avance: 0, orden: 5 },
     ],
-    procesosIds: ['proc-001', 'proc-002', 'proc-003', 'proc-004'],
+    procesosIds: ['55555555-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', '55555555-0000-0000-0000-000000000003', '55555555-0000-0000-0000-000000000004'],
     entregablesIds: ['ent-001', 'ent-002', 'ent-003', 'ent-004', 'ent-005', 'ent-006', 'ent-007'],
   },
   {
@@ -179,7 +179,7 @@ export const PROYECTOS: Proyecto[] = [
       { id: 'f002-4', nombre: 'Implementación y capacitación', estado: 'Pendiente', avance: 0, orden: 4 },
       { id: 'f002-5', nombre: 'Auditoría interna', estado: 'Pendiente', avance: 0, orden: 5 },
     ],
-    procesosIds: ['proc-005', 'proc-006'],
+    procesosIds: ['55555555-0000-0000-0000-000000000005', '55555555-0000-0000-0000-000000000006'],
     entregablesIds: ['ent-008', 'ent-009', 'ent-010'],
   },
   {
@@ -204,7 +204,7 @@ export const PROYECTOS: Proyecto[] = [
       { id: 'f003-4', nombre: 'Implementación y capacitación', estado: 'Completada', avance: 100, orden: 4 },
       { id: 'f003-5', nombre: 'Auditoría interna', estado: 'Completada', avance: 100, orden: 5 },
     ],
-    procesosIds: ['proc-001', 'proc-002'],
+    procesosIds: ['55555555-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002'],
     entregablesIds: ['ent-011', 'ent-012', 'ent-013', 'ent-014'],
   },
 ]
@@ -242,7 +242,7 @@ export const HISTORIAL: EntradaHistorial[] = [
 
 export const PROCESOS: Proceso[] = [
   {
-    id: 'proc-001',
+    id: '55555555-0000-0000-0000-000000000001',
     nombre: 'Gestión de compras y proveedores',
     proyectoId: '33333333-0000-0000-0000-000000000001',
     responsableId: 'aaaaaaaa-0000-0000-0000-000000000005',
@@ -255,7 +255,7 @@ export const PROCESOS: Proceso[] = [
     salidas: ['Orden de compra autorizada', 'Evaluación de proveedor'],
   },
   {
-    id: 'proc-002',
+    id: '55555555-0000-0000-0000-000000000002',
     nombre: 'Control de producción',
     proyectoId: '33333333-0000-0000-0000-000000000001',
     responsableId: 'aaaaaaaa-0000-0000-0000-000000000005',
@@ -268,7 +268,7 @@ export const PROCESOS: Proceso[] = [
     salidas: ['Producto terminado', 'Registros de producción'],
   },
   {
-    id: 'proc-003',
+    id: '55555555-0000-0000-0000-000000000003',
     nombre: 'Atención al cliente y postventa',
     proyectoId: '33333333-0000-0000-0000-000000000001',
     responsableId: 'aaaaaaaa-0000-0000-0000-000000000005',
@@ -281,7 +281,7 @@ export const PROCESOS: Proceso[] = [
     salidas: ['Respuesta al cliente', 'Registro de satisfacción'],
   },
   {
-    id: 'proc-004',
+    id: '55555555-0000-0000-0000-000000000004',
     nombre: 'Gestión de recursos humanos',
     proyectoId: '33333333-0000-0000-0000-000000000001',
     responsableId: 'aaaaaaaa-0000-0000-0000-000000000005',
@@ -293,7 +293,7 @@ export const PROCESOS: Proceso[] = [
     salidas: ['Personal contratado'],
   },
   {
-    id: 'proc-005',
+    id: '55555555-0000-0000-0000-000000000005',
     nombre: 'Recepción y almacenamiento de mercancía',
     proyectoId: '33333333-0000-0000-0000-000000000002',
     responsableId: 'aaaaaaaa-0000-0000-0000-000000000006',
@@ -306,7 +306,7 @@ export const PROCESOS: Proceso[] = [
     salidas: ['Producto almacenado'],
   },
   {
-    id: 'proc-006',
+    id: '55555555-0000-0000-0000-000000000006',
     nombre: 'Despacho y entrega a clientes',
     proyectoId: '33333333-0000-0000-0000-000000000002',
     responsableId: 'aaaaaaaa-0000-0000-0000-000000000006',
@@ -320,11 +320,11 @@ export const PROCESOS: Proceso[] = [
 ]
 
 export const EVIDENCIAS: Evidencia[] = [
-  { id: 'evid-001', nombre: 'Formato de evaluación de proveedores', tipo: 'Formulario', procesoId: 'proc-001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Revisada', fechaCarga: '22/03/2024', descripcion: 'Formato actual para evaluar y dar seguimiento a proveedores.', archivoNombre: 'evaluacion_proveedores_v2.xlsx' },
-  { id: 'evid-002', nombre: 'Fotografías del área de almacén', tipo: 'Foto', procesoId: 'proc-001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '25/03/2024', descripcion: 'Fotografías del área de recepción y almacenamiento.', archivoNombre: 'fotos_almacen_mar2024.zip' },
-  { id: 'evid-003', nombre: 'Video recorrido de planta de producción', tipo: 'Video', procesoId: 'proc-002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '08/04/2024', descripcion: 'Recorrido por las líneas de producción principales.', archivoNombre: 'recorrido_planta_abr2024.mp4' },
-  { id: 'evid-004', nombre: 'Formulario de recepción de mercancía', tipo: 'Formulario', procesoId: 'proc-005', proyectoId: '33333333-0000-0000-0000-000000000002', estado: 'Cargada', fechaCarga: '12/09/2024', descripcion: 'Formato actual de recepción e inspección de productos.', archivoNombre: 'formato_recepcion_actual.pdf' },
-  { id: 'evid-005', nombre: 'Audio entrevista con jefe de producción', tipo: 'Audio', procesoId: 'proc-002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Pendiente', descripcion: 'Entrevista de levantamiento pendiente de carga.' },
+  { id: 'evid-001', nombre: 'Formato de evaluación de proveedores', tipo: 'Formulario', procesoId: '55555555-0000-0000-0000-000000000001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Revisada', fechaCarga: '22/03/2024', descripcion: 'Formato actual para evaluar y dar seguimiento a proveedores.', archivoNombre: 'evaluacion_proveedores_v2.xlsx' },
+  { id: 'evid-002', nombre: 'Fotografías del área de almacén', tipo: 'Foto', procesoId: '55555555-0000-0000-0000-000000000001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '25/03/2024', descripcion: 'Fotografías del área de recepción y almacenamiento.', archivoNombre: 'fotos_almacen_mar2024.zip' },
+  { id: 'evid-003', nombre: 'Video recorrido de planta de producción', tipo: 'Video', procesoId: '55555555-0000-0000-0000-000000000002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '08/04/2024', descripcion: 'Recorrido por las líneas de producción principales.', archivoNombre: 'recorrido_planta_abr2024.mp4' },
+  { id: 'evid-004', nombre: 'Formulario de recepción de mercancía', tipo: 'Formulario', procesoId: '55555555-0000-0000-0000-000000000005', proyectoId: '33333333-0000-0000-0000-000000000002', estado: 'Cargada', fechaCarga: '12/09/2024', descripcion: 'Formato actual de recepción e inspección de productos.', archivoNombre: 'formato_recepcion_actual.pdf' },
+  { id: 'evid-005', nombre: 'Audio entrevista con jefe de producción', tipo: 'Audio', procesoId: '55555555-0000-0000-0000-000000000002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Pendiente', descripcion: 'Entrevista de levantamiento pendiente de carga.' },
 ]
 
 export const DOCUMENTOS: Documento[] = [
@@ -333,7 +333,7 @@ export const DOCUMENTOS: Documento[] = [
     nombre: 'Procedimiento de selección y evaluación de proveedores',
     tipo: 'Procedimiento',
     proyectoId: '33333333-0000-0000-0000-000000000001',
-    procesoId: 'proc-001',
+    procesoId: '55555555-0000-0000-0000-000000000001',
     estado: 'Pendiente de revisión',
     version: '1.0',
     fechaCreacion: '01/06/2024',
@@ -350,7 +350,7 @@ export const DOCUMENTOS: Documento[] = [
     nombre: 'Procedimiento de control de producción',
     tipo: 'Procedimiento',
     proyectoId: '33333333-0000-0000-0000-000000000001',
-    procesoId: 'proc-002',
+    procesoId: '55555555-0000-0000-0000-000000000002',
     estado: 'Aprobado',
     version: '2.0',
     fechaCreacion: '15/04/2024',
@@ -370,7 +370,7 @@ export const DOCUMENTOS: Documento[] = [
     nombre: 'Instrucción de trabajo: Calibración de equipos',
     tipo: 'Instrucción de trabajo',
     proyectoId: '33333333-0000-0000-0000-000000000001',
-    procesoId: 'proc-002',
+    procesoId: '55555555-0000-0000-0000-000000000002',
     estado: 'En elaboración',
     version: '0.5',
     fechaCreacion: '20/07/2024',
@@ -387,7 +387,7 @@ export const DOCUMENTOS: Documento[] = [
     nombre: 'Procedimiento de atención a quejas y reclamaciones',
     tipo: 'Procedimiento',
     proyectoId: '33333333-0000-0000-0000-000000000001',
-    procesoId: 'proc-003',
+    procesoId: '55555555-0000-0000-0000-000000000003',
     estado: 'Borrador',
     version: '0.1',
     fechaCreacion: '01/08/2024',

@@ -1,4 +1,4 @@
-import type { Empresa, EstadoProyecto, Proyecto } from '../types'
+import type { Empresa, EstadoProyecto, Proceso, Proyecto } from '../types'
 import { traducirEmpresa, traducirProyecto, type FilaEmpresa, type FilaProyecto } from './datos'
 
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
@@ -21,6 +21,7 @@ export interface ClienteEscritura {
       eq(columna: 'id', valor: string): { select(columnas: string): { single(): RespuestaFila } }
     }
   }
+  rpc(funcion: 'guardar_proceso', args: Record<string, unknown>): PromiseLike<{ error: ErrorBD | null }>
 }
 
 export interface NuevaEmpresa {
@@ -133,6 +134,52 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         })
       }
       return { ok: true, valor: traducirProyecto(proyecto, [], []) }
+    },
+
+    // Proceso y actividades viajan juntos: la función de la BD los guarda en una transacción.
+    async guardarProceso(proceso: Proceso): Promise<ResultadoEscritura<void>> {
+      const lista = (valor?: string[]) => valor ?? []
+      const { error } = await cliente.rpc('guardar_proceso', {
+        p_proceso: {
+          id: proceso.id,
+          proyecto_id: proceso.proyectoId,
+          responsable_id: proceso.responsableId,
+          nombre: proceso.nombre,
+          descripcion: proceso.descripcion,
+          estado: proceso.estado,
+          objetivo: proceso.objetivo,
+          alcance: proceso.alcance,
+          puesto_responsable: proceso.puestoResponsable,
+          personal_involucrado: proceso.personalInvolucrado,
+          entradas: lista(proceso.entradas),
+          salidas: lista(proceso.salidas),
+          proveedores: lista(proceso.proveedores),
+          clientes: lista(proceso.clientes),
+          recursos_materiales: lista(proceso.recursosMateriales),
+          equipos: lista(proceso.equipos),
+          sistemas: lista(proceso.sistemas),
+          controles: lista(proceso.controles),
+          registros: lista(proceso.registros),
+          indicadores: lista(proceso.indicadores),
+          riesgos: lista(proceso.riesgos),
+          problemas: lista(proceso.problemas),
+          observaciones: proceso.observaciones,
+          mejoras: proceso.mejoras,
+          no_aplica: proceso.noAplica ?? {},
+        },
+        p_actividades: (proceso.actividades ?? []).map((a) => ({
+          id: a.id,
+          tipo: a.tipo,
+          responsable_id: a.responsableId,
+          descripcion: a.descripcion,
+          entradas: a.entradas,
+          recursos: a.recursos,
+          controles: a.controles,
+          resultado: a.resultado,
+          orden: a.orden,
+        })),
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },
 
     cambiarEstadoProyecto(id: string, estado: EstadoProyecto): Promise<ResultadoEscritura<void>> {
