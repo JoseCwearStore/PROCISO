@@ -27,6 +27,7 @@ import type {
 } from '../types'
 import { canAccess } from '../config/permissions'
 import { estaVencida, hoyLocal } from '../lib/tareas'
+import { avanceAl } from '../lib/avance'
 
 export type EstadoDatosSesion = 'pendiente' | 'cargando' | 'listo' | 'error'
 
@@ -457,16 +458,14 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const calcularAvance = useCallback(
     (proyectoId: string) => {
-      const tareasProy = state.tareas.filter((t) => t.proyectoId === proyectoId)
-      const entregablesProy = state.entregables.filter((e) => e.proyectoId === proyectoId)
-      const tareasTotal = tareasProy.length
-      const tareasCompletadas = tareasProy.filter((t) => t.estado === 'Completada').length
-      const entregablesTotal = entregablesProy.length
-      const entregablesAprobados = entregablesProy.filter((e) => e.estado === 'Aprobado').length
-      if (tareasTotal === 0 && entregablesTotal === 0) return 0
-      const pTareas = tareasTotal > 0 ? tareasCompletadas / tareasTotal : 0
-      const pEntregables = entregablesTotal > 0 ? entregablesAprobados / entregablesTotal : 0
-      return Math.round(0.7 * pTareas * 100 + 0.3 * pEntregables * 100)
+      // La fórmula vive en lib/avance (la misma que usa el gráfico de evolución).
+      const hoy = hoyLocal()
+      return avanceAl(
+        state.tareas.filter((t) => t.proyectoId === proyectoId),
+        state.entregables.filter((e) => e.proyectoId === proyectoId),
+        hoy,
+        hoy,
+      )
     },
     [state.tareas, state.entregables]
   )

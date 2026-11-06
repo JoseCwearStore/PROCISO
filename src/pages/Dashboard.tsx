@@ -32,7 +32,7 @@ import { useApp } from '../context/AppContext'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import type { PageId } from '../types'
-import { EVOLUCION_AVANCE } from '../data/demo'
+import { evolucionAvance } from '../lib/avance'
 import { estaVencida, fechaISO, hoyLocal } from '../lib/tareas'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -48,6 +48,9 @@ const CHART_COLORS = {
   violet: '#8b5cf6',
   slate: '#94a3b8',
 }
+
+// Una serie por proyecto en el gráfico de evolución (como máximo, tantas como colores).
+const SERIES_COLORS = [CHART_COLORS.navy, CHART_COLORS.blue, CHART_COLORS.emerald, CHART_COLORS.amber, CHART_COLORS.violet, CHART_COLORS.red]
 
 const ESTADO_PROYECTO_LIST = [
   'Planificación',
@@ -366,12 +369,19 @@ export function Dashboard() {
     })
   }, [filteredProyectos, filteredTareas, empresas])
 
-  // Chart 5: Evolución del avance — uses demo data directly
-  const evolucionSeries: Array<{ key: string; color: string }> = [
-    { key: 'Manufact. Norte', color: CHART_COLORS.navy },
-    { key: 'Dist. Altiplano', color: CHART_COLORS.blue },
-    { key: 'Revisión 2023', color: CHART_COLORS.emerald },
-  ]
+  // Chart 5: Evolución del avance — reconstruido de las fechas reales de tareas
+  // completadas y entregables aprobados (misma fórmula que el KPI de avance).
+  const evolucion = useMemo(() => {
+    const visibles = filteredProyectos.slice(0, SERIES_COLORS.length)
+    const ids = new Set(visibles.map((p) => p.id))
+    return evolucionAvance(
+      visibles.map((p) => ({ id: p.id, nombre: p.nombre })),
+      filteredTareas.filter((t) => ids.has(t.proyectoId)),
+      state.entregables.filter((e) => ids.has(e.proyectoId)),
+      hoyLocal(),
+    )
+  }, [filteredProyectos, filteredTareas, state.entregables])
+  const evolucionSeries = evolucion.series.map((s, i) => ({ ...s, color: SERIES_COLORS[i] }))
 
   // ── Historial reciente ────────────────────────────────────────────────────
 
@@ -757,15 +767,15 @@ export function Dashboard() {
 
         {/* Chart 5: Evolución del avance — full width */}
         <div className="bg-white border border-line rounded-xl p-5 shadow-sm lg:col-span-2">
-          <SectionHeader title="Evolución del avance por empresa" />
+          <SectionHeader title="Evolución del avance por proyecto" />
           <ResponsiveContainer width="100%" height={240}>
             <AreaChart
-              data={EVOLUCION_AVANCE}
+              data={evolucion.puntos}
               margin={{ top: 10, right: 24, left: 0, bottom: 0 }}
             >
               <defs>
                 {evolucionSeries.map((s) => (
-                  <linearGradient key={s.key} id={`grad-${s.key}`} x1="0" y1="0" x2="0" y2="1">
+                  <linearGradient key={s.clave} id={`grad-${s.clave}`} x1="0" y1="0" x2="0" y2="1">
                     <stop offset="5%" stopColor={s.color} stopOpacity={0.2} />
                     <stop offset="95%" stopColor={s.color} stopOpacity={0} />
                   </linearGradient>
@@ -790,12 +800,13 @@ export function Dashboard() {
               <Legend iconType="circle" iconSize={8} wrapperStyle={{ fontSize: 11 }} />
               {evolucionSeries.map((s) => (
                 <Area
-                  key={s.key}
+                  key={s.clave}
                   type="monotone"
-                  dataKey={s.key}
+                  dataKey={s.clave}
+                  name={s.nombre}
                   stroke={s.color}
                   strokeWidth={2}
-                  fill={`url(#grad-${s.key})`}
+                  fill={`url(#grad-${s.clave})`}
                   dot={{ r: 3, fill: s.color, strokeWidth: 0 }}
                   activeDot={{ r: 5 }}
                 />

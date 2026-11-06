@@ -742,14 +742,3 @@ export const NO_CONFORMIDADES = [
   },
 ]
 
-// ─── Simulated evolution data for charts ─────────────────────────────────────
-export const EVOLUCION_AVANCE = [
-  { mes: 'Feb 24', 'Manufact. Norte': 5, 'Dist. Altiplano': 0, 'Revisión 2023': 100 },
-  { mes: 'Mar 24', 'Manufact. Norte': 15, 'Dist. Altiplano': 0, 'Revisión 2023': 100 },
-  { mes: 'Abr 24', 'Manufact. Norte': 28, 'Dist. Altiplano': 0, 'Revisión 2023': 100 },
-  { mes: 'May 24', 'Manufact. Norte': 38, 'Dist. Altiplano': 0, 'Revisión 2023': 100 },
-  { mes: 'Jun 24', 'Manufact. Norte': 45, 'Dist. Altiplano': 0, 'Revisión 2023': 100 },
-  { mes: 'Jul 24', 'Manufact. Norte': 52, 'Dist. Altiplano': 0, 'Revisión 2023': 100 },
-  { mes: 'Ago 24', 'Manufact. Norte': 58, 'Dist. Altiplano': 8, 'Revisión 2023': 100 },
-  { mes: 'Sep 24', 'Manufact. Norte': 65, 'Dist. Altiplano': 15, 'Revisión 2023': 100 },
-]
