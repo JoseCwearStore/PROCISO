@@ -40,7 +40,7 @@ export default function Usuarios() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Usuario invitado',
         descripcion: `${usuario.email}; rol ${usuario.rol}. No se generó ni mostró una contraseña.`,
         entidadId: usuario.id,
@@ -59,7 +59,7 @@ export default function Usuarios() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: usuario.activo ? 'Acceso suspendido' : 'Acceso restablecido',
         descripcion: `${usuario.email}; acción administrativa registrada sin manipular credenciales.`,
         entidadId: usuario.id,
@@ -77,7 +77,7 @@ export default function Usuarios() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Rol actualizado',
         descripcion: `${usuario.email}: ${usuario.rol} → ${rol}.`,
         entidadId: usuario.id,

@@ -34,7 +34,7 @@ export default function Revisiones() {
     const ahora = new Date()
     const fecha = ahora.toLocaleDateString('es-MX')
     const fechaHora = ahora.toLocaleString('es-MX')
-    const usuarioId = state.currentUser?.id || 'usr-001'
+    const usuarioId = state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002'
     const comentarioNuevo = seccionId && comentario.trim() ? {
       id: `comentario-${Date.now()}`,
       seccionId,

@@ -133,7 +133,7 @@ export function Tareas() {
     if (!selectedTarea || !nuevoComentario.trim()) return
     const comentario = {
       id: `com-${Date.now()}`,
-      autorId: 'usr-001',
+      autorId: 'aaaaaaaa-0000-0000-0000-000000000002',
       fecha: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       texto: nuevoComentario.trim(),
     }

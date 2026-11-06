@@ -11,6 +11,11 @@
 --   lucia@jaza.test          Usuario Cliente     JAZA (COWIN)
 --   laura@consultoria2.test  Admin Consultoría   Consultoría 2
 --   pedro@norte.test         Usuario Cliente     Industrias Norte (Consultoría 2)
+--   jorge@cowin.test         Consultor           COWIN · sin proyectos asignados
+--
+-- Puente con src/data/demo.ts: los IDs de demo apuntan a estos UUID
+-- (cons-001 → 1111…001, emp-001/002 → 2222…001/002, proy-001/002/003 → 3333…001/002/004,
+-- usr-admin/001…006 → aaaa…001/002/003/004/005/006/009).
 
 -- ─── Usuarios de Auth ───────────────────────────────────────────────────────
 
@@ -23,7 +28,8 @@ with u (id, email) as (
     ('aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'carlos@marketino.test'),
     ('aaaaaaaa-0000-0000-0000-000000000006'::uuid, 'lucia@jaza.test'),
     ('aaaaaaaa-0000-0000-0000-000000000007'::uuid, 'laura@consultoria2.test'),
-    ('aaaaaaaa-0000-0000-0000-000000000008'::uuid, 'pedro@norte.test')
+    ('aaaaaaaa-0000-0000-0000-000000000008'::uuid, 'pedro@norte.test'),
+    ('aaaaaaaa-0000-0000-0000-000000000009'::uuid, 'jorge@cowin.test')
 )
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -75,7 +81,8 @@ insert into public.perfiles (id, nombre, email, rol, consultoria_id, empresa_id,
   ('aaaaaaaa-0000-0000-0000-000000000005', 'Carlos Mendoza',   'carlos@marketino.test',   'usuario_cliente',   '11111111-0000-0000-0000-000000000001', '22222222-0000-0000-0000-000000000001', 'Director general'),
   ('aaaaaaaa-0000-0000-0000-000000000006', 'Lucía Ramírez',    'lucia@jaza.test',         'usuario_cliente',   '11111111-0000-0000-0000-000000000001', '22222222-0000-0000-0000-000000000002', 'Gerente de calidad'),
   ('aaaaaaaa-0000-0000-0000-000000000007', 'Laura Méndez',     'laura@consultoria2.test', 'admin_consultoria', '11111111-0000-0000-0000-000000000002', null, 'Directora'),
-  ('aaaaaaaa-0000-0000-0000-000000000008', 'Pedro Salinas',    'pedro@norte.test',        'usuario_cliente',   '11111111-0000-0000-0000-000000000002', '22222222-0000-0000-0000-000000000003', 'Jefe de producción');
+  ('aaaaaaaa-0000-0000-0000-000000000008', 'Pedro Salinas',    'pedro@norte.test',        'usuario_cliente',   '11111111-0000-0000-0000-000000000002', '22222222-0000-0000-0000-000000000003', 'Jefe de producción'),
+  ('aaaaaaaa-0000-0000-0000-000000000009', 'Jorge Hernández',  'jorge@cowin.test',        'consultor',         '11111111-0000-0000-0000-000000000001', null, 'Consultor Junior');
 
 update public.empresas set consultor_asignado_id = 'aaaaaaaa-0000-0000-0000-000000000003' where id = '22222222-0000-0000-0000-000000000001';
 update public.empresas set consultor_asignado_id = 'aaaaaaaa-0000-0000-0000-000000000004' where id = '22222222-0000-0000-0000-000000000002';
@@ -96,7 +103,15 @@ insert into public.proyectos (id, consultoria_id, empresa_id, consultor_id, nomb
    'Diagnóstico inicial del sistema de calidad',
    'Diagnóstico', 10, '2026-10-15', '2027-01-31', 'Diagnóstico inicial.');
 
+-- Proyecto ya cerrado de Marketino (el "proy-003" de demo.ts).
+insert into public.proyectos (id, consultoria_id, empresa_id, consultor_id, nombre, objetivo, estado, avance, fecha_inicio, fecha_fin_estimada, fecha_fin_real, descripcion) values
+  ('33333333-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001', '22222222-0000-0000-0000-000000000001',
+   'aaaaaaaa-0000-0000-0000-000000000003', 'Revisión y mantenimiento SGC 2025 — Marketino',
+   'Revisión anual del SGC y preparación para la auditoría de seguimiento',
+   'Finalizado', 100, '2025-01-15', '2025-11-30', '2025-11-20', 'Revisión anual del sistema de gestión.');
+
 insert into public.proyecto_miembros (proyecto_id, usuario_id, consultoria_id) values
+  ('33333333-0000-0000-0000-000000000004', 'aaaaaaaa-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001'),
   ('33333333-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001'),
   ('33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001');
 

@@ -80,7 +80,7 @@ export default function ListasVerificacion() {
         descripcion: `Hallazgo identificado en la lista “${lista.nombre}”. Estado: ${hallazgo.estado}.`,
         proyectoId: lista.proyectoId,
         asignadoAId: lista.responsableId,
-        asignadoPorId: state.currentUser?.id || 'usr-001',
+        asignadoPorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         estado: 'Pendiente',
         prioridad: hallazgo.estado === 'No cumple según la evidencia revisada' ? 'Alta' : 'Media',
         fechaVencimiento: lista.fecha,
@@ -95,7 +95,7 @@ export default function ListasVerificacion() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Lista de verificación guardada',
         descripcion: `${lista.nombre}; ${hallazgos.length} hallazgo(s) con tarea de seguimiento.`,
         entidadId: lista.id,

@@ -50,7 +50,7 @@ export default function PanelAdminProciso() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-admin',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000001',
         accion: item.activa ? 'Consultoría suspendida' : 'Consultoría activada',
         descripcion: `${item.nombre}; no se consultó información privada de sus clientes.`,
         entidadId: item.id,

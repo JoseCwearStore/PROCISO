@@ -236,7 +236,7 @@ export default function Documentacion() {
       version: '0.1',
       fechaCreacion: ahora,
       fechaModificacion: ahora,
-      creadoPorId: state.currentUser?.id || 'usr-001',
+      creadoPorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
       plantilla: generador.plantilla,
       referenciaNormativa: generador.edicionNorma,
       secciones: crearSecciones(generador.plantilla, proceso, generador.codigo, generador.edicionNorma),
@@ -246,7 +246,7 @@ export default function Documentacion() {
       historial: [{
         id: `evento-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Borrador generado',
         detalle: `Creado con la plantilla ${generador.plantilla}.`,
       }],
@@ -276,7 +276,7 @@ export default function Documentacion() {
       historial: [...(documento.historial || []), {
         id: `evento-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Borrador guardado',
         detalle: 'Cambios conservados en la sesión local.',
       }],
@@ -306,7 +306,7 @@ export default function Documentacion() {
     const snapshot: VersionDocumento = {
       version: documento.version,
       fecha: new Date().toLocaleDateString('es-MX'),
-      autorId: state.currentUser?.id || 'usr-001',
+      autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
       comentario: documento.motivoCambio || 'Envío a revisión',
       motivo: documento.motivoCambio || 'Envío a revisión',
       secciones: documento.secciones?.map((seccion) => ({ ...seccion, filas: seccion.filas?.map((fila) => [...fila]) })),
@@ -319,7 +319,7 @@ export default function Documentacion() {
       historial: [...(documento.historial || []), {
         id: `evento-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Enviado a revisión',
         detalle: `Versión ${documento.version}.`,
       }],
@@ -343,7 +343,7 @@ export default function Documentacion() {
       historial: [{
         id: `evento-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Nueva versión creada',
         detalle: `Derivada de la versión ${documento.version}.`,
       }],
@@ -387,7 +387,7 @@ export default function Documentacion() {
         nuevaVersion={nuevaVersion}
         errores={errores}
         evidencias={state.evidencias.filter((item) => item.proyectoId === documento.proyectoId)}
-        usuarioId={state.currentUser?.id || 'usr-001'}
+        usuarioId={state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002'}
         comentarioSeccion={comentarioSeccion}
         setComentarioSeccion={setComentarioSeccion}
         comentarioTexto={comentarioTexto}

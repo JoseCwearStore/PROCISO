@@ -268,7 +268,7 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
         ...(localTarea.historial ?? []),
         {
           fecha: formatFecha(TODAY),
-          autorId: state.currentUser?.id ?? 'usr-001',
+          autorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
           de: tarea.estado,
           a: localTarea.estado,
         },
@@ -283,7 +283,7 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
     if (!nuevoComentario.trim() || !localTarea) return
     const comentario = {
       id: `com-${Date.now()}`,
-      autorId: state.currentUser?.id ?? 'usr-001',
+      autorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
       fecha: formatFecha(TODAY),
       texto: nuevoComentario.trim(),
     }
@@ -525,7 +525,7 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
       descripcion: descripcion.trim(),
       proyectoId,
       asignadoAId,
-      asignadoPorId: state.currentUser?.id ?? 'usr-001',
+      asignadoPorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
       estado: 'Pendiente',
       prioridad,
       fechaVencimiento,
@@ -712,7 +712,7 @@ export default function TableroTareas() {
         ...tarea.historial,
         {
           fecha: formatFecha(TODAY),
-          autorId: state.currentUser?.id ?? 'usr-001',
+          autorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
           de: tarea.estado,
           a: estado,
         },

@@ -79,7 +79,7 @@ export default function NoConformidades() {
       historial: [...(nc.historial || []), {
         id: `hist-nc-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion,
         detalle: `Estado: ${nc.estado}. Eficacia: ${nc.eficacia || 'Pendiente'}.`,
       }],
@@ -90,7 +90,7 @@ export default function NoConformidades() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion,
         descripcion: `${guardada.id}: ${guardada.titulo || guardada.descripcion}`,
         entidadId: guardada.id,

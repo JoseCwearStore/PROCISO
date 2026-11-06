@@ -55,7 +55,7 @@ export function Notificaciones() {
         id: `comentario-global-${Date.now()}`,
         entidadTipo,
         entidadId,
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         fecha: new Date().toLocaleString('es-MX'),
         texto: texto.trim(),
       },
@@ -65,7 +65,7 @@ export function Notificaciones() {
       entrada: {
         id: `hist-${Date.now()}`,
         fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'usr-001',
+        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
         accion: 'Comentario agregado',
         descripcion: `Comentario en ${entidadTipo} ${entidadId}.`,
         entidadId,
