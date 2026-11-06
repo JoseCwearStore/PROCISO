@@ -33,11 +33,11 @@ import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import type { PageId } from '../types'
 import { EVOLUCION_AVANCE } from '../data/demo'
+import { estaVencida, fechaISO, hoyLocal } from '../lib/tareas'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 // "Today" fixed as Oct 23, 2026 per spec
-const TODAY = new Date(2026, 9, 23)
 
 const CHART_COLORS = {
   navy: '#1e3a5f',
@@ -281,24 +281,23 @@ export function Dashboard() {
     [filteredEvidencias]
   )
 
+  // Vence hoy o en los próximos 7 días (fecha local; las vencidas van aparte).
   const kpiProximosVencer = useMemo(() => {
-    const limit = new Date(TODAY)
-    limit.setDate(limit.getDate() + 7)
+    const hoy = hoyLocal()
+    const limite = new Date()
+    limite.setDate(limite.getDate() + 7)
+    const hasta = hoyLocal(limite)
     return filteredTareas.filter((t) => {
-      if (t.estado === 'Completada' || t.estado === 'Vencida') return false
-      try {
-        const d = parseDate(t.fechaVencimiento)
-        return d >= TODAY && d <= limit
-      } catch {
-        return false
-      }
+      if (t.estado === 'Completada' || !t.fechaVencimiento) return false
+      const fecha = fechaISO(t.fechaVencimiento)
+      return fecha >= hoy && fecha <= hasta
     }).length
   }, [filteredTareas])
 
-  const kpiVencidas = useMemo(
-    () => filteredTareas.filter((t) => t.estado === 'Vencida').length,
-    [filteredTareas]
-  )
+  const kpiVencidas = useMemo(() => {
+    const hoy = hoyLocal()
+    return filteredTareas.filter((t) => estaVencida(t, hoy)).length
+  }, [filteredTareas])
 
   const kpiEvidenciasCargadas = useMemo(
     () => filteredEvidencias.filter((e) => e.estado === 'Cargada').length,

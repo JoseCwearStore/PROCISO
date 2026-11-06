@@ -27,17 +27,16 @@ import type {
   LoginReason,
 } from '../types'
 import {
-  TAREAS,
   NO_CONFORMIDADES,
   NOTIFICACIONES,
   ENTREGABLES,
   HISTORIAL,
 } from '../data/demo'
 import { canAccess } from '../config/permissions'
+import { estaVencida, hoyLocal } from '../lib/tareas'
 
 // Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
 const DEMO: DatosDemo = {
-  tareas: TAREAS,
   entregables: ENTREGABLES,
   noConformidades: NO_CONFORMIDADES,
   notificaciones: NOTIFICACIONES,
@@ -502,7 +501,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       (!n.pagina || canAccess(n.pagina, state.currentRole)) &&
       (state.currentRole !== 'Usuario Cliente' || !n.proyectoId || proyectosCliente.has(n.proyectoId))
   ).length
-  const tareasVencidas = state.tareas.filter((t) => t.estado === 'Vencida').length
+  const hoy = hoyLocal()
+  const tareasVencidas = state.tareas.filter((t) => estaVencida(t, hoy)).length
 
   return (
     <AppContext.Provider

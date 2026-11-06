@@ -420,7 +420,7 @@ export const DOCUMENTOS: Documento[] = [
 
 export const TAREAS: Tarea[] = [
   {
-    id: 'tar-001',
+    id: '77777777-0000-0000-0000-000000000001',
     titulo: 'Redactar procedimiento de gestión de compras',
     descripcion: 'Elaborar el procedimiento documentado para el proceso de compras.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -429,20 +429,20 @@ export const TAREAS: Tarea[] = [
     estado: 'En proceso',
     prioridad: 'Alta',
     fechaVencimiento: '15/09/2024',
-    dependencias: ['tar-006'],
+    dependencias: ['77777777-0000-0000-0000-000000000006'],
     comentarios: [
       { id: 'com-001', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', fecha: '05/09/2024', texto: 'Prioridad alta, necesario para completar la fase 3.' },
     ],
     historial: [],
   },
   {
-    id: 'tar-002',
+    id: '77777777-0000-0000-0000-000000000002',
     titulo: 'Reunión de revisión con cliente - Manufact. Norte',
     descripcion: 'Revisión de avances del proyecto y alineación con equipo directivo del cliente.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
     asignadoAId: 'aaaaaaaa-0000-0000-0000-000000000003',
     asignadoPorId: 'aaaaaaaa-0000-0000-0000-000000000002',
-    estado: 'Vencida',
+    estado: 'Pendiente', // vencida por fecha (estaVencida), no por estado
     prioridad: 'Alta',
     fechaVencimiento: '31/08/2024',
     dependencias: [],
@@ -450,7 +450,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-003',
+    id: '77777777-0000-0000-0000-000000000003',
     titulo: 'Levantar proceso de atención al cliente',
     descripcion: 'Agendar y realizar sesiones de entrevistas con el equipo de servicio al cliente.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -464,7 +464,7 @@ export const TAREAS: Tarea[] = [
     historial: [{ fecha: '20/09/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', de: 'En proceso', a: 'En revisión' }],
   },
   {
-    id: 'tar-004',
+    id: '77777777-0000-0000-0000-000000000004',
     titulo: 'Revisar y aprobar manual de calidad v1.1',
     descripcion: 'Revisión del manual de calidad por parte de la dirección.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -478,7 +478,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-005',
+    id: '77777777-0000-0000-0000-000000000005',
     titulo: 'Cargar evidencias de proceso de compras',
     descripcion: 'Solicitar y cargar evidencias documentales del proceso actual.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -493,7 +493,7 @@ export const TAREAS: Tarea[] = [
     historial: [{ fecha: '28/03/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000005', de: 'En proceso', a: 'Completada' }],
   },
   {
-    id: 'tar-006',
+    id: '77777777-0000-0000-0000-000000000006',
     titulo: 'Entrevista con jefe de producción',
     descripcion: 'Levantamiento del proceso de control de producción.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -508,7 +508,7 @@ export const TAREAS: Tarea[] = [
     historial: [{ fecha: '09/04/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000003', de: 'En proceso', a: 'Completada' }],
   },
   {
-    id: 'tar-007',
+    id: '77777777-0000-0000-0000-000000000007',
     titulo: 'Elaborar IT: calibración de equipos',
     descripcion: 'Redactar instrucción de trabajo para la calibración de equipos de medición.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -517,12 +517,12 @@ export const TAREAS: Tarea[] = [
     estado: 'En proceso',
     prioridad: 'Media',
     fechaVencimiento: '05/10/2024',
-    dependencias: ['tar-006'],
+    dependencias: ['77777777-0000-0000-0000-000000000006'],
     comentarios: [],
     historial: [],
   },
   {
-    id: 'tar-008',
+    id: '77777777-0000-0000-0000-000000000008',
     titulo: 'Capacitación en SGC al personal operativo',
     descripcion: 'Sesión de sensibilización e inducción al SGC para el personal.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -536,7 +536,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-009',
+    id: '77777777-0000-0000-0000-000000000009',
     titulo: 'Diagnóstico inicial - Distribuidora Altiplano',
     descripcion: 'Aplicar cuestionario de diagnóstico GAP con la alta dirección.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -552,7 +552,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-010',
+    id: '77777777-0000-0000-0000-000000000010',
     titulo: 'Reunión de arranque con Distribuidora Altiplano',
     descripcion: 'Presentación del proyecto, objetivos y plan de trabajo.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -567,7 +567,7 @@ export const TAREAS: Tarea[] = [
     historial: [{ fecha: '05/08/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000004', de: 'En proceso', a: 'Completada' }],
   },
   {
-    id: 'tar-011',
+    id: '77777777-0000-0000-0000-000000000011',
     titulo: 'Enviar contrato de servicios al cliente',
     descripcion: 'Gestionar firma del contrato de servicios de consultoría.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -582,7 +582,7 @@ export const TAREAS: Tarea[] = [
     historial: [{ fecha: '26/07/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', de: 'En proceso', a: 'Completada' }],
   },
   {
-    id: 'tar-012',
+    id: '77777777-0000-0000-0000-000000000012',
     titulo: 'Definir alcance del SGC con la dirección',
     descripcion: 'Determinar el alcance del sistema de gestión con el cliente.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -591,12 +591,12 @@ export const TAREAS: Tarea[] = [
     estado: 'Pendiente',
     prioridad: 'Alta',
     fechaVencimiento: '30/09/2024',
-    dependencias: ['tar-009'],
+    dependencias: ['77777777-0000-0000-0000-000000000009'],
     comentarios: [],
     historial: [],
   },
   {
-    id: 'tar-013',
+    id: '77777777-0000-0000-0000-000000000013',
     titulo: 'Levantar proceso de recepción de mercancía',
     descripcion: 'Entrevistas y observación del proceso de recepción en bodega.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -610,7 +610,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-014',
+    id: '77777777-0000-0000-0000-000000000014',
     titulo: 'Elaborar informe de diagnóstico inicial',
     descripcion: 'Informe con hallazgos del diagnóstico GAP y recomendaciones.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -619,7 +619,7 @@ export const TAREAS: Tarea[] = [
     estado: 'Requiere corrección',
     prioridad: 'Alta',
     fechaVencimiento: '30/09/2024',
-    dependencias: ['tar-009'],
+    dependencias: ['77777777-0000-0000-0000-000000000009'],
     comentarios: [{ id: 'com-003', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', fecha: '28/09/2024', texto: 'Favor de agregar la sección de brechas identificadas vs requisitos de la norma.' }],
     historial: [
       { fecha: '25/09/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000004', de: 'En proceso', a: 'En revisión' },
@@ -627,7 +627,7 @@ export const TAREAS: Tarea[] = [
     ],
   },
   {
-    id: 'tar-015',
+    id: '77777777-0000-0000-0000-000000000015',
     titulo: 'Auditoría interna - revisión documental',
     descripcion: 'Revisión de la documentación del SGC previa a auditoría de certificación.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -641,13 +641,13 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-016',
+    id: '77777777-0000-0000-0000-000000000016',
     titulo: 'Elaborar formato de registro de no conformidades',
     descripcion: 'Crear el formato oficial para el registro y seguimiento de NC.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
     asignadoAId: 'aaaaaaaa-0000-0000-0000-000000000003',
     asignadoPorId: 'aaaaaaaa-0000-0000-0000-000000000002',
-    estado: 'Vencida',
+    estado: 'Pendiente', // vencida por fecha (estaVencida), no por estado
     prioridad: 'Media',
     fechaVencimiento: '15/08/2024',
     dependencias: [],
@@ -655,7 +655,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-017',
+    id: '77777777-0000-0000-0000-000000000017',
     titulo: 'Revisión de listas de verificación',
     descripcion: 'Validar que las listas de verificación cubren todos los requisitos.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -669,7 +669,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-018',
+    id: '77777777-0000-0000-0000-000000000018',
     titulo: 'Actualizar matriz de riesgos y oportunidades',
     descripcion: 'Revisar y actualizar la matriz de riesgos con el equipo del cliente.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -683,7 +683,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-019',
+    id: '77777777-0000-0000-0000-000000000019',
     titulo: 'Recopilar expedientes de personal capacitado',
     descripcion: 'Recopilar evidencias de capacitaciones previas del personal.',
     proyectoId: '33333333-0000-0000-0000-000000000002',
@@ -697,7 +697,7 @@ export const TAREAS: Tarea[] = [
     historial: [],
   },
   {
-    id: 'tar-020',
+    id: '77777777-0000-0000-0000-000000000020',
     titulo: 'Presentar informe de avance mensual',
     descripcion: 'Informe de avance del mes al equipo directivo.',
     proyectoId: '33333333-0000-0000-0000-000000000001',

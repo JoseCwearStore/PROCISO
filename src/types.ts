@@ -25,7 +25,7 @@ export type EstadoTarea =
   | 'En revisión'
   | 'Requiere corrección'
   | 'Completada'
-  | 'Vencida'
+// "Vencida" no es un estado: se calcula con estaVencida() (src/lib/tareas.ts).
 
 // ─── Document states ──────────────────────────────────────────────────────────
 export type EstadoDocumento =

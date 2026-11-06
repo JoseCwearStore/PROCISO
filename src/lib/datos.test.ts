@@ -83,6 +83,15 @@ function filasBase(): FilasSesion {
       { id: 8, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'Revisada', estado_nuevo: 'Revisada', creado_en: '2024-03-24T10:00:00+00:00' },
       { id: 7, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: 'Se ve bien', estado_anterior: 'Cargada', estado_nuevo: 'Revisada', creado_en: '2024-03-23T10:00:00+00:00' },
       { id: 9, entidad_tipo: 'documento', entidad_id: 'doc-p1', autor_id: ROBERTO, accion: 'Enviado a revisión', descripcion: 'Versión 1.0', estado_anterior: null, estado_nuevo: null, creado_en: '2024-03-25T10:00:00+00:00' },
+      { id: 11, entidad_tipo: 'tarea', entidad_id: 'tar-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: 'Listo', estado_anterior: 'En proceso', estado_nuevo: 'En revisión', creado_en: '2024-09-12T10:00:00+00:00' },
+      { id: 10, entidad_tipo: 'tarea', entidad_id: 'tar-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'Pendiente', estado_nuevo: 'En proceso', creado_en: '2024-09-11T10:00:00+00:00' },
+    ],
+    tareas: [
+      {
+        id: 'tar-p1', proyecto_id: P1, titulo: 'Cargar evidencias de compras', descripcion: 'Fotos del almacén',
+        asignado_a: CARLOS, asignado_por: ROBERTO, estado: 'En revisión', prioridad: 'Alta',
+        fecha_vencimiento: '2024-09-15', fecha_completada: null, dependencias: ['tar-p0'],
+      },
     ],
     documentos: [
       {
@@ -103,6 +112,7 @@ function filasBase(): FilasSesion {
       { id: 'com-2', entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: CARLOS, texto: 'Agregar el alcance', creado_en: '2024-07-20T10:00:00+00:00' },
       { id: 'com-1', entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: ROBERTO, texto: 'Revisar redacción', creado_en: '2024-07-18T10:00:00+00:00' },
       { id: 'com-ev', entidad_tipo: 'evidencia', entidad_id: 'ev-p1', seccion_id: null, autor_id: ROBERTO, texto: 'Otra entidad', creado_en: '2024-07-19T10:00:00+00:00' },
+      { id: 'com-t1', entidad_tipo: 'tarea', entidad_id: 'tar-p1', seccion_id: null, autor_id: CARLOS, texto: 'Listo', creado_en: '2024-09-12T10:00:00+00:00' },
     ],
   }
 }
@@ -110,7 +120,6 @@ function filasBase(): FilasSesion {
 // Datos de demo de DOS proyectos: P1 (visible) y P2 (de otra empresa, no visible).
 function demoBase(): DatosDemo {
   return {
-    tareas: [{ id: 'tar-p2', proyectoId: P2 }] as Tarea[],
     entregables: [],
     noConformidades: [],
     notificaciones: [
@@ -205,7 +214,31 @@ describe('combinarDatosSesion', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
-    expect(datos.tareas).toEqual([])
+  })
+
+  it('traduce las tareas de la BD con su historial y comentarios ordenados', () => {
+    const { tareas } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(tareas).toEqual<Tarea[]>([
+      {
+        id: 'tar-p1',
+        titulo: 'Cargar evidencias de compras',
+        descripcion: 'Fotos del almacén',
+        proyectoId: P1,
+        asignadoAId: CARLOS,
+        asignadoPorId: ROBERTO,
+        estado: 'En revisión',
+        prioridad: 'Alta',
+        fechaVencimiento: '15/09/2024',
+        fechaCompletada: undefined,
+        dependencias: ['tar-p0'],
+        comentarios: [{ id: 'com-t1', autorId: CARLOS, fecha: '12/09/2024', texto: 'Listo' }],
+        historial: [
+          { fecha: '11/09/2024', autorId: CARLOS, de: 'Pendiente', a: 'En proceso' },
+          { fecha: '12/09/2024', autorId: CARLOS, de: 'En proceso', a: 'En revisión' },
+        ],
+      },
+    ])
   })
 
   it('traduce los procesos de la BD con sus actividades ordenadas y sus vínculos', () => {
@@ -322,6 +355,7 @@ describe('cargarFilasSesion', () => {
       documento_versiones: filas.versiones,
       documento_evidencias: filas.vinculos,
       comentarios: filas.comentarios,
+      tareas: filas.tareas,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -332,13 +366,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las catorce tablas y devuelve sus filas', async () => {
+  it('lee las quince tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(14)
+    expect(cliente.from).toHaveBeenCalledTimes(15)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

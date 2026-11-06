@@ -17,22 +17,19 @@ import { useApp } from '../context/AppContext'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
+import { useAccionesTarea } from '../hooks/useAccionesTarea'
+import type { CambiosTarea } from '../lib/escrituras'
+import { ESTADOS_TAREA, estaVencida } from '../lib/tareas'
 import type { EstadoTarea, PrioridadTarea, Tarea } from '../types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
-const ESTADOS: EstadoTarea[] = [
-  'Pendiente',
-  'En proceso',
-  'En revisión',
-  'Requiere corrección',
-  'Completada',
-  'Vencida',
-]
+// "Vencida" no es una columna: una tarea vencida sigue en su estado y se marca en rojo.
+const ESTADOS = ESTADOS_TAREA
+// Opción extra del filtro de estado (se calcula con la fecha, no se guarda).
+const FILTRO_VENCIDAS = 'Vencidas'
 
 const PRIORIDADES: PrioridadTarea[] = ['Alta', 'Media', 'Baja']
-
-const TODAY = '2026-10-23'
 
 const PRIORIDAD_COLORS: Record<PrioridadTarea, string> = {
   Alta: 'bg-red-100 text-red-700 border-red-200',
@@ -46,7 +43,6 @@ const COLUMN_HEADER_COLORS: Record<EstadoTarea, string> = {
   'En revisión': 'bg-amber-50 text-amber-700 border-amber-200',
   'Requiere corrección': 'bg-orange-50 text-orange-700 border-orange-200',
   'Completada': 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  'Vencida': 'bg-red-50 text-red-700 border-red-200',
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -73,9 +69,6 @@ function formatFecha(fecha: string): string {
   return `${d}/${m}/${y}`
 }
 
-function isVencida(fecha: string): boolean {
-  return parseFecha(fecha) < TODAY
-}
 
 // ─── Avatars ──────────────────────────────────────────────────────────────────
 
@@ -119,7 +112,7 @@ interface KanbanCardProps {
 }
 
 function KanbanCard({ tarea, proyectoNombre, onClick, onDragStart }: KanbanCardProps) {
-  const vencida = isVencida(tarea.fechaVencimiento)
+  const vencida = estaVencida(tarea)
 
   return (
     <div
@@ -150,6 +143,11 @@ function KanbanCard({ tarea, proyectoNombre, onClick, onDragStart }: KanbanCardP
               <Calendar className="w-3 h-3" />
               {formatFecha(tarea.fechaVencimiento)}
             </span>
+            {vencida && (
+              <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+                Vencida
+              </span>
+            )}
           </div>
           <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab flex-shrink-0" />
         </div>
@@ -170,10 +168,8 @@ interface KanbanColumnProps {
 
 function KanbanColumn({ estado, tareas, getProyectoNombre, onDrop, onCardClick }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false)
-  const isVencidaCol = estado === 'Vencida'
 
   const handleDragOver = (e: React.DragEvent) => {
-    if (isVencidaCol) return // no drop into Vencida
     e.preventDefault()
     setDragOver(true)
   }
@@ -183,7 +179,6 @@ function KanbanColumn({ estado, tareas, getProyectoNombre, onDrop, onCardClick }
   const handleDrop = (e: React.DragEvent) => {
     e.preventDefault()
     setDragOver(false)
-    if (isVencidaCol) return
     const taskId = e.dataTransfer.getData('text/plain')
     if (taskId) onDrop(estado, taskId)
   }
@@ -234,60 +229,56 @@ interface TareaDetailModalProps {
 }
 
 function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
-  const { state, dispatch, showToast, getProyecto } = useApp()
+  const { state, showToast, getProyecto } = useApp()
+  const acciones = useAccionesTarea()
   const [localTarea, setLocalTarea] = useState<Tarea | null>(tarea)
   const [nuevoComentario, setNuevoComentario] = useState('')
+  const [guardando, setGuardando] = useState(false)
 
   // Sync when tarea prop changes
   if (tarea && localTarea?.id !== tarea.id) {
     setLocalTarea(tarea)
   }
 
-  if (!localTarea) return null
+  if (!localTarea || !tarea) return null
 
   const proyecto = getProyecto(localTarea.proyectoId)
-  const usuario = state.usuarios.find((u) => u.id === localTarea.asignadoAId)
-  const completandoAhora = localTarea.estado === 'Completada' && tarea?.estado !== 'Completada'
+  const completandoAhora = localTarea.estado === 'Completada' && tarea.estado !== 'Completada'
+  // Solo lo que el servidor va a aceptar: el equipo edita y mueve a cualquier estado;
+  // el asignado solo avanza su trabajo.
+  const puedeEditar = acciones.esEquipo
+  const estadosPosibles = [tarea.estado, ...acciones.permitidas(tarea)]
+  const asignables = acciones.asignables(localTarea.proyectoId)
 
-  function handleGuardar() {
-    if (!localTarea) return
-    const updates: Partial<Tarea> = {
-      estado: localTarea.estado,
-      prioridad: localTarea.prioridad,
-      asignadoAId: localTarea.asignadoAId,
-      fechaVencimiento: localTarea.fechaVencimiento,
-      descripcion: localTarea.descripcion,
-      comentarios: localTarea.comentarios,
+  // Tres operaciones distintas en la BD: editar datos (equipo), cambiar estado (RPC
+  // con historial) y comentar (inmediato, abajo).
+  async function handleGuardar() {
+    if (!localTarea || !tarea || guardando) return
+    const cambios: CambiosTarea = {}
+    if (localTarea.descripcion !== tarea.descripcion) cambios.descripcion = localTarea.descripcion
+    if (localTarea.prioridad !== tarea.prioridad) cambios.prioridad = localTarea.prioridad
+    if (localTarea.asignadoAId !== tarea.asignadoAId) cambios.asignadoAId = localTarea.asignadoAId
+    if (parseFecha(localTarea.fechaVencimiento) !== parseFecha(tarea.fechaVencimiento)) {
+      cambios.fechaVencimiento = localTarea.fechaVencimiento
     }
-    if (localTarea.estado === 'Completada' && tarea?.estado !== 'Completada') {
-      updates.fechaCompletada = TODAY
-    }
-    // Add historial entry if estado changed
-    if (tarea && localTarea.estado !== tarea.estado) {
-      updates.historial = [
-        ...(localTarea.historial ?? []),
-        {
-          fecha: formatFecha(TODAY),
-          autorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
-          de: tarea.estado,
-          a: localTarea.estado,
-        },
-      ]
-    }
-    dispatch({ type: 'UPDATE_TAREA', id: localTarea.id, updates })
+
+    setGuardando(true)
+    // Los comentarios ya se guardaron al agregarlos: se parte de la lista actual.
+    let actual: Tarea | null = { ...tarea, comentarios: localTarea.comentarios }
+    if (puedeEditar) actual = await acciones.editar(actual, cambios)
+    if (actual && localTarea.estado !== tarea.estado) actual = await acciones.cambiarEstado(actual, localTarea.estado)
+    setGuardando(false)
+    if (!actual) return
+
     showToast(`Tarea "${localTarea.titulo}" actualizada.`, 'success')
     onClose()
   }
 
-  function handleAddComentario() {
+  async function handleAddComentario() {
     if (!nuevoComentario.trim() || !localTarea) return
-    const comentario = {
-      id: `com-${Date.now()}`,
-      autorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
-      fecha: formatFecha(TODAY),
-      texto: nuevoComentario.trim(),
-    }
-    setLocalTarea({ ...localTarea, comentarios: [...localTarea.comentarios, comentario] })
+    const actualizada = await acciones.comentar(localTarea, nuevoComentario)
+    if (!actualizada) return
+    setLocalTarea({ ...localTarea, comentarios: actualizada.comentarios })
     setNuevoComentario('')
   }
 
@@ -304,7 +295,9 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={handleGuardar}>Guardar cambios</Button>
+          <Button variant="primary" onClick={handleGuardar} disabled={guardando}>
+            {guardando ? 'Guardando…' : 'Guardar cambios'}
+          </Button>
         </>
       }
     >
@@ -321,9 +314,10 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
         <div>
           <label className="block text-xs font-semibold text-slate-500 mb-1">Descripción</label>
           <textarea
-            className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg resize-none focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50"
             rows={3}
             value={localTarea.descripcion}
+            disabled={!puedeEditar}
             onChange={(e) => setLocalTarea({ ...localTarea, descripcion: e.target.value })}
           />
         </div>
@@ -333,19 +327,24 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Estado</label>
             <select
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
               value={localTarea.estado}
+              disabled={estadosPosibles.length === 1}
               onChange={(e) => setLocalTarea({ ...localTarea, estado: e.target.value as EstadoTarea })}
             >
-              {ESTADOS.map((es) => (
+              {estadosPosibles.map((es) => (
                 <option key={es} value={es}>{es}</option>
               ))}
             </select>
+            {!acciones.esEquipo && tarea.estado === 'En revisión' && (
+              <p className="text-xs text-slate-400 mt-1">La consultoría revisa y cierra la tarea.</p>
+            )}
           </div>
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Prioridad</label>
             <select
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
+              disabled={!puedeEditar}
               value={localTarea.prioridad}
               onChange={(e) => setLocalTarea({ ...localTarea, prioridad: e.target.value as PrioridadTarea })}
             >
@@ -361,11 +360,16 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
           <div>
             <label className="block text-xs font-semibold text-slate-500 mb-1">Asignado a</label>
             <select
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
               value={localTarea.asignadoAId}
+              disabled={!puedeEditar}
               onChange={(e) => setLocalTarea({ ...localTarea, asignadoAId: e.target.value })}
             >
-              {state.usuarios.map((u) => (
+              {/* El asignado actual siempre aparece, aunque ya no sea asignable. */}
+              {(asignables.some((u) => u.id === localTarea.asignadoAId)
+                ? asignables
+                : [...asignables, ...state.usuarios.filter((u) => u.id === localTarea.asignadoAId)]
+              ).map((u) => (
                 <option key={u.id} value={u.id}>{u.nombre}</option>
               ))}
             </select>
@@ -383,8 +387,9 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
           <label className="block text-xs font-semibold text-slate-500 mb-1">Fecha de vencimiento</label>
           <input
             type="date"
-            className="border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            className="border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
             value={parseFecha(localTarea.fechaVencimiento)}
+            disabled={!puedeEditar}
             onChange={(e) =>
               setLocalTarea({ ...localTarea, fechaVencimiento: e.target.value })
             }
@@ -487,7 +492,9 @@ interface NuevaTareaModalProps {
 }
 
 function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
-  const { state, dispatch, showToast } = useApp()
+  const { state, showToast } = useApp()
+  const acciones = useAccionesTarea()
+  const [guardando, setGuardando] = useState(false)
   const [titulo, setTitulo] = useState('')
   const [descripcion, setDescripcion] = useState('')
   const [proyectoId, setProyectoId] = useState('')
@@ -517,23 +524,13 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
     return Object.keys(e).length === 0
   }
 
-  function handleSubmit() {
-    if (!validate()) return
-    const newTarea: Tarea = {
-      id: `tar-${Date.now()}`,
-      titulo: titulo.trim(),
-      descripcion: descripcion.trim(),
-      proyectoId,
-      asignadoAId,
-      asignadoPorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
-      estado: 'Pendiente',
-      prioridad,
-      fechaVencimiento,
-      dependencias: [],
-      comentarios: [],
-      historial: [],
-    }
-    dispatch({ type: 'ADD_TAREA', tarea: newTarea })
+  // Escritura pesimista: si la BD rechaza, el formulario queda como estaba.
+  async function handleSubmit() {
+    if (!validate() || guardando) return
+    setGuardando(true)
+    const creada = await acciones.crear({ titulo, descripcion, proyectoId, asignadoAId, prioridad, fechaVencimiento })
+    setGuardando(false)
+    if (!creada) return
     showToast('Tarea creada.', 'success')
     handleClose()
   }
@@ -547,7 +544,9 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
       footer={
         <>
           <Button variant="outline" onClick={handleClose}>Cancelar</Button>
-          <Button variant="primary" onClick={handleSubmit}>Crear tarea</Button>
+          <Button variant="primary" onClick={handleSubmit} disabled={guardando}>
+            {guardando ? 'Creando…' : 'Crear tarea'}
+          </Button>
         </>
       }
     >
@@ -587,7 +586,11 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
           <select
             className={`w-full border rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.proyectoId ? 'border-red-400' : 'border-line'}`}
             value={proyectoId}
-            onChange={(e) => setProyectoId(e.target.value)}
+            onChange={(e) => {
+              // El asignado depende del proyecto: al cambiarlo, se vuelve a elegir.
+              setProyectoId(e.target.value)
+              setAsignadoAId('')
+            }}
           >
             <option value="">Seleccionar proyecto...</option>
             {state.proyectos.map((p) => (
@@ -605,11 +608,13 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
           <select
             className={`w-full border rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 ${errors.asignadoAId ? 'border-red-400' : 'border-line'}`}
             value={asignadoAId}
+            disabled={!proyectoId}
             onChange={(e) => setAsignadoAId(e.target.value)}
           >
-            <option value="">Seleccionar usuario...</option>
-            {state.usuarios.filter((u) => u.activo).map((u) => (
-              <option key={u.id} value={u.id}>{u.nombre}</option>
+            <option value="">{proyectoId ? 'Seleccionar usuario...' : 'Primero elige el proyecto'}</option>
+            {/* Equipo del proyecto o clientes de su empresa (lo mismo que valida la BD). */}
+            {acciones.asignables(proyectoId).map((u) => (
+              <option key={u.id} value={u.id}>{u.nombre} · {u.rol}</option>
             ))}
           </select>
           {errors.asignadoAId && <p className="text-xs text-red-500 mt-1">{errors.asignadoAId}</p>}
@@ -622,7 +627,7 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
               Prioridad <span className="text-red-500">*</span>
             </label>
             <select
-              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
               value={prioridad}
               onChange={(e) => setPrioridad(e.target.value as PrioridadTarea)}
             >
@@ -661,25 +666,23 @@ interface Filtros {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function TableroTareas() {
-  const { state, dispatch, getProyecto, showToast } = useApp()
+  const { state, getProyecto, showToast } = useApp()
+  const acciones = useAccionesTarea()
   const [view, setView] = useState<'kanban' | 'lista'>('kanban')
   const [filtros, setFiltros] = useState<Filtros>({ proyectoId: '', asignadoAId: '', prioridad: '', estado: '' })
   const [sortBy, setSortBy] = useState<'fechaVencimiento' | 'prioridad' | 'estado'>('fechaVencimiento')
   const [tareaDetalle, setTareaDetalle] = useState<Tarea | null>(null)
   const [nuevaTareaOpen, setNuevaTareaOpen] = useState(false)
 
-  const usuarioSesion = state.usuarios.find((item) => item.email === state.currentUser?.email)
-  const usuarioCliente = usuarioSesion?.empresaId ? usuarioSesion : state.usuarios.find((item) => item.rol === 'Usuario Cliente' && item.activo)
-  const empresaClienteId = state.currentRole === 'Usuario Cliente' ? usuarioCliente?.empresaId : undefined
-  const proyectosDisponibles = state.proyectos.filter((item) => !empresaClienteId || item.empresaId === empresaClienteId)
-  const proyectoIdsDisponibles = new Set(proyectosDisponibles.map((item) => item.id))
+  // El RLS ya dejó en el estado solo los proyectos y tareas que este usuario puede ver.
+  const proyectosDisponibles = state.proyectos
 
   // Filtered tareas
   const tareasFiltradas = state.tareas.filter((t) => {
-    if (!proyectoIdsDisponibles.has(t.proyectoId)) return false
     if (filtros.proyectoId && t.proyectoId !== filtros.proyectoId) return false
     if (filtros.asignadoAId && t.asignadoAId !== filtros.asignadoAId) return false
     if (filtros.prioridad && t.prioridad !== filtros.prioridad) return false
+    if (filtros.estado === FILTRO_VENCIDAS) return estaVencida(t)
     if (filtros.estado && t.estado !== filtros.estado) return false
     return true
   })
@@ -692,39 +695,39 @@ export default function TableroTareas() {
   // Sort for list view
   const PRIORIDAD_ORDER: Record<PrioridadTarea, number> = { Alta: 0, Media: 1, Baja: 2 }
   const ESTADO_ORDER: Record<EstadoTarea, number> = {
-    Vencida: 0, 'En proceso': 1, 'En revisión': 2, 'Requiere corrección': 3, Pendiente: 4, Completada: 5,
+    'En proceso': 1, 'En revisión': 2, 'Requiere corrección': 3, Pendiente: 4, Completada: 5,
   }
+  // Las vencidas primero (como antes la "columna" Vencida), después por estado.
+  const rangoEstado = (t: Tarea) => (estaVencida(t) ? 0 : ESTADO_ORDER[t.estado])
 
   const tareasOrdenadas = [...tareasFiltradas].sort((a, b) => {
     if (sortBy === 'prioridad') return PRIORIDAD_ORDER[a.prioridad] - PRIORIDAD_ORDER[b.prioridad]
-    if (sortBy === 'estado') return ESTADO_ORDER[a.estado] - ESTADO_ORDER[b.estado]
+    if (sortBy === 'estado') return rangoEstado(a) - rangoEstado(b)
     // fechaVencimiento asc
     return parseFecha(a.fechaVencimiento).localeCompare(parseFecha(b.fechaVencimiento))
   })
 
-  function handleDrop(estado: EstadoTarea, taskId: string) {
+  async function handleDrop(estado: EstadoTarea, taskId: string) {
     const tarea = state.tareas.find((t) => t.id === taskId)
     if (!tarea || tarea.estado === estado) return
 
-    const updates: Partial<Tarea> = {
-      estado,
-      historial: [
-        ...tarea.historial,
-        {
-          fecha: formatFecha(TODAY),
-          autorId: state.currentUser?.id ?? 'aaaaaaaa-0000-0000-0000-000000000002',
-          de: tarea.estado,
-          a: estado,
-        },
-      ],
-    }
-    if (estado === 'Completada') {
-      updates.fechaCompletada = TODAY
+    // Se avisa antes de ir al servidor (que igual lo rechazaría).
+    if (!acciones.permitidas(tarea).includes(estado)) {
+      showToast(
+        acciones.esEquipo || tarea.asignadoAId !== state.currentUser?.id
+          ? 'No puedes mover esta tarea.'
+          : 'Puedes avanzar tu tarea; cerrarla o devolverla le corresponde a la consultoría.',
+        'error'
+      )
+      return
     }
 
-    dispatch({ type: 'UPDATE_TAREA', id: taskId, updates })
+    const movida = await acciones.cambiarEstado(tarea, estado)
+    if (!movida) return
     showToast(
-      `"${tarea.titulo}" movida a ${estado}. El avance del proyecto se actualiza automáticamente.`,
+      estado === 'Completada'
+        ? `"${tarea.titulo}" completada. El avance del proyecto se actualiza automáticamente.`
+        : `"${tarea.titulo}" movida a ${estado}.`,
       'success'
     )
   }
@@ -822,6 +825,7 @@ export default function TableroTareas() {
             {ESTADOS.map((es) => (
               <option key={es} value={es}>{es}</option>
             ))}
+            <option value={FILTRO_VENCIDAS}>Vencidas (fecha pasada)</option>
           </select>
 
           {(filtros.proyectoId || filtros.asignadoAId || filtros.prioridad || filtros.estado) && (
@@ -913,7 +917,7 @@ export default function TableroTareas() {
                     {tareasOrdenadas.map((tarea, idx) => {
                       const proyecto = getProyecto(tarea.proyectoId)
                       const usuario = state.usuarios.find((u) => u.id === tarea.asignadoAId)
-                      const vencida = isVencida(tarea.fechaVencimiento)
+                      const vencida = estaVencida(tarea)
                       return (
                         <tr
                           key={tarea.id}

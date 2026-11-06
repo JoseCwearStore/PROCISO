@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type NuevoProyecto } from './escrituras'
-import type { FilaEmpresa, FilaProyecto } from './datos'
+import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type NuevaTarea, type NuevoProyecto } from './escrituras'
+import type { FilaEmpresa, FilaProyecto, FilaTarea } from './datos'
 import type { Documento, Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
@@ -508,5 +508,136 @@ describe('cambiarEstadoProyecto', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.cambiarEstadoProyecto(P_NUEVO, 'Diagnóstico')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+// ─── Tareas ───────────────────────────────────────────────────────────────────
+
+const T_NUEVA = '77777777-0000-0000-0000-0000000000aa'
+const CARLOS = 'aaaaaaaa-0000-0000-0000-000000000005'
+
+const NUEVA_TAREA: NuevaTarea = {
+  id: T_NUEVA, proyectoId: P_NUEVO, titulo: ' Cargar evidencias ', descripcion: ' ', asignadoAId: CARLOS,
+  prioridad: 'Alta', fechaVencimiento: '2026-11-20',
+}
+
+const FILA_TAREA: FilaTarea = {
+  id: T_NUEVA, proyecto_id: P_NUEVO, titulo: 'Cargar evidencias', descripcion: '', asignado_a: CARLOS,
+  asignado_por: ROBERTO, estado: 'Pendiente', prioridad: 'Alta', fecha_vencimiento: '2026-11-20',
+  fecha_completada: null, dependencias: [],
+}
+
+describe('crearTarea', () => {
+  it('inserta solo las columnas permitidas: el estado y quién asigna los pone el servidor', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'tareas.insert': { data: FILA_TAREA, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.crearTarea(C1, NUEVA_TAREA)
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'tareas',
+        operacion: 'insert',
+        datos: {
+          id: T_NUEVA, consultoria_id: C1, proyecto_id: P_NUEVO, titulo: 'Cargar evidencias', descripcion: '',
+          asignado_a: CARLOS, prioridad: 'Alta', fecha_vencimiento: '2026-11-20', dependencias: [],
+        },
+      },
+    ])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: expect.objectContaining({ id: T_NUEVA, estado: 'Pendiente', asignadoPorId: ROBERTO, fechaVencimiento: '20/11/2026', historial: [], comentarios: [] }),
+    })
+  })
+
+  it('no intenta guardar si el usuario no pertenece a una consultoría', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.crearTarea(null, NUEVA_TAREA)).toEqual({ ok: false, error: 'sin_consultoria' })
+    expect(llamadas).toHaveLength(0)
+  })
+
+  it('un asignado que no vale (otra empresa) llega como datos inválidos', async () => {
+    const { cliente } = crearClienteDoble({ 'tareas.insert': { data: null, error: { code: '22023', message: 'El asignado no es…' } } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.crearTarea(C1, NUEVA_TAREA)).toEqual({ ok: false, error: 'datos_invalidos' })
+  })
+})
+
+describe('editarTarea', () => {
+  it('traduce los campos editables a columnas y la fecha a ISO', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.editarTarea(T_NUEVA, {
+      prioridad: 'Baja', asignadoAId: ROBERTO, fechaVencimiento: '25/11/2026', descripcion: ' Más fotos ',
+    })
+
+    expect(resultado).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      {
+        tabla: 'tareas',
+        operacion: 'update',
+        datos: { prioridad: 'Baja', asignado_a: ROBERTO, fecha_vencimiento: '2026-11-25', descripcion: 'Más fotos' },
+        id: T_NUEVA,
+      },
+    ])
+  })
+
+  it('el cliente no edita: el RLS no le devuelve la fila', async () => {
+    const { cliente } = crearClienteDoble({ 'tareas.update': { data: null, error: SIN_FILAS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.editarTarea(T_NUEVA, { prioridad: 'Baja' })).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+describe('cambiarEstadoTarea', () => {
+  it('cambia el estado por la RPC (que deja historial), con el comentario opcional', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.cambiarEstadoTarea(T_NUEVA, 'En revisión', ' Ya subí las fotos ')).toEqual({ ok: true, valor: undefined })
+    expect(await escrituras.cambiarEstadoTarea(T_NUEVA, 'En proceso', '   ')).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      { tabla: 'cambiar_estado_tarea', operacion: 'rpc', datos: { p_id: T_NUEVA, p_estado: 'En revisión', p_comentario: 'Ya subí las fotos' } },
+      { tabla: 'cambiar_estado_tarea', operacion: 'rpc', datos: { p_id: T_NUEVA, p_estado: 'En proceso', p_comentario: null } },
+    ])
+  })
+
+  it('si el cliente intenta completar, el servidor lo rechaza y llega como "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'cambiar_estado_tarea.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.cambiarEstadoTarea(T_NUEVA, 'Completada')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+describe('comentarTarea', () => {
+  it('guarda el comentario en la tabla genérica y lo devuelve con la fecha de la BD', async () => {
+    const fila = { id: 'com-9', entidad_tipo: 'tarea', entidad_id: T_NUEVA, seccion_id: null, autor_id: CARLOS, texto: 'Listo', creado_en: '2026-11-07T10:00:00+00:00' }
+    const { cliente, llamadas } = crearClienteDoble({ 'comentarios.insert': { data: fila, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.comentarTarea(C1, { id: T_NUEVA, proyectoId: P_NUEVO }, ' Listo ')
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'comentarios',
+        operacion: 'insert',
+        datos: { consultoria_id: C1, proyecto_id: P_NUEVO, entidad_tipo: 'tarea', entidad_id: T_NUEVA, texto: 'Listo' },
+      },
+    ])
+    expect(resultado).toEqual({ ok: true, valor: { id: 'com-9', autorId: CARLOS, fecha: '07/11/2026', texto: 'Listo' } })
+  })
+
+  it('no guarda comentarios vacíos', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.comentarTarea(C1, { id: T_NUEVA, proyectoId: P_NUEVO }, '  ')).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toHaveLength(0)
   })
 })

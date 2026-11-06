@@ -5,25 +5,33 @@ import { Button } from '../components/ui/Button'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
+import { useAccionesTarea } from '../hooks/useAccionesTarea'
+import { ESTADOS_TAREA, estaVencida } from '../lib/tareas'
 import type { Tarea, EstadoTarea } from '../types'
 
-const ESTADOS: EstadoTarea[] = ['Pendiente', 'En proceso', 'En revisión', 'Requiere corrección', 'Completada', 'Vencida']
+const ESTADOS = ESTADOS_TAREA
+// Opción extra del filtro: "vencida" se calcula con la fecha, no es un estado.
+const FILTRO_VENCIDAS = 'Vencidas'
 const PRIORIDADES = ['Alta', 'Media', 'Baja'] as const
 
 function TareaRow({
   tarea,
   onClick,
   onStatusChange,
+  opciones,
   proyectoNombre,
   asignadoNombre,
 }: {
   tarea: Tarea
   onClick: () => void
   onStatusChange: (id: string, estado: EstadoTarea) => void
+  opciones: EstadoTarea[] // transiciones que la BD va a aceptar para este usuario
   proyectoNombre: string
   asignadoNombre: string
 }) {
   const [statusOpen, setStatusOpen] = useState(false)
+  const vencida = estaVencida(tarea)
+  const puedeAlternar = opciones.includes(tarea.estado === 'Completada' ? 'Pendiente' : 'Completada')
   const prioridadColor = {
     Alta: 'text-red-600 bg-red-50 border-red-200',
     Media: 'text-amber-600 bg-amber-50 border-amber-200',
@@ -34,14 +42,16 @@ function TareaRow({
     <div className="bg-white rounded-xl border border-slate-200 p-4 hover:shadow-sm transition-shadow">
       <div className="flex items-start gap-3">
         {/* Status toggle button */}
+        {/* Completar/reabrir es del equipo (la BD lo exige): para el resto, solo indicador. */}
         <button
           onClick={() => onStatusChange(tarea.id, tarea.estado === 'Completada' ? 'Pendiente' : 'Completada')}
-          className="mt-0.5 flex-shrink-0 text-slate-300 hover:text-green-500 transition-colors"
+          disabled={!puedeAlternar}
+          className="mt-0.5 flex-shrink-0 text-slate-300 hover:text-green-500 transition-colors disabled:hover:text-slate-300 disabled:cursor-default"
           aria-label={tarea.estado === 'Completada' ? 'Marcar como pendiente' : 'Marcar como completada'}
         >
           {tarea.estado === 'Completada' ? (
             <CheckCircle className="w-5 h-5 text-green-500" />
-          ) : tarea.estado === 'Vencida' ? (
+          ) : vencida ? (
             <AlertTriangle className="w-5 h-5 text-red-400" />
           ) : tarea.estado === 'En proceso' ? (
             <Clock className="w-5 h-5 text-blue-400" />
@@ -61,18 +71,18 @@ function TareaRow({
               </span>
               <div className="relative">
                 <button
-                  onClick={(e) => { e.stopPropagation(); setStatusOpen((o) => !o) }}
+                  onClick={(e) => { e.stopPropagation(); if (opciones.length > 0) setStatusOpen((o) => !o) }}
                   className="flex items-center gap-1 text-xs"
                   aria-label="Cambiar estado"
                 >
                   <StatusBadge status={tarea.estado} size="sm" />
-                  <ChevronDown className="w-3 h-3 text-slate-400" />
+                  {opciones.length > 0 && <ChevronDown className="w-3 h-3 text-slate-400" />}
                 </button>
                 {statusOpen && (
                   <>
                     <div className="fixed inset-0 z-10" onClick={(e) => { e.stopPropagation(); setStatusOpen(false) }} />
                     <div className="absolute right-0 top-full mt-1 bg-white border border-slate-200 rounded-lg shadow-lg z-20 py-1 w-44">
-                      {ESTADOS.map((e) => (
+                      {opciones.map((e) => (
                         <button
                           key={e}
                           onClick={(ev) => {
@@ -95,8 +105,8 @@ function TareaRow({
           <div className="flex items-center gap-3 mt-1.5 flex-wrap">
             <span className="text-xs text-slate-400 truncate max-w-[180px]">{proyectoNombre}</span>
             <span className="text-xs text-slate-400">{asignadoNombre}</span>
-            <span className={`text-xs font-medium ${tarea.estado === 'Vencida' ? 'text-red-500' : 'text-slate-400'}`}>
-              Vence: {tarea.fechaVencimiento}
+            <span className={`text-xs font-medium ${vencida ? 'text-red-500' : 'text-slate-400'}`}>
+              {vencida ? 'Venció' : 'Vence'}: {tarea.fechaVencimiento}
             </span>
             {tarea.comentarios.length > 0 && (
               <span className="text-xs text-slate-400 flex items-center gap-1">
@@ -112,41 +122,33 @@ function TareaRow({
 }
 
 export function Tareas() {
-  const { state, dispatch, navigate, getProyecto, getUsuario, showToast } = useApp()
+  const { state, navigate, getProyecto, getUsuario, showToast } = useApp()
+  const acciones = useAccionesTarea()
   const [estadoFilter, setEstadoFilter] = useState('')
   const [prioridadFilter, setPrioridadFilter] = useState('')
   const [proyectoFilter, setProyectoFilter] = useState('')
   const [selectedTarea, setSelectedTarea] = useState<Tarea | null>(null)
   const [nuevoComentario, setNuevoComentario] = useState('')
 
-  function handleStatusChange(id: string, estado: EstadoTarea) {
-    const updates: Partial<Tarea> = { estado }
-    if (estado === 'Completada') updates.fechaCompletada = new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' })
-    else updates.fechaCompletada = undefined
-    dispatch({ type: 'UPDATE_TAREA', id, updates })
-    showToast(`Tarea marcada como "${estado}"`, estado === 'Completada' ? 'success' : 'info')
-    if (selectedTarea?.id === id) setSelectedTarea((t) => t ? { ...t, ...updates } : t)
+  // La pantalla lee de state.tareas: lo que la BD aceptó ya está reflejado ahí.
+  async function handleStatusChange(id: string, estado: EstadoTarea) {
+    const tarea = state.tareas.find((t) => t.id === id)
+    if (!tarea || tarea.estado === estado) return
+    const movida = await acciones.cambiarEstado(tarea, estado)
+    if (movida) showToast(`Tarea marcada como "${estado}"`, estado === 'Completada' ? 'success' : 'info')
   }
 
-  function handleAddComentario() {
-    if (!selectedTarea || !nuevoComentario.trim()) return
-    const comentario = {
-      id: `com-${Date.now()}`,
-      autorId: 'aaaaaaaa-0000-0000-0000-000000000002',
-      fecha: new Date().toLocaleDateString('es-MX', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-      texto: nuevoComentario.trim(),
-    }
-    const updates: Partial<Tarea> = {
-      comentarios: [...selectedTarea.comentarios, comentario],
-    }
-    dispatch({ type: 'UPDATE_TAREA', id: selectedTarea.id, updates })
-    setSelectedTarea((t) => t ? { ...t, ...updates } : t)
+  async function handleAddComentario() {
+    if (!currentTarea || !nuevoComentario.trim()) return
+    const comentada = await acciones.comentar(currentTarea, nuevoComentario)
+    if (!comentada) return
     setNuevoComentario('')
     showToast('Comentario agregado', 'success')
   }
 
   let filtered = state.tareas
-  if (estadoFilter) filtered = filtered.filter((t) => t.estado === estadoFilter)
+  if (estadoFilter === FILTRO_VENCIDAS) filtered = filtered.filter((t) => estaVencida(t))
+  else if (estadoFilter) filtered = filtered.filter((t) => t.estado === estadoFilter)
   if (prioridadFilter) filtered = filtered.filter((t) => t.prioridad === prioridadFilter)
   if (proyectoFilter) filtered = filtered.filter((t) => t.proyectoId === proyectoFilter)
 
@@ -155,7 +157,7 @@ export function Tareas() {
     pendiente: filtered.filter((t) => t.estado === 'Pendiente').length,
     enProgreso: filtered.filter((t) => t.estado === 'En proceso').length,
     completada: filtered.filter((t) => t.estado === 'Completada').length,
-    vencida: filtered.filter((t) => t.estado === 'Vencida').length,
+    vencida: filtered.filter((t) => estaVencida(t)).length,
   }
 
   const currentTarea = selectedTarea
@@ -201,6 +203,7 @@ export function Tareas() {
         <select value={estadoFilter} onChange={(e) => setEstadoFilter(e.target.value)} className="h-9 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">Todos los estados</option>
           {ESTADOS.map((e) => <option key={e} value={e}>{e}</option>)}
+          <option value={FILTRO_VENCIDAS}>Vencidas (fecha pasada)</option>
         </select>
         <select value={prioridadFilter} onChange={(e) => setPrioridadFilter(e.target.value)} className="h-9 px-3 rounded-lg border border-slate-300 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500">
           <option value="">Toda prioridad</option>
@@ -236,6 +239,7 @@ export function Tareas() {
                 tarea={tarea}
                 onClick={() => setSelectedTarea(tarea)}
                 onStatusChange={handleStatusChange}
+                opciones={acciones.permitidas(tarea)}
                 proyectoNombre={proyecto?.nombre ?? '—'}
                 asignadoNombre={asignado?.nombre ?? '—'}
               />
@@ -271,7 +275,7 @@ export function Tareas() {
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="text-xs text-slate-400 mb-0.5">Vencimiento</p>
-                <p className={`text-sm font-medium ${currentTarea.estado === 'Vencida' ? 'text-red-600' : 'text-slate-700'}`}>{currentTarea.fechaVencimiento}</p>
+                <p className={`text-sm font-medium ${estaVencida(currentTarea) ? 'text-red-600' : 'text-slate-700'}`}>{currentTarea.fechaVencimiento}</p>
               </div>
               <div className="bg-slate-50 rounded-lg p-3">
                 <p className="text-xs text-slate-400 mb-0.5">Asignado a</p>
@@ -293,8 +297,13 @@ export function Tareas() {
             {/* Change status */}
             <div>
               <p className="text-xs font-medium text-slate-500 mb-2">Cambiar estado</p>
+              {acciones.permitidas(currentTarea).length === 0 && (
+                <p className="text-xs text-slate-400 mb-2">
+                  {currentTarea.estado === 'En revisión' ? 'La consultoría revisa y cierra la tarea.' : 'No puedes cambiar el estado de esta tarea.'}
+                </p>
+              )}
               <div className="flex gap-2 flex-wrap">
-                {ESTADOS.map((e) => (
+                {[currentTarea.estado, ...acciones.permitidas(currentTarea)].map((e) => (
                   <button
                     key={e}
                     onClick={() => handleStatusChange(currentTarea.id, e)}

@@ -1,6 +1,7 @@
 import type {
   ActividadProceso,
   ComentarioDocumento,
+  ComentarioTarea,
   Consultoria,
   Documento,
   SeccionDocumento,
@@ -224,6 +225,20 @@ export interface FilaHistorial {
   creado_en: string
 }
 
+export interface FilaTarea {
+  id: string
+  proyecto_id: string
+  titulo: string
+  descripcion: string
+  asignado_a: string
+  asignado_por: string | null
+  estado: Tarea['estado']
+  prioridad: Tarea['prioridad']
+  fecha_vencimiento: string
+  fecha_completada: string | null
+  dependencias: string[]
+}
+
 export interface FilasSesion {
   consultorias: FilaConsultoria[]
   empresas: FilaEmpresa[]
@@ -239,11 +254,11 @@ export interface FilasSesion {
   versiones: FilaVersion[]
   vinculos: FilaVinculo[]
   comentarios: FilaComentario[]
+  tareas: FilaTarea[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
 export interface DatosDemo {
-  tareas: Tarea[]
   entregables: Entregable[]
   noConformidades: NoConformidad[]
   notificaciones: Notificacion[]
@@ -251,6 +266,7 @@ export interface DatosDemo {
 }
 
 export interface DatosSesion extends DatosDemo {
+  tareas: Tarea[]
   consultorias: Consultoria[]
   empresas: Empresa[]
   usuarios: Usuario[]
@@ -283,6 +299,7 @@ const CONSULTAS = {
   versiones: ['documento_versiones', 'documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en'],
   vinculos: ['documento_evidencias', 'documento_id, evidencia_id'],
   comentarios: ['comentarios', 'id, entidad_tipo, entidad_id, seccion_id, autor_id, texto, creado_en'],
+  tareas: ['tareas', 'id, proyecto_id, titulo, descripcion, asignado_a, asignado_por, estado, prioridad, fecha_vencimiento, fecha_completada, dependencias'],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
@@ -560,6 +577,40 @@ export function traducirDocumento(
   }
 }
 
+export function traducirComentarioTarea(fila: Pick<FilaComentario, 'id' | 'autor_id' | 'texto' | 'creado_en'>): ComentarioTarea {
+  return { id: fila.id, autorId: fila.autor_id, fecha: formatearFecha(fila.creado_en), texto: fila.texto }
+}
+
+export function traducirTarea(fila: FilaTarea, historial: FilaHistorial[], comentarios: FilaComentario[]): Tarea {
+  const deEstaTarea = <T extends { entidad_tipo: string; entidad_id: string; creado_en: string }>(lista: T[]) =>
+    lista
+      .filter((item) => item.entidad_tipo === 'tarea' && item.entidad_id === fila.id)
+      .sort((a, b) => a.creado_en.localeCompare(b.creado_en))
+
+  return {
+    id: fila.id,
+    titulo: fila.titulo,
+    descripcion: fila.descripcion,
+    proyectoId: fila.proyecto_id,
+    asignadoAId: fila.asignado_a,
+    asignadoPorId: fila.asignado_por ?? '',
+    estado: fila.estado,
+    prioridad: fila.prioridad,
+    fechaVencimiento: formatearFecha(fila.fecha_vencimiento),
+    fechaCompletada: fila.fecha_completada ? formatearFecha(fila.fecha_completada) : undefined,
+    dependencias: fila.dependencias,
+    comentarios: deEstaTarea(comentarios).map(traducirComentarioTarea),
+    historial: deEstaTarea(historial)
+      .filter((h) => h.estado_nuevo)
+      .map((h) => ({
+        fecha: formatearFecha(h.creado_en),
+        autorId: h.autor_id ?? '',
+        de: h.estado_anterior ?? '',
+        a: h.estado_nuevo ?? '',
+      })),
+  }
+}
+
 function proyectosDelUsuario(perfil: FilaPerfil, filas: FilasSesion): string[] {
   const { proyectos, miembros } = filas
   switch (perfil.rol) {
@@ -601,7 +652,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
   const documentos = filas.documentos.map((fila) =>
     traducirDocumento(fila, filas.proyectos, filas.versiones, filas.vinculos, filas.historial, filas.comentarios),
   )
-  const tareas = delProyectoVisible(demo.tareas)
+  const tareas = filas.tareas.map((fila) => traducirTarea(fila, filas.historial, filas.comentarios))
 
   const visiblesPorTipo: Record<EntradaHistorial['entidadTipo'], Set<string>> = {
     proyecto: proyectosVisibles,

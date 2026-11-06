@@ -1,14 +1,32 @@
-import type { ComentarioDocumento, Documento, Empresa, EstadoEvidencia, EstadoProyecto, Evidencia, Proceso, Proyecto, TipoEvidencia } from '../types'
+import type {
+  ComentarioDocumento,
+  ComentarioTarea,
+  Documento,
+  Empresa,
+  EstadoEvidencia,
+  EstadoProyecto,
+  EstadoTarea,
+  Evidencia,
+  PrioridadTarea,
+  Proceso,
+  Proyecto,
+  Tarea,
+  TipoEvidencia,
+} from '../types'
 import {
   traducirComentario,
+  traducirComentarioTarea,
   traducirEmpresa,
   traducirEvidencia,
   traducirProyecto,
+  traducirTarea,
   type FilaComentario,
   type FilaEmpresa,
   type FilaEvidencia,
   type FilaProyecto,
+  type FilaTarea,
 } from './datos'
+import { fechaISO } from './tareas'
 
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
 // lo que la BD devolvió. Si el RLS lo rechaza, la pantalla no cambia.
@@ -37,7 +55,7 @@ export interface ClienteEscritura {
     }
   }
   rpc(
-    funcion: 'guardar_proceso' | 'revisar_evidencia' | 'guardar_documento' | 'decidir_documento',
+    funcion: 'guardar_proceso' | 'revisar_evidencia' | 'guardar_documento' | 'decidir_documento' | 'cambiar_estado_tarea',
     args: Record<string, unknown>,
   ): PromiseLike<{ error: ErrorBD | null }>
   storage: {
@@ -116,6 +134,30 @@ export interface NuevoProyecto {
   alcance: string
   fechaInicio: string // yyyy-mm-dd (input type="date")
   fechaFinEstimada: string
+}
+
+export interface NuevaTarea {
+  id: string // UUID generado en el navegador
+  proyectoId: string
+  titulo: string
+  descripcion: string
+  asignadoAId: string
+  prioridad: PrioridadTarea
+  fechaVencimiento: string // ISO (input date) o dd/mm/aaaa
+  dependencias?: string[]
+}
+
+// Lo único que la BD deja editar directo (permisos por columna). El estado NO:
+// va por cambiarEstadoTarea, que deja historial.
+export type CambiosTarea = Partial<Pick<Tarea, 'titulo' | 'descripcion' | 'asignadoAId' | 'prioridad' | 'fechaVencimiento' | 'dependencias'>>
+
+const COLUMNAS_TAREA: Record<keyof CambiosTarea, string> = {
+  titulo: 'titulo',
+  descripcion: 'descripcion',
+  asignadoAId: 'asignado_a',
+  prioridad: 'prioridad',
+  fechaVencimiento: 'fecha_vencimiento',
+  dependencias: 'dependencias',
 }
 
 // 22023: el servidor rechazó la operación por una regla de negocio (estado, datos faltantes).
@@ -363,6 +405,64 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
 
     cambiarEstadoProyecto(id: string, estado: EstadoProyecto): Promise<ResultadoEscritura<void>> {
       return actualizar('proyectos', id, { estado })
+    },
+
+    // ─── Tareas ─────────────────────────────────────────────────────────────
+    // No se mandan estado ni asignado_por: no tienen GRANT. Nace Pendiente y
+    // asignada por quien la crea (default auth.uid() en la BD).
+    async crearTarea(consultoriaId: string | null, nueva: NuevaTarea): Promise<ResultadoEscritura<Tarea>> {
+      if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+      const resultado = await insertar<FilaTarea>('tareas', {
+        id: nueva.id,
+        consultoria_id: consultoriaId,
+        proyecto_id: nueva.proyectoId,
+        titulo: nueva.titulo.trim(),
+        descripcion: nueva.descripcion.trim(),
+        asignado_a: nueva.asignadoAId,
+        prioridad: nueva.prioridad,
+        fecha_vencimiento: fechaISO(nueva.fechaVencimiento),
+        dependencias: nueva.dependencias ?? [],
+      })
+      return resultado.ok ? { ok: true, valor: traducirTarea(resultado.valor, [], []) } : resultado
+    },
+
+    editarTarea(id: string, cambios: CambiosTarea): Promise<ResultadoEscritura<void>> {
+      const fila: Record<string, unknown> = {}
+      for (const [campo, valor] of Object.entries(cambios) as [keyof CambiosTarea, unknown][]) {
+        if (valor === undefined) continue
+        const columna = COLUMNAS_TAREA[campo]
+        if (campo === 'fechaVencimiento') fila[columna] = fechaISO(valor as string)
+        else fila[columna] = typeof valor === 'string' ? valor.trim() : valor
+      }
+      return actualizar('tareas', id, fila)
+    },
+
+    // El servidor decide quién puede qué (el asignado avanza; el equipo cierra o
+    // devuelve) y deja el historial y el comentario en la misma transacción.
+    async cambiarEstadoTarea(id: string, estado: EstadoTarea, comentario?: string): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('cambiar_estado_tarea', {
+        p_id: id,
+        p_estado: estado,
+        p_comentario: comentario?.trim() || null,
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    async comentarTarea(
+      consultoriaId: string | null,
+      tarea: Pick<Tarea, 'id' | 'proyectoId'>,
+      texto: string,
+    ): Promise<ResultadoEscritura<ComentarioTarea>> {
+      if (!texto.trim()) return { ok: false, error: 'datos_invalidos' }
+      if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+      const resultado = await insertar<FilaComentario>('comentarios', {
+        consultoria_id: consultoriaId,
+        proyecto_id: tarea.proyectoId,
+        entidad_tipo: 'tarea',
+        entidad_id: tarea.id,
+        texto: texto.trim(),
+      })
+      return resultado.ok ? { ok: true, valor: traducirComentarioTarea(resultado.valor) } : resultado
     },
   }
 }
