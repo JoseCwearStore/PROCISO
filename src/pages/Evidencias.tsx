@@ -16,7 +16,7 @@ import {
   X,
 } from "lucide-react"
 import { useApp } from "../context/AppContext"
-import { servicioEscritura } from "../lib/servicios"
+import { servicioArchivos, servicioEscritura } from "../lib/servicios"
 import { MENSAJES_ERROR_ESCRITURA } from "../lib/escrituras"
 import { formatearFecha } from "../lib/datos"
 import { Button } from "../components/ui/Button"
@@ -141,7 +141,7 @@ export default function Evidencias() {
     setProgreso(0)
   }
 
-  function iniciarCarga() {
+  async function iniciarCarga() {
     if (
       !archivo ||
       !form.nombre.trim() ||
@@ -154,61 +154,50 @@ export default function Evidencias() {
       setEstadoCarga("error")
       return
     }
+    // Aviso rápido en el navegador; el límite real lo aplica el bucket en el servidor.
     if (archivo.size > 25 * 1024 * 1024) {
       setErrorCarga(
-        "El archivo supera el límite demostrativo de 25 MB. Selecciona uno más pequeño e intenta de nuevo.",
+        "El archivo supera el límite de 25 MB. Selecciona uno más pequeño e intenta de nuevo.",
       )
       setEstadoCarga("error")
       return
     }
     setEstadoCarga("uploading")
     setErrorCarga("")
-    let valor = 0
-    timerRef.current = window.setInterval(() => {
-      valor += 20
-      setProgreso(valor)
-      if (valor >= 100) {
-        if (timerRef.current) window.clearInterval(timerRef.current)
-        const tipo = tipoArchivo(archivo)
-        const evidencia: Evidencia = {
-          id: `evid-${Date.now()}`,
-          nombre: form.nombre.trim(),
-          tipo,
-          descripcion: form.descripcion.trim(),
-          empresaId: form.empresaId,
-          proyectoId: form.proyectoId,
-          procesoId: form.procesoId,
-          actividadId: form.actividadId || undefined,
-          categoria: form.categoria,
-          estado: "Pendiente",
-          fechaCarga: new Date().toLocaleDateString("es-MX"),
-          fecha: new Date().toLocaleString("es-MX"),
-          autor: state.currentUser?.nombre || "Usuario de demostración",
-          archivoNombre: archivo.name,
-          archivoMime: archivo.type,
-          archivoUrl: URL.createObjectURL(archivo),
-          historial: [
-            {
-              id: `hist-evid-${Date.now()}`,
-              fecha: new Date().toLocaleString("es-MX"),
-              autor: state.currentUser?.nombre || "Usuario de demostración",
-              estadoNuevo: "Pendiente",
-              comentario: "Evidencia agregada a la sesión local.",
-            },
-          ],
-        }
-        dispatch({ type: "ADD_EVIDENCIA", evidencia })
-        setModalCaptura(false)
-        setForm(FORM_VACIO)
-        setArchivo(null)
-        setEstadoCarga("idle")
-        setProgreso(0)
-        showToast(
-          "Evidencia agregada al almacenamiento local de esta sesión.",
-          "success",
-        )
-      }
-    }, 180)
+    // supabase-js no informa progreso de subida: la barra indica "en curso", sin inventar porcentajes.
+    setProgreso(30)
+
+    const resultado = await servicioEscritura.subirEvidencia(
+      {
+        id: crypto.randomUUID(),
+        consultoriaId: state.currentUser?.consultoriaId ?? null,
+        empresaId: form.empresaId,
+        proyectoId: form.proyectoId,
+        procesoId: form.procesoId,
+        actividadId: form.actividadId,
+        nombre: form.nombre,
+        descripcion: form.descripcion,
+        categoria: form.categoria,
+        autor: state.currentUser?.nombre ?? "",
+      },
+      archivo,
+    )
+    if (!resultado.ok) {
+      setErrorCarga(MENSAJES_ERROR_ESCRITURA[resultado.error])
+      setEstadoCarga("error")
+      setProgreso(0)
+      return
+    }
+
+    setProgreso(100)
+    const [evidencia] = await servicioArchivos.firmarEvidencias([resultado.valor])
+    dispatch({ type: "ADD_EVIDENCIA", evidencia })
+    setModalCaptura(false)
+    setForm(FORM_VACIO)
+    setArchivo(null)
+    setEstadoCarga("idle")
+    setProgreso(0)
+    showToast("Evidencia cargada.", "success")
   }
 
   async function alternarGrabacion() {
@@ -297,18 +286,6 @@ export default function Evidencias() {
         </Button>
       </div>
 
-      <div className="mb-5 flex items-start gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-        <Upload className="mt-0.5 h-4 w-4 shrink-0" />
-        <div>
-          <p className="font-semibold">
-            Almacenamiento real pendiente de integrar
-          </p>
-          <p className="text-xs text-amber-700">
-            Los archivos seleccionados solo están disponibles durante esta
-            sesión del navegador.
-          </p>
-        </div>
-      </div>
 
       <div className="mb-5 grid gap-3 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-4">
         <label className="relative">
@@ -673,10 +650,6 @@ export default function Evidencias() {
               </Button>
             </div>
           )}
-          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
-            <strong>Almacenamiento real pendiente de integrar.</strong> Se
-            conservará una URL temporal del archivo, no una carga persistente.
-          </div>
           <Button
             disabled
             variant="outline"

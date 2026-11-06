@@ -246,6 +246,8 @@ export interface Evidencia {
   categoria?: string
   autor?: string
   fecha?: string
+  // Ruta en el bucket privado "evidencias". archivoUrl es una URL firmada que vence.
+  archivoRuta?: string
   archivoUrl?: string
   archivoMime?: string
   historial?: HistorialEvidencia[]

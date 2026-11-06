@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { crearServicioAuth, type ClienteAuth, type PerfilBD } from './auth'
 import { cargarFilasSesion, type ClienteDatos } from './datos'
 import { crearServicioEscritura, type ClienteEscritura } from './escrituras'
+import { crearServicioArchivos, type ClienteArchivos } from './archivos'
 import { supabase } from './supabase'
 
 export { llegoDesdeEnlaceDeRecuperacion } from './supabase'
@@ -52,10 +53,27 @@ function adaptarClienteEscritura(cliente: SupabaseClient): ClienteEscritura {
       }),
     }),
     rpc: (funcion, args) => cliente.rpc(funcion, args),
+    storage: {
+      from: (bucket) => ({
+        upload: (ruta, archivo, opciones) => cliente.storage.from(bucket).upload(ruta, archivo, opciones),
+        remove: (rutas) => cliente.storage.from(bucket).remove(rutas),
+      }),
+    },
+  }
+}
+
+function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
+  return {
+    storage: {
+      from: (bucket) => ({
+        createSignedUrls: (rutas, segundos) => cliente.storage.from(bucket).createSignedUrls(rutas, segundos),
+      }),
+    },
   }
 }
 
 // Punto de composición: acá los servicios reciben el cliente real de Supabase.
 export const servicioEscritura = crearServicioEscritura(adaptarClienteEscritura(supabase))
+export const servicioArchivos = crearServicioArchivos(adaptarClienteArchivos(supabase))
 export const servicioAuth = crearServicioAuth(adaptarClienteAuth(supabase))
 export const cargarFilasDeSesion = () => cargarFilasSesion(adaptarClienteDatos(supabase))

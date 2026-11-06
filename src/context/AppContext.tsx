@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
-import { cargarFilasDeSesion, llegoDesdeEnlaceDeRecuperacion, servicioAuth } from '../lib/servicios'
+import { cargarFilasDeSesion, llegoDesdeEnlaceDeRecuperacion, servicioArchivos, servicioAuth } from '../lib/servicios'
 import { combinarDatosSesion, type DatosDemo, type DatosSesion } from '../lib/datos'
 import type {
   Rol,
@@ -418,11 +418,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!usuarioId) return
     let cancelado = false
     dispatch({ type: 'DATOS_CARGANDO' })
-    cargarFilasDeSesion()
-      .catch(() => ({ ok: false as const }))
-      .then((resultado) => {
+    async function cargar() {
+      const resultado = await cargarFilasDeSesion()
+      if (!resultado.ok) return null
+      const datos = combinarDatosSesion(resultado.filas, DEMO)
+      // Los archivos son privados: cada evidencia recibe una URL firmada que vence.
+      return { ...datos, evidencias: await servicioArchivos.firmarEvidencias(datos.evidencias) }
+    }
+    cargar()
+      .catch(() => null)
+      .then((datos) => {
         if (cancelado) return
-        if (resultado.ok) dispatch({ type: 'DATOS_CARGADOS', datos: combinarDatosSesion(resultado.filas, DEMO) })
+        if (datos) dispatch({ type: 'DATOS_CARGADOS', datos })
         else dispatch({ type: 'DATOS_ERROR' })
       })
     return () => {

@@ -406,6 +406,7 @@ export function traducirEvidencia(
     categoria: opcional(fila.categoria),
     archivoNombre: opcional(fila.archivo_nombre),
     archivoMime: opcional(fila.archivo_mime),
+    archivoRuta: opcional(fila.archivo_ruta),
     autor: nombreDe(fila.subido_por),
     fechaCarga,
     fecha: fechaCarga,

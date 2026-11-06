@@ -1,10 +1,17 @@
-import type { Empresa, EstadoEvidencia, EstadoProyecto, Proceso, Proyecto } from '../types'
-import { traducirEmpresa, traducirProyecto, type FilaEmpresa, type FilaProyecto } from './datos'
+import type { Empresa, EstadoEvidencia, EstadoProyecto, Evidencia, Proceso, Proyecto, TipoEvidencia } from '../types'
+import {
+  traducirEmpresa,
+  traducirEvidencia,
+  traducirProyecto,
+  type FilaEmpresa,
+  type FilaEvidencia,
+  type FilaProyecto,
+} from './datos'
 
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
 // lo que la BD devolvió. Si el RLS lo rechaza, la pantalla no cambia.
 
-export type ErrorEscritura = 'sin_permiso' | 'sin_consultoria' | 'servicio'
+export type ErrorEscritura = 'sin_permiso' | 'sin_consultoria' | 'archivo_grande' | 'tipo_no_permitido' | 'servicio'
 export type ResultadoEscritura<T> = { ok: true; valor: T } | { ok: false; error: ErrorEscritura }
 
 interface ErrorBD {
@@ -22,6 +29,50 @@ export interface ClienteEscritura {
     }
   }
   rpc(funcion: 'guardar_proceso' | 'revisar_evidencia', args: Record<string, unknown>): PromiseLike<{ error: ErrorBD | null }>
+  storage: {
+    from(bucket: 'evidencias'): {
+      upload(ruta: string, archivo: File, opciones: { contentType: string }): PromiseLike<{ error: ErrorStorage | null }>
+      remove(rutas: string[]): PromiseLike<{ error: unknown }>
+    }
+  }
+}
+
+interface ErrorStorage {
+  message: string
+  statusCode?: string
+}
+
+export interface NuevaEvidencia {
+  id: string // UUID generado en el navegador: es también el nombre del archivo
+  consultoriaId: string | null
+  empresaId: string
+  proyectoId: string
+  procesoId: string
+  actividadId: string
+  nombre: string
+  descripcion: string
+  categoria: string
+  autor: string
+}
+
+function tipoDeArchivo(mime: string): TipoEvidencia {
+  if (mime.startsWith('image/')) return 'Foto'
+  if (mime.startsWith('video/')) return 'Video'
+  if (mime.startsWith('audio/')) return 'Audio'
+  return 'Documento'
+}
+
+// Solo letras y números: el nombre original del usuario nunca entra en la ruta.
+function extension(nombre: string): string {
+  const coincidencia = /\.([a-z0-9]{1,10})$/i.exec(nombre)
+  return coincidencia ? `.${coincidencia[1].toLowerCase()}` : ''
+}
+
+function traducirErrorStorage(error: ErrorStorage): ErrorEscritura {
+  if (error.statusCode === '413') return 'archivo_grande'
+  if (error.statusCode === '415') return 'tipo_no_permitido'
+  if (error.statusCode === '403' || /row-level security/i.test(error.message)) return 'sin_permiso'
+  return 'servicio'
 }
 
 export interface NuevaEmpresa {
@@ -192,6 +243,42 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },
 
+    // Dos sistemas (Storage y la tabla), sin transacción común: si el registro
+    // falla después de subir, se borra el archivo para no dejarlo huérfano.
+    async subirEvidencia(datos: NuevaEvidencia, archivo: File): Promise<ResultadoEscritura<Evidencia>> {
+      if (!datos.consultoriaId) return { ok: false, error: 'sin_consultoria' }
+
+      const ruta = `${datos.consultoriaId}/${datos.empresaId}/${datos.proyectoId}/${datos.id}${extension(archivo.name)}`
+      const bucket = cliente.storage.from('evidencias')
+
+      const subida = await bucket.upload(ruta, archivo, { contentType: archivo.type })
+      if (subida.error) return { ok: false, error: traducirErrorStorage(subida.error) }
+
+      const registro = await insertar<FilaEvidencia>('evidencias', {
+        id: datos.id,
+        consultoria_id: datos.consultoriaId,
+        proyecto_id: datos.proyectoId,
+        proceso_id: nulo(datos.procesoId),
+        actividad_id: nulo(datos.actividadId),
+        nombre: datos.nombre.trim(),
+        tipo: tipoDeArchivo(archivo.type),
+        estado: 'Cargada',
+        descripcion: nulo(datos.descripcion),
+        categoria: nulo(datos.categoria),
+        archivo_ruta: ruta,
+        archivo_nombre: archivo.name,
+        archivo_mime: archivo.type,
+        archivo_tamano: archivo.size,
+      })
+      if (!registro.ok) {
+        await bucket.remove([ruta])
+        return registro
+      }
+
+      const evidencia = traducirEvidencia(registro.valor, [], [], [])
+      return { ok: true, valor: { ...evidencia, autor: datos.autor, empresaId: datos.empresaId } }
+    },
+
     cambiarEstadoProyecto(id: string, estado: EstadoProyecto): Promise<ResultadoEscritura<void>> {
       return actualizar('proyectos', id, { estado })
     },
@@ -203,5 +290,7 @@ export type ServicioEscritura = ReturnType<typeof crearServicioEscritura>
 export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   sin_permiso: 'No tienes permiso para realizar esta acción.',
   sin_consultoria: 'Tu usuario no pertenece a una consultoría.',
+  archivo_grande: 'El archivo supera el límite de 25 MB.',
+  tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',
 }

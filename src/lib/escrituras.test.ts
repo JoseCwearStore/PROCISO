@@ -38,13 +38,15 @@ type Respuesta = { data: unknown; error: { code?: string; message: string } | nu
 
 interface Llamada {
   tabla: string
-  operacion: 'insert' | 'update' | 'rpc'
+  operacion: 'insert' | 'update' | 'rpc' | 'upload' | 'remove'
   datos: Record<string, unknown>
   id?: string
 }
 
+type RespuestaStorage = { error: { message: string; statusCode?: string } | null }
+
 // Doble del cliente: registra cada escritura y responde según "tabla.operacion".
-function crearClienteDoble(respuestas: Record<string, Respuesta> = {}) {
+function crearClienteDoble(respuestas: Record<string, Respuesta> = {}, subida: RespuestaStorage = { error: null }) {
   const llamadas: Llamada[] = []
   const responder = (clave: string): Respuesta => respuestas[clave] ?? { data: {}, error: null }
 
@@ -64,6 +66,18 @@ function crearClienteDoble(respuestas: Record<string, Respuesta> = {}) {
     rpc: async (funcion, args) => {
       llamadas.push({ tabla: funcion, operacion: 'rpc', datos: args })
       return { error: responder(`${funcion}.rpc`).error }
+    },
+    storage: {
+      from: (bucket) => ({
+        upload: async (ruta, _archivo, opciones) => {
+          llamadas.push({ tabla: bucket, operacion: 'upload', datos: { ruta, ...opciones } })
+          return subida
+        },
+        remove: async (rutas) => {
+          llamadas.push({ tabla: bucket, operacion: 'remove', datos: { rutas } })
+          return { error: null }
+        },
+      }),
     },
   }
   return { cliente, llamadas }
@@ -260,6 +274,88 @@ describe('revisarEvidencia', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.revisarEvidencia(EVIDENCIA, 'Aceptada')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+describe('subirEvidencia', () => {
+  const ID = '44444444-0000-0000-0000-0000000000aa'
+  const archivo = (nombre: string, tipo = 'image/jpeg') => new File(['contenido'], nombre, { type: tipo })
+  const RUTA = `${C1}/${E_NUEVA}/${P_NUEVO}/${ID}.jpg`
+  const NUEVA = {
+    id: ID, consultoriaId: C1, empresaId: E_NUEVA, proyectoId: P_NUEVO, procesoId: '55555555-0000-0000-0000-000000000001',
+    actividadId: '', nombre: 'Foto del almacén', descripcion: 'Vista general', categoria: 'Instalaciones', autor: 'Carlos',
+  }
+  const FILA_EVIDENCIA = {
+    id: ID, proyecto_id: P_NUEVO, proceso_id: NUEVA.procesoId, actividad_id: null, subido_por: 'u', nombre: 'Foto del almacén',
+    tipo: 'Foto', estado: 'Cargada', descripcion: 'Vista general', categoria: 'Instalaciones', archivo_ruta: RUTA,
+    archivo_nombre: 'Almacén.JPG', archivo_mime: 'image/jpeg', creado_en: '2026-11-06T10:00:00+00:00',
+  }
+
+  it('sube el archivo a la ruta de su proyecto y registra la evidencia con esa ruta', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'evidencias.insert': { data: FILA_EVIDENCIA, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.subirEvidencia(NUEVA, archivo('Almacén.JPG'))
+
+    expect(llamadas).toEqual([
+      { tabla: 'evidencias', operacion: 'upload', datos: { ruta: RUTA, contentType: 'image/jpeg' } },
+      {
+        tabla: 'evidencias',
+        operacion: 'insert',
+        datos: expect.objectContaining({
+          id: ID, consultoria_id: C1, proyecto_id: P_NUEVO, proceso_id: NUEVA.procesoId, actividad_id: null,
+          tipo: 'Foto', estado: 'Cargada', archivo_ruta: RUTA, archivo_nombre: 'Almacén.JPG', archivo_mime: 'image/jpeg',
+          archivo_tamano: 9,
+        }),
+      },
+    ])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: expect.objectContaining({ id: ID, archivoRuta: RUTA, autor: 'Carlos', empresaId: E_NUEVA, estado: 'Cargada' }),
+    })
+  })
+
+  it('deduce el tipo de evidencia por el tipo de archivo', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'evidencias.insert': { data: FILA_EVIDENCIA, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.subirEvidencia(NUEVA, archivo('acta.pdf', 'application/pdf'))
+
+    expect(llamadas[0].datos.ruta).toBe(`${C1}/${E_NUEVA}/${P_NUEVO}/${ID}.pdf`)
+    expect(llamadas[1].datos).toEqual(expect.objectContaining({ tipo: 'Documento' }))
+  })
+
+  it('no sube nada si el usuario no pertenece a una consultoría', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.subirEvidencia({ ...NUEVA, consultoriaId: null }, archivo('a.jpg'))).toEqual({
+      ok: false,
+      error: 'sin_consultoria',
+    })
+    expect(llamadas).toHaveLength(0)
+  })
+
+  it.each([
+    [{ message: 'The object exceeded the maximum allowed size', statusCode: '413' }, 'archivo_grande'],
+    [{ message: 'mime type text/x-sh is not supported', statusCode: '415' }, 'tipo_no_permitido'],
+    [{ message: 'new row violates row-level security policy', statusCode: '403' }, 'sin_permiso'],
+    [{ message: 'Failed to fetch' }, 'servicio'],
+  ] as const)('si Storage rechaza la subida (%o) informa "%s" y no registra nada', async (error, esperado) => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.subirEvidencia(NUEVA, archivo('a.jpg'))).toEqual({ ok: false, error: esperado })
+    expect(llamadas.map((l) => l.operacion)).toEqual(['upload'])
+  })
+
+  it('si no se puede registrar la evidencia, borra el archivo que acaba de subir', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'evidencias.insert': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.subirEvidencia(NUEVA, archivo('a.jpg'))).toEqual({ ok: false, error: 'sin_permiso' })
+    expect(llamadas.map((l) => l.operacion)).toEqual(['upload', 'insert', 'remove'])
+    expect(llamadas[2].datos).toEqual({ rutas: [`${C1}/${E_NUEVA}/${P_NUEVO}/${ID}.jpg`] })
   })
 })
 
