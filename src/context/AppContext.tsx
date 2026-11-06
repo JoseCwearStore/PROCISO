@@ -7,7 +7,6 @@ import type {
   NavParams,
   Toast,
   ModalState,
-  SaveState,
   Empresa,
   Proyecto,
   Tarea,
@@ -74,7 +73,6 @@ interface AppState {
   currentPage: PageId
   navParams: NavParams
   bannerDismissed: boolean
-  saveState: SaveState
   sidebarOpen: boolean
   sidebarCollapsed: boolean
   datosSesion: EstadoDatosSesion
@@ -140,7 +138,6 @@ type Action =
   | { type: 'UPSERT_CONSULTORIA'; consultoria: Consultoria }
   // Solo después de que la BD las guardó (useAccionesNotificacion).
   | { type: 'MARCAR_LEIDAS'; ids: string[] }
-  | { type: 'SET_SAVE_STATE'; state: SaveState }
 
 function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
@@ -321,8 +318,6 @@ function reducer(state: AppState, action: Action): AppState {
         notificaciones: state.notificaciones.map((n) => ids.has(n.id) ? { ...n, leida: true } : n),
       }
     }
-    case 'SET_SAVE_STATE':
-      return { ...state, saveState: action.state }
     default:
       return state
   }
@@ -360,7 +355,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     currentPage: 'inicio',
     navParams: {},
     bannerDismissed: false,
-    saveState: 'saved',
     sidebarOpen: false,
     sidebarCollapsed: false,
     datosSesion: 'pendiente',

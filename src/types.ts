@@ -483,4 +483,3 @@ export interface ModalState {
   data?: any
 }
 
-export type SaveState = 'saved' | 'saving' | 'pending' | 'error'

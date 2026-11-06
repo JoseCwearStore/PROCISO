@@ -1,4 +1,4 @@
-import { Menu, Bell, Save, RefreshCw, WifiOff, AlertCircle, LogOut, Search } from 'lucide-react'
+import { Menu, Bell, LogOut, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
 import { servicioAuth } from '../../lib/servicios'
@@ -27,19 +27,10 @@ const PAGE_TITLES: Record<string, string> = {
   unauthorized: 'Acceso no autorizado',
 }
 
-const SAVE_STATE_UI = {
-  saved: { icon: Save, text: 'Guardado', color: 'text-green-600' },
-  saving: { icon: RefreshCw, text: 'Guardando…', color: 'text-blue-600' },
-  pending: { icon: WifiOff, text: 'Pend. sincronización', color: 'text-amber-600' },
-  error: { icon: AlertCircle, text: 'Error al guardar', color: 'text-red-600' },
-}
-
 export function TopBar() {
   const { state, dispatch, navigate, unreadCount } = useApp()
   const [searchOpen, setSearchOpen] = useState(false)
   const title = PAGE_TITLES[state.currentPage] ?? 'PROCISO'
-  const saveUI = SAVE_STATE_UI[state.saveState]
-  const SaveIcon = saveUI.icon
 
   async function cerrarSesion() {
     await servicioAuth.cerrarSesion()
@@ -59,15 +50,6 @@ export function TopBar() {
 
       {/* Title */}
       <h1 className="font-semibold text-slate-900 text-sm flex-1 truncate">{title}</h1>
-
-      {/* Save state indicator */}
-      <div className={`hidden sm:flex items-center gap-1.5 text-xs ${saveUI.color}`}>
-        <SaveIcon className="w-3.5 h-3.5" />
-        <span>{saveUI.text}</span>
-        <span className="text-slate-400 text-[10px] font-medium ml-1 bg-slate-100 px-1.5 py-0.5 rounded">
-          Requiere integración
-        </span>
-      </div>
 
       {/* Notifications */}
       <button
