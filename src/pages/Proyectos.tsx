@@ -28,6 +28,8 @@ import { Modal } from '../components/ui/Modal'
 import { Tabs } from '../components/ui/Tabs'
 import type { Column } from '../components/ui/DataTable'
 import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId, Usuario } from '../types'
+import { servicioEscritura } from '../lib/servicios'
+import { MENSAJES_ERROR_ESCRITURA, type NuevoProyecto } from '../lib/escrituras'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -107,10 +109,8 @@ function NuevoProyectoModal({
   onClose: () => void
   empresas: { id: string; nombre: string }[]
   consultores: Usuario[]
-  onCreated: (data: {
-    nombre: string; empresaId: string; consultorId: string; edicionNorma: Proyecto['edicionNorma']
-    objetivo: string; alcance: string; fechaInicio: string; fechaFinEstimada: string
-  }) => void
+  // Devuelve true si se guardó. Si falla, el formulario conserva lo que se escribió.
+  onCreated: (data: NuevoProyecto) => Promise<boolean>
 }) {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState<{
@@ -133,15 +133,14 @@ function NuevoProyectoModal({
     return Object.keys(e).length === 0
   }
 
-  function handleSubmit() {
+  async function handleSubmit() {
     if (!validate()) return
     setSaving(true)
-    setTimeout(() => {
-      onCreated(form)
-      setSaving(false)
-      setForm({ nombre: '', empresaId: '', consultorId: '', edicionNorma: 'ISO 9001:2026', objetivo: '', alcance: '', fechaInicio: '', fechaFinEstimada: '' })
-      setErrors({})
-    }, 600)
+    const guardado = await onCreated(form)
+    setSaving(false)
+    if (!guardado) return
+    setForm({ nombre: '', empresaId: '', consultorId: '', edicionNorma: 'ISO 9001:2026', objetivo: '', alcance: '', fechaInicio: '', fechaFinEstimada: '' })
+    setErrors({})
   }
 
   function handleClose() {
@@ -581,37 +580,19 @@ export function Proyectos() {
   if (filterConsultor) filtered = filtered.filter((p) => p.consultorId === filterConsultor)
   if (filterNorma) filtered = filtered.filter((p) => p.edicionNorma === filterNorma)
 
-  function handleCreated(data: {
-    nombre: string; empresaId: string; consultorId: string; edicionNorma: Proyecto['edicionNorma']
-    objetivo: string; alcance: string; fechaInicio: string; fechaFinEstimada: string
-  }) {
-    const id = `proy-${Date.now()}`
-    dispatch({
-      type: 'ADD_PROYECTO',
-      proyecto: {
-        id,
-        nombre: data.nombre,
-        objetivo: data.objetivo || undefined,
-        alcance: data.alcance || undefined,
-        empresaId: data.empresaId,
-        consultorId: data.consultorId,
-        equipoIds: [data.consultorId],
-        estado: 'Planificación',
-        avance: 0,
-        edicionNorma: data.edicionNorma,
-        fechaInicio: toDisplayDate(data.fechaInicio),
-        fechaFinEstimada: toDisplayDate(data.fechaFinEstimada),
-        descripcion: 'Información pendiente de confirmar.',
-        fases: [],
-        procesosIds: [],
-        entregablesIds: [],
-      },
-    })
+  async function handleCreated(data: NuevoProyecto): Promise<boolean> {
+    const resultado = await servicioEscritura.crearProyecto(state.currentUser?.consultoriaId ?? null, data)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return false
+    }
+    dispatch({ type: 'ADD_PROYECTO', proyecto: resultado.valor })
     setCreateOpen(false)
     showToast('Proyecto creado exitosamente.', 'success')
+    return true
   }
 
-  function handleDrop(targetEstado: EstadoProyecto) {
+  async function handleDrop(targetEstado: EstadoProyecto) {
     if (!dragId) return
     const proyecto = state.proyectos.find((p) => p.id === dragId)
     if (!proyecto || proyecto.estado === targetEstado) {
@@ -630,10 +611,16 @@ export function Proyectos() {
         return
       }
     }
-    dispatch({ type: 'UPDATE_PROYECTO', id: dragId, updates: { estado: targetEstado } })
-    showToast(`Proyecto movido a "${targetEstado}".`, 'success')
+    const id = dragId
     setDragId(null)
     setDragOver(null)
+    const resultado = await servicioEscritura.cambiarEstadoProyecto(id, targetEstado)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return
+    }
+    dispatch({ type: 'UPDATE_PROYECTO', id, updates: { estado: targetEstado } })
+    showToast(`Proyecto movido a "${targetEstado}".`, 'success')
   }
 
   const views: { id: ViewMode; label: string; icon: React.ReactNode }[] = [
@@ -1014,7 +1001,7 @@ export function ProyectoDetalle() {
   const tareas = state.tareas.filter((t) => t.proyectoId === proyecto.id)
   const avance = calcularAvance(proyecto.id)
 
-  function handleEstadoChange(nuevoEstado: EstadoProyecto) {
+  async function handleEstadoChange(nuevoEstado: EstadoProyecto) {
     if (!proyecto || nuevoEstado === proyecto.estado) return
     if (nuevoEstado === 'Finalizado') {
       const pendientes = entregables.filter((e) => e.estado !== 'Aprobado')
@@ -1023,6 +1010,11 @@ export function ProyectoDetalle() {
         setValidacionOpen(true)
         return
       }
+    }
+    const resultado = await servicioEscritura.cambiarEstadoProyecto(proyecto.id, nuevoEstado)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return
     }
     dispatch({ type: 'UPDATE_PROYECTO', id: proyecto.id, updates: { estado: nuevoEstado } })
     showToast(`Estado actualizado a "${nuevoEstado}".`, 'success')

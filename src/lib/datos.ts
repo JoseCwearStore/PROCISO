@@ -193,7 +193,7 @@ function traducirConsultoria(fila: FilaConsultoria): Consultoria {
   }
 }
 
-function traducirEmpresa(fila: FilaEmpresa, proyectos: FilaProyecto[]): Empresa {
+export function traducirEmpresa(fila: FilaEmpresa, proyectos: FilaProyecto[]): Empresa {
   return {
     id: fila.id,
     nombre: fila.nombre,
@@ -221,7 +221,7 @@ function traducirEmpresa(fila: FilaEmpresa, proyectos: FilaProyecto[]): Empresa 
   }
 }
 
-function traducirProyecto(fila: FilaProyecto, fases: FilaFase[], miembros: FilaMiembro[]): Proyecto {
+export function traducirProyecto(fila: FilaProyecto, fases: FilaFase[], miembros: FilaMiembro[]): Proyecto {
   const equipo = [fila.consultor_id, ...miembros.filter((m) => m.proyecto_id === fila.id).map((m) => m.usuario_id)]
 
   return {

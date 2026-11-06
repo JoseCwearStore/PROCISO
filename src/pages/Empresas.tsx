@@ -5,6 +5,8 @@ import {
   AlertTriangle, MapPin, Phone, Mail, User, BarChart2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { servicioEscritura } from '../lib/servicios'
+import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -268,7 +270,12 @@ export function EmpresaDetalle() {
   const historialEmpresa = state.auditoria.filter((h) => h.entidadId === empresa.id || proyectosEmpresa.some((p) => p.id === h.entidadId))
   const consultor = state.usuarios.find((u) => u.id === empresa.consultorAsignadoId)
 
-  function handleArchive() {
+  async function handleArchive() {
+    const resultado = await servicioEscritura.archivarEmpresa(empresa!.id)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return
+    }
     dispatch({ type: 'UPDATE_EMPRESA', id: empresa!.id, updates: { activa: false } })
     showToast(`"${empresa!.nombre}" fue archivada.`, 'success')
     navigate('empresas')
@@ -537,33 +544,13 @@ export function Empresas() {
     return true
   })
 
-  function handleCreate(form: FormData) {
-    const initials = form.nombre.split(' ').filter((w) => w.length > 2).slice(0, 2).map((w) => w[0].toUpperCase()).join('') || form.nombre.slice(0, 2).toUpperCase()
-    const nueva: Empresa = {
-      id: `emp-${Date.now()}`,
-      nombre: form.nombre,
-      nombreComercial: form.nombreComercial,
-      rfc: form.rfc,
-      sector: form.sector,
-      tamano: form.tamano,
-      ciudad: form.ciudad,
-      estado: form.estado,
-      direccion: form.direccion,
-      contactoPrincipal: form.contactoPrincipal,
-      cargoContacto: form.cargoContacto,
-      emailContacto: form.emailContacto,
-      telefonoContacto: form.telefonoContacto,
-      procesosprincipales: form.procesosprincipales,
-      alcanceInicial: form.alcanceInicial,
-      normaInteres: form.normaInteres,
-      consultorAsignadoId: form.consultorAsignadoId || undefined,
-      observaciones: form.observaciones,
-      trabajadores: form.trabajadores,
-      activa: true,
-      fechaAlta: new Date().toLocaleDateString('es-MX'),
-      proyectosIds: [],
-      logoInicial: initials,
+  async function handleCreate(form: FormData) {
+    const resultado = await servicioEscritura.crearEmpresa(state.currentUser?.consultoriaId ?? null, form)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return
     }
+    const nueva = resultado.valor
     dispatch({ type: 'ADD_EMPRESA', empresa: nueva })
     showToast(`"${nueva.nombre}" registrada exitosamente.`, 'success')
     setShowModal(false)

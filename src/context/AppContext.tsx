@@ -73,6 +73,8 @@ interface CurrentUser {
   nombre: string
   email: string
   rol: Rol
+  consultoriaId?: string | null
+  empresaId?: string | null
   passwordTemp?: boolean
 }
 
