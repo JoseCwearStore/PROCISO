@@ -9,9 +9,12 @@ import {
   XCircle,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { servicioEscritura } from '../lib/servicios'
+import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { formatearFecha } from '../lib/datos'
 import { Button } from '../components/ui/Button'
 import { StatusBadge } from '../components/ui/StatusBadge'
-import type { Documento, EstadoDocumento } from '../types'
+import type { Documento } from '../types'
 
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 
@@ -24,19 +27,30 @@ export default function Revisiones() {
 
   const pendientes = state.documentos.filter((item) => item.estado === 'Pendiente de revisión')
   const documento = state.documentos.find((item) => item.id === seleccionadoId)
+  // Solo se muestran los botones que la BD va a aceptar (la regla real está en decidir_documento).
+  const esCliente = state.currentRole === 'Usuario Cliente'
+  const [decidiendo, setDecidiendo] = useState(false)
 
-  function decidir(estado: EstadoDocumento) {
-    if (!documento) return
+  async function decidir(estado: 'Aprobado' | 'En corrección' | 'Rechazado') {
+    if (!documento || decidiendo) return
     if ((estado === 'Rechazado' || estado === 'En corrección') && (!seccionId || !comentario.trim())) {
       setError('Selecciona una sección y agrega el comentario que fundamenta la decisión.')
       return
     }
-    const ahora = new Date()
-    const fecha = ahora.toLocaleDateString('es-MX')
-    const fechaHora = ahora.toLocaleString('es-MX')
-    const usuarioId = state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002'
+    setDecidiendo(true)
+    const resultado = await servicioEscritura.decidirDocumento(documento.id, estado, seccionId, comentario)
+    setDecidiendo(false)
+    if (!resultado.ok) {
+      setError(MENSAJES_ERROR_ESCRITURA[resultado.error])
+      return
+    }
+
+    // La BD ya aplicó la decisión; acá se refleja igual que la función del servidor.
+    const fecha = formatearFecha(new Date().toISOString())
+    const fechaHora = fecha
+    const usuarioId = state.currentUser?.id ?? ''
     const comentarioNuevo = seccionId && comentario.trim() ? {
-      id: `comentario-${Date.now()}`,
+      id: crypto.randomUUID(),
       seccionId,
       autorId: usuarioId,
       fecha: fechaHora,
@@ -46,17 +60,18 @@ export default function Revisiones() {
     const actualizado: Documento = {
       ...documento,
       estado,
-      revisadoPorId: usuarioId,
-      aprobadoPorId: estado === 'Aprobado' ? usuarioId : undefined,
-      fechaRevision: fecha,
-      fechaAprobacion: estado === 'Aprobado' ? fecha : undefined,
+      // Como en el servidor: el revisor es el equipo; el aprobador, el cliente.
+      revisadoPorId: esCliente ? documento.revisadoPorId : usuarioId,
+      aprobadoPorId: estado === 'Aprobado' ? usuarioId : documento.aprobadoPorId,
+      fechaRevision: esCliente ? documento.fechaRevision : fecha,
+      fechaAprobacion: estado === 'Aprobado' ? fecha : documento.fechaAprobacion,
       bloqueado: estado === 'Aprobado',
       comentarios: comentarioNuevo ? [...(documento.comentarios || []), comentarioNuevo] : documento.comentarios,
       historialVersiones: documento.historialVersiones.map((version) =>
         version.version === documento.version ? { ...version, estado } : version
       ),
       historial: [...(documento.historial || []), {
-        id: `evento-${Date.now()}`,
+        id: crypto.randomUUID(),
         fecha: fechaHora,
         autorId: usuarioId,
         accion,
@@ -70,6 +85,7 @@ export default function Revisiones() {
         estado === 'Aprobado' &&
         item.estado === 'Aprobado' &&
         item.id !== documento.id &&
+        item.proyectoId === documento.proyectoId &&
         (
           (!!documento.codigo && item.codigo === documento.codigo) ||
           (!!documento.procesoId && item.procesoId === documento.procesoId && item.tipo === documento.tipo)
@@ -80,7 +96,7 @@ export default function Revisiones() {
         estado: 'Obsoleto' as const,
         bloqueado: true,
         historial: [...(item.historial || []), {
-          id: `evento-${Date.now()}-${item.id}`,
+          id: crypto.randomUUID(),
           fecha: fechaHora,
           autorId: usuarioId,
           accion: 'Documento reemplazado',
@@ -139,7 +155,7 @@ export default function Revisiones() {
         </main>
 
         <aside className="h-fit space-y-4 xl:sticky xl:top-20">
-          <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">Decisión de revisión</p><p className="mt-1 text-xs text-slate-500">Los comentarios de rechazo o corrección deben quedar anclados a una sección.</p><select className={`${inputClass} mt-4`} value={seccionId} onChange={(event) => setSeccionId(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea rows={4} className={`${inputClass} mt-3`} value={comentario} onChange={(event) => setComentario(event.target.value)} placeholder="Comentario de revisión..." />{error && <div className="mt-3 flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}<div className="mt-4 space-y-2"><Button className="w-full" variant="success" onClick={() => decidir('Aprobado')} icon={<CheckCircle2 className="h-4 w-4" />}>Aprobar y fijar versión</Button><Button className="w-full" variant="outline" onClick={() => decidir('En corrección')} icon={<RotateCcw className="h-4 w-4" />}>Solicitar corrección</Button><Button className="w-full" variant="danger" onClick={() => decidir('Rechazado')} icon={<XCircle className="h-4 w-4" />}>Rechazar</Button></div></div>
+          <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">{esCliente ? 'Aprobación del documento' : 'Decisión de revisión'}</p><p className="mt-1 text-xs text-slate-500">{esCliente ? 'Como responsable de la empresa, apruebas el documento o solicitas correcciones.' : 'El equipo revisa; la aprobación final la da el cliente.'} Los comentarios de corrección o rechazo deben quedar anclados a una sección.</p><select className={`${inputClass} mt-4`} value={seccionId} onChange={(event) => setSeccionId(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea rows={4} className={`${inputClass} mt-3`} value={comentario} onChange={(event) => setComentario(event.target.value)} placeholder="Comentario de revisión..." />{error && <div className="mt-3 flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}<div className="mt-4 space-y-2">{esCliente && <Button className="w-full" variant="success" disabled={decidiendo} onClick={() => decidir('Aprobado')} icon={<CheckCircle2 className="h-4 w-4" />}>Aprobar y fijar versión</Button>}<Button className="w-full" variant="outline" disabled={decidiendo} onClick={() => decidir('En corrección')} icon={<RotateCcw className="h-4 w-4" />}>Solicitar corrección</Button>{!esCliente && <Button className="w-full" variant="danger" disabled={decidiendo} onClick={() => decidir('Rechazado')} icon={<XCircle className="h-4 w-4" />}>Rechazar</Button>}</div></div>
           <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 text-sm font-semibold text-slate-700">Historial completo</p><div className="space-y-3">{documento.historial?.slice().reverse().map((item) => <div key={item.id} className="border-l-2 border-violet-200 pl-3"><p className="text-xs font-medium text-slate-700">{item.accion}</p><p className="text-[10px] text-slate-400">{item.fecha}</p><p className="mt-1 text-xs text-slate-500">{item.detalle}</p></div>) || <p className="text-xs text-slate-400">Sin eventos registrados.</p>}</div></div>
         </aside>
       </div>

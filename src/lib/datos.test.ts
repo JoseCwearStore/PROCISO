@@ -99,6 +99,11 @@ function filasBase(): FilasSesion {
       { documento_id: 'doc-p1', version: '0.9', autor_id: ROBERTO, comentario: 'Borrador inicial', motivo: 'Creación', secciones: [], estado: null, creado_en: '2024-06-01T10:00:00+00:00' },
     ],
     vinculos: [{ documento_id: 'doc-p1', evidencia_id: 'ev-p1' }],
+    comentarios: [
+      { id: 'com-2', entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: CARLOS, texto: 'Agregar el alcance', creado_en: '2024-07-20T10:00:00+00:00' },
+      { id: 'com-1', entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: ROBERTO, texto: 'Revisar redacción', creado_en: '2024-07-18T10:00:00+00:00' },
+      { id: 'com-ev', entidad_tipo: 'evidencia', entidad_id: 'ev-p1', seccion_id: null, autor_id: ROBERTO, texto: 'Otra entidad', creado_en: '2024-07-19T10:00:00+00:00' },
+    ],
   }
 }
 
@@ -273,7 +278,10 @@ describe('combinarDatosSesion', () => {
       evidenciasVinculadas: ['ev-p1'],
       motivoCambio: 'Creación',
       bloqueado: false,
-      comentarios: [],
+      comentarios: [
+        { id: 'com-1', seccionId: 's1', autorId: ROBERTO, fecha: '18/07/2024', texto: 'Revisar redacción' },
+        { id: 'com-2', seccionId: 's1', autorId: CARLOS, fecha: '20/07/2024', texto: 'Agregar el alcance' },
+      ],
       historialVersiones: [
         { version: '0.9', fecha: '01/06/2024', autorId: ROBERTO, comentario: 'Borrador inicial', motivo: 'Creación' },
         { version: '1.0', fecha: '15/07/2024', autorId: ROBERTO, comentario: 'Con comentarios del cliente', estado: 'Pendiente de revisión' },
@@ -313,6 +321,7 @@ describe('cargarFilasSesion', () => {
       documentos: filas.documentos,
       documento_versiones: filas.versiones,
       documento_evidencias: filas.vinculos,
+      comentarios: filas.comentarios,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -323,13 +332,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las trece tablas y devuelve sus filas', async () => {
+  it('lee las catorce tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(13)
+    expect(cliente.from).toHaveBeenCalledTimes(14)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

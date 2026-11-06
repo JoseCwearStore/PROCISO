@@ -1,5 +1,6 @@
 import type {
   ActividadProceso,
+  ComentarioDocumento,
   Consultoria,
   Documento,
   SeccionDocumento,
@@ -201,6 +202,16 @@ export interface FilaVinculo {
   evidencia_id: string
 }
 
+export interface FilaComentario {
+  id: string
+  entidad_tipo: string
+  entidad_id: string
+  seccion_id: string | null
+  autor_id: string
+  texto: string
+  creado_en: string
+}
+
 export interface FilaHistorial {
   id: number
   entidad_tipo: string
@@ -227,6 +238,7 @@ export interface FilasSesion {
   documentos: FilaDocumento[]
   versiones: FilaVersion[]
   vinculos: FilaVinculo[]
+  comentarios: FilaComentario[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
@@ -270,6 +282,7 @@ const CONSULTAS = {
   documentos: ['documentos', '*'],
   versiones: ['documento_versiones', 'documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en'],
   vinculos: ['documento_evidencias', 'documento_id, evidencia_id'],
+  comentarios: ['comentarios', 'id, entidad_tipo, entidad_id, seccion_id, autor_id, texto, creado_en'],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
@@ -473,12 +486,23 @@ export function traducirEvidencia(
   }
 }
 
+export function traducirComentario(fila: Pick<FilaComentario, 'id' | 'seccion_id' | 'autor_id' | 'texto' | 'creado_en'>): ComentarioDocumento {
+  return {
+    id: fila.id,
+    seccionId: fila.seccion_id ?? '',
+    autorId: fila.autor_id,
+    fecha: formatearFecha(fila.creado_en),
+    texto: fila.texto,
+  }
+}
+
 export function traducirDocumento(
   fila: FilaDocumento,
   proyectos: FilaProyecto[],
   versiones: FilaVersion[],
   vinculos: FilaVinculo[],
   historial: FilaHistorial[],
+  comentarios: FilaComentario[],
 ): Documento {
   const porFecha = (a: { creado_en: string }, b: { creado_en: string }) => a.creado_en.localeCompare(b.creado_en)
 
@@ -507,8 +531,10 @@ export function traducirDocumento(
     motivoCambio: opcional(fila.motivo_cambio),
     bloqueado: fila.bloqueado,
     evidenciasVinculadas: vinculos.filter((v) => v.documento_id === fila.id).map((v) => v.evidencia_id),
-    // Los comentarios por sección llegan con la revisión (E2).
-    comentarios: [],
+    comentarios: comentarios
+      .filter((c) => c.entidad_tipo === 'documento' && c.entidad_id === fila.id)
+      .sort(porFecha)
+      .map(traducirComentario),
     historialVersiones: versiones
       .filter((v) => v.documento_id === fila.id)
       .sort(porFecha)
@@ -573,7 +599,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
 
   const evidencias = filas.evidencias.map((fila) => traducirEvidencia(fila, filas.proyectos, filas.perfiles, filas.historial))
   const documentos = filas.documentos.map((fila) =>
-    traducirDocumento(fila, filas.proyectos, filas.versiones, filas.vinculos, filas.historial),
+    traducirDocumento(fila, filas.proyectos, filas.versiones, filas.vinculos, filas.historial, filas.comentarios),
   )
   const tareas = delProyectoVisible(demo.tareas)
 

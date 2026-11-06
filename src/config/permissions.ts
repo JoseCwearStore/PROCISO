@@ -15,7 +15,8 @@ export const PAGE_PERMISSIONS: Partial<Record<PageId, Rol[]>> = {
   procesos: OPERACION,
   evidencias: COLABORACION_CLIENTE,
   documentacion: COLABORACION_CLIENTE,
-  revisiones: EQUIPO,
+  // El equipo revisa y el cliente aprueba (decisión de negocio).
+  revisiones: COLABORACION_CLIENTE,
   tareas: COLABORACION_CLIENTE,
   'tablero-tareas': COLABORACION_CLIENTE,
   'listas-verificacion': OPERACION,

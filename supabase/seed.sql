@@ -194,6 +194,32 @@ insert into public.documento_versiones (consultoria_id, proyecto_id, documento_i
   ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000005', '1.0', 'aaaaaaaa-0000-0000-0000-000000000003', 'Primera versión', null, '[]'::jsonb, null, '2024-05-01 12:00:00-06'),
   ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000005', '1.1', 'aaaaaaaa-0000-0000-0000-000000000003', 'En corrección por observaciones', null, '[]'::jsonb, null, '2024-08-10 12:00:00-06');
 
+-- Código y contenido de demostración (el demo original no los traía): sin secciones
+-- no se puede anclar un comentario de revisión.
+update public.documentos d set codigo = c.codigo, secciones = c.secciones
+from (values
+  ('66666666-0000-0000-0000-000000000001'::uuid, 'PRO-COM-001', '[
+    {"id":"s1","titulo":"Objetivo","tipo":"texto","contenido":"Establecer los criterios para seleccionar, evaluar y reevaluar a los proveedores que impactan la calidad del servicio."},
+    {"id":"s2","titulo":"Alcance","tipo":"texto","contenido":"Aplica a todos los proveedores de servicios y licencias de Marketino."},
+    {"id":"s3","titulo":"Criterios de evaluación","tipo":"tabla","filas":[["Criterio","Peso"],["Calidad","40 %"],["Tiempo de entrega","30 %"],["Precio","30 %"]]}
+  ]'::jsonb),
+  ('66666666-0000-0000-0000-000000000002'::uuid, 'PRO-PRD-001', '[
+    {"id":"s1","titulo":"Objetivo","tipo":"texto","contenido":"Planificar y controlar la producción de campañas para cumplir los requisitos del cliente."},
+    {"id":"s2","titulo":"Responsabilidades","tipo":"texto","contenido":"El jefe de producción aprueba el plan semanal; los ejecutivos registran el avance diario."}
+  ]'::jsonb),
+  ('66666666-0000-0000-0000-000000000003'::uuid, 'IT-PRD-001', '[
+    {"id":"s1","titulo":"Propósito","tipo":"texto","contenido":"Describir la calibración de los equipos de medición utilizados en producción."}
+  ]'::jsonb),
+  ('66666666-0000-0000-0000-000000000004'::uuid, 'PRO-ATC-001', '[
+    {"id":"s1","titulo":"Objetivo","tipo":"texto","contenido":"Atender y resolver las quejas de los clientes en un plazo máximo de cinco días hábiles."}
+  ]'::jsonb),
+  ('66666666-0000-0000-0000-000000000005'::uuid, 'MAN-SGC-001', '[
+    {"id":"s1","titulo":"Política de calidad","tipo":"texto","contenido":"Marketino se compromete a cumplir los requisitos de sus clientes y a mejorar continuamente su sistema de gestión."},
+    {"id":"s2","titulo":"Alcance del SGC","tipo":"texto","contenido":"Diseño y ejecución de campañas de marketing digital."}
+  ]'::jsonb)
+) as c (id, codigo, secciones)
+where d.id = c.id;
+
 insert into public.documento_evidencias (documento_id, evidencia_id, proyecto_id, consultoria_id) values
   ('66666666-0000-0000-0000-000000000002', '44444444-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001');
 

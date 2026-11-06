@@ -287,6 +287,18 @@ export default function Documentacion() {
     return true
   }
 
+  // Los comentarios se guardan aparte del documento: también se puede comentar uno aprobado.
+  async function comentar(seccionId: string, texto: string): Promise<boolean> {
+    if (!documento) return false
+    const resultado = await servicioEscritura.comentarDocumento(state.currentUser?.consultoriaId ?? null, documento, seccionId, texto)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return false
+    }
+    dispatch({ type: 'UPSERT_DOCUMENTO', documento: { ...documento, comentarios: [...(documento.comentarios || []), resultado.valor] } })
+    return true
+  }
+
   async function guardarBorrador() {
     if (!documento) return
     const guardado = await persistir(
@@ -404,6 +416,7 @@ export default function Documentacion() {
         setComentarioSeccion={setComentarioSeccion}
         comentarioTexto={comentarioTexto}
         setComentarioTexto={setComentarioTexto}
+        comentar={comentar}
         abrirComparacion={() => {
           const versiones = documento.historialVersiones
           setVersionA(versiones[0]?.version || '')
@@ -499,6 +512,8 @@ interface EditorProps {
   setComentarioSeccion: (value: string) => void
   comentarioTexto: string
   setComentarioTexto: (value: string) => void
+  // Guarda el comentario en la BD; devuelve true si se guardó.
+  comentar: (seccionId: string, texto: string) => Promise<boolean>
   abrirComparacion: () => void
   children: React.ReactNode
 }
@@ -523,18 +538,9 @@ function EditorDocumento(props: EditorProps) {
     })
   }
 
-  function agregarComentario() {
+  async function agregarComentario() {
     if (!props.comentarioSeccion || !props.comentarioTexto.trim()) return
-    actualizar({
-      comentarios: [...(documento.comentarios || []), {
-        id: `comentario-${Date.now()}`,
-        seccionId: props.comentarioSeccion,
-        autorId: props.usuarioId,
-        fecha: new Date().toLocaleString('es-MX'),
-        texto: props.comentarioTexto.trim(),
-      }],
-    })
-    props.setComentarioTexto('')
+    if (await props.comentar(props.comentarioSeccion, props.comentarioTexto)) props.setComentarioTexto('')
   }
 
   return (

@@ -1,8 +1,10 @@
-import type { Documento, Empresa, EstadoEvidencia, EstadoProyecto, Evidencia, Proceso, Proyecto, TipoEvidencia } from '../types'
+import type { ComentarioDocumento, Documento, Empresa, EstadoEvidencia, EstadoProyecto, Evidencia, Proceso, Proyecto, TipoEvidencia } from '../types'
 import {
+  traducirComentario,
   traducirEmpresa,
   traducirEvidencia,
   traducirProyecto,
+  type FilaComentario,
   type FilaEmpresa,
   type FilaEvidencia,
   type FilaProyecto,
@@ -11,7 +13,13 @@ import {
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
 // lo que la BD devolvió. Si el RLS lo rechaza, la pantalla no cambia.
 
-export type ErrorEscritura = 'sin_permiso' | 'sin_consultoria' | 'archivo_grande' | 'tipo_no_permitido' | 'servicio'
+export type ErrorEscritura =
+  | 'sin_permiso'
+  | 'sin_consultoria'
+  | 'datos_invalidos'
+  | 'archivo_grande'
+  | 'tipo_no_permitido'
+  | 'servicio'
 export type ResultadoEscritura<T> = { ok: true; valor: T } | { ok: false; error: ErrorEscritura }
 
 interface ErrorBD {
@@ -29,7 +37,7 @@ export interface ClienteEscritura {
     }
   }
   rpc(
-    funcion: 'guardar_proceso' | 'revisar_evidencia' | 'guardar_documento',
+    funcion: 'guardar_proceso' | 'revisar_evidencia' | 'guardar_documento' | 'decidir_documento',
     args: Record<string, unknown>,
   ): PromiseLike<{ error: ErrorBD | null }>
   storage: {
@@ -110,9 +118,11 @@ export interface NuevoProyecto {
   fechaFinEstimada: string
 }
 
+// 22023: el servidor rechazó la operación por una regla de negocio (estado, datos faltantes).
 // 42501: el RLS rechazó el INSERT. PGRST116: el UPDATE no encontró la fila, porque
 // el RLS no le deja ver esa fila a este usuario. Para quien usa la app, lo mismo.
 function traducirError(error: ErrorBD): ErrorEscritura {
+  if (error.code === '22023') return 'datos_invalidos'
   return error.code === '42501' || error.code === 'PGRST116' ? 'sin_permiso' : 'servicio'
 }
 
@@ -315,6 +325,42 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },
 
+    // Revisión: el servidor decide quién puede qué (el cliente aprueba, el equipo
+    // rechaza) y deja obsoleta la versión aprobada anterior en la misma transacción.
+    async decidirDocumento(
+      id: string,
+      estado: 'Aprobado' | 'En corrección' | 'Rechazado',
+      seccionId?: string,
+      comentario?: string,
+    ): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('decidir_documento', {
+        p_id: id,
+        p_estado: estado,
+        p_seccion_id: seccionId?.trim() || null,
+        p_comentario: comentario?.trim() || null,
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    async comentarDocumento(
+      consultoriaId: string | null,
+      documento: Documento,
+      seccionId: string,
+      texto: string,
+    ): Promise<ResultadoEscritura<ComentarioDocumento>> {
+      if (!texto.trim() || !seccionId) return { ok: false, error: 'datos_invalidos' }
+      if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+      const resultado = await insertar<FilaComentario>('comentarios', {
+        consultoria_id: consultoriaId,
+        proyecto_id: documento.proyectoId,
+        entidad_tipo: 'documento',
+        entidad_id: documento.id,
+        seccion_id: seccionId,
+        texto: texto.trim(),
+      })
+      return resultado.ok ? { ok: true, valor: traducirComentario(resultado.valor) } : resultado
+    },
+
     cambiarEstadoProyecto(id: string, estado: EstadoProyecto): Promise<ResultadoEscritura<void>> {
       return actualizar('proyectos', id, { estado })
     },
@@ -326,6 +372,7 @@ export type ServicioEscritura = ReturnType<typeof crearServicioEscritura>
 export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   sin_permiso: 'No tienes permiso para realizar esta acción.',
   sin_consultoria: 'Tu usuario no pertenece a una consultoría.',
+  datos_invalidos: 'La operación no es válida en el estado actual. Revisa la información e intenta de nuevo.',
   archivo_grande: 'El archivo supera el límite de 25 MB.',
   tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',

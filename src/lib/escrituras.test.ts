@@ -421,6 +421,79 @@ describe('guardarDocumento', () => {
   })
 })
 
+describe('decidirDocumento', () => {
+  const DOC = '66666666-0000-0000-0000-000000000001'
+
+  it('envía la decisión con sección y comentario en una sola llamada', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.decidirDocumento(DOC, 'En corrección', 's1', '  Falta el alcance ')).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      {
+        tabla: 'decidir_documento',
+        operacion: 'rpc',
+        datos: { p_id: DOC, p_estado: 'En corrección', p_seccion_id: 's1', p_comentario: 'Falta el alcance' },
+      },
+    ])
+  })
+
+  it('aprobar no exige sección ni comentario', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.decidirDocumento(DOC, 'Aprobado')
+
+    expect(llamadas[0].datos).toEqual({ p_id: DOC, p_estado: 'Aprobado', p_seccion_id: null, p_comentario: null })
+  })
+
+  it.each([
+    [{ code: '42501', message: 'Solo el cliente de la empresa aprueba documentos' }, 'sin_permiso'],
+    [{ code: '22023', message: 'Solo se decide sobre documentos pendientes de revisión' }, 'datos_invalidos'],
+  ] as const)('traduce %o a "%s"', async (error, esperado) => {
+    const { cliente } = crearClienteDoble({ 'decidir_documento.rpc': { data: null, error } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.decidirDocumento(DOC, 'Aprobado')).toEqual({ ok: false, error: esperado })
+  })
+})
+
+describe('comentarDocumento', () => {
+  const DOC = { id: '66666666-0000-0000-0000-000000000001', proyectoId: P_NUEVO } as Documento
+
+  it('guarda el comentario anclado a la sección y lo devuelve con la fecha de la BD', async () => {
+    const { cliente, llamadas } = crearClienteDoble({
+      'comentarios.insert': {
+        data: { id: 'com-1', seccion_id: 's1', autor_id: ROBERTO, texto: 'Revisar redacción', creado_en: '2026-11-06T10:00:00+00:00' },
+        error: null,
+      },
+    })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.comentarDocumento(C1, DOC, 's1', ' Revisar redacción ')
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'comentarios',
+        operacion: 'insert',
+        datos: { consultoria_id: C1, proyecto_id: P_NUEVO, entidad_tipo: 'documento', entidad_id: DOC.id, seccion_id: 's1', texto: 'Revisar redacción' },
+      },
+    ])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: { id: 'com-1', seccionId: 's1', autorId: ROBERTO, fecha: '06/11/2026', texto: 'Revisar redacción' },
+    })
+  })
+
+  it('no guarda comentarios vacíos', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.comentarDocumento(C1, DOC, 's1', '   ')).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toHaveLength(0)
+  })
+})
+
 describe('cambiarEstadoProyecto', () => {
   it('actualiza el estado del proyecto', async () => {
     const { cliente, llamadas } = crearClienteDoble()
