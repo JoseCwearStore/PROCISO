@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
 import type { FilaEmpresa, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
-import type { Documento, Proceso } from '../types'
+import type { Documento, ListaVerificacion, Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
 const E_NUEVA = '22222222-0000-0000-0000-0000000000aa'
@@ -65,7 +65,8 @@ function crearClienteDoble(respuestas: Record<string, Respuesta> = {}, subida: R
     }),
     rpc: async (funcion, args) => {
       llamadas.push({ tabla: funcion, operacion: 'rpc', datos: args })
-      return { error: responder(`${funcion}.rpc`).error }
+      const { data, error } = responder(`${funcion}.rpc`)
+      return { data, error }
     },
     storage: {
       from: (bucket) => ({
@@ -755,5 +756,67 @@ describe('cambiarEstadoNC', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.cambiarEstadoNC(NC_NUEVA, 'Verificada', 'Bien')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+// ─── Listas de verificación ───────────────────────────────────────────────────
+
+const LISTA: ListaVerificacion = {
+  id: 'lv-1', nombre: ' Revisión de compras ', empresaId: 'emp', proyectoId: P_NUEVO, procesoId: '', area: ' Compras ',
+  responsableId: CARLOS, fecha: '2026-11-21', edicionNorma: 'ISO 9001:2026',
+  preguntas: [
+    { id: 'pr-1', pregunta: ' ¿Hay proveedores aprobados? ', estado: 'Cumple según la evidencia revisada', referenciaRequisito: '8.4', evidenciaId: '' },
+    { id: 'pr-2', pregunta: '¿Se reevalúan?', estado: 'No cumple según la evidencia revisada', observaciones: 'Sin registros' },
+  ],
+}
+
+describe('guardarLista', () => {
+  it('manda lista y preguntas (con su orden) en una sola llamada y devuelve las tareas que creó el servidor', async () => {
+    const tareaCreada: FilaTarea = {
+      id: 'tar-nueva', proyecto_id: P_NUEVO, titulo: 'Seguimiento de hallazgo: ¿Se reevalúan?', descripcion: 'Hallazgo…',
+      asignado_a: CARLOS, asignado_por: ROBERTO, estado: 'Pendiente', prioridad: 'Alta', fecha_vencimiento: '2026-11-21',
+      fecha_completada: null, dependencias: [],
+    }
+    const { cliente, llamadas } = crearClienteDoble({ 'guardar_lista.rpc': { data: [tareaCreada], error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.guardarLista(LISTA)
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'guardar_lista',
+        operacion: 'rpc',
+        datos: {
+          p_lista: {
+            id: 'lv-1', proyecto_id: P_NUEVO, proceso_id: null, nombre: 'Revisión de compras', area: 'Compras',
+            responsable_id: CARLOS, fecha: '2026-11-21', edicion_norma: 'ISO 9001:2026',
+          },
+          p_preguntas: [
+            { id: 'pr-1', orden: 1, pregunta: '¿Hay proveedores aprobados?', estado: 'Cumple según la evidencia revisada', referencia_requisito: '8.4', evidencia_id: null, observaciones: '', justificacion_no_aplica: '' },
+            { id: 'pr-2', orden: 2, pregunta: '¿Se reevalúan?', estado: 'No cumple según la evidencia revisada', referencia_requisito: '', evidencia_id: null, observaciones: 'Sin registros', justificacion_no_aplica: '' },
+          ],
+        },
+      },
+    ])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: [expect.objectContaining({ id: 'tar-nueva', asignadoAId: CARLOS, prioridad: 'Alta', fechaVencimiento: '21/11/2026' })],
+    })
+  })
+
+  it('"No aplica" sin justificar o una evidencia de otro proyecto llegan como datos inválidos', async () => {
+    for (const code of ['23514', '23503']) {
+      const { cliente } = crearClienteDoble({ 'guardar_lista.rpc': { data: null, error: { code, message: 'violates constraint' } } })
+      const escrituras = crearServicioEscritura(cliente)
+
+      expect(await escrituras.guardarLista(LISTA)).toEqual({ ok: false, error: 'datos_invalidos' })
+    }
+  })
+
+  it('el cliente no guarda listas: el RLS lo rechaza', async () => {
+    const { cliente } = crearClienteDoble({ 'guardar_lista.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarLista(LISTA)).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })

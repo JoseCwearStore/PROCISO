@@ -19,7 +19,8 @@ export const PAGE_PERMISSIONS: Partial<Record<PageId, Rol[]>> = {
   revisiones: COLABORACION_CLIENTE,
   tareas: COLABORACION_CLIENTE,
   'tablero-tareas': COLABORACION_CLIENTE,
-  'listas-verificacion': OPERACION,
+  // El cliente las ve en lectura (la BD no le deja escribir).
+  'listas-verificacion': COLABORACION_CLIENTE,
   // El cliente participa: documenta corrección, causa y acción (la BD decide qué puede cada uno).
   'no-conformidades': COLABORACION_CLIENTE,
   indicadores: EQUIPO,

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, EntradaHistorial, NoConformidad, Notificacion, Tarea } from '../types'
+import type { Documento, EntradaHistorial, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -94,6 +94,16 @@ function filasBase(): FilasSesion {
         asignado_a: CARLOS, asignado_por: ROBERTO, estado: 'En revisión', prioridad: 'Alta',
         fecha_vencimiento: '2024-09-15', fecha_completada: null, dependencias: ['tar-p0'],
       },
+    ],
+    listas: [
+      {
+        id: 'lv-p1', proyecto_id: P1, proceso_id: PROC1, nombre: 'Revisión de compras', area: 'Compras',
+        responsable_id: CARLOS, fecha: '2024-09-24', edicion_norma: 'ISO 9001:2026',
+      },
+    ],
+    preguntas: [
+      { id: 'pr-2', lista_id: 'lv-p1', orden: 2, pregunta: '¿Aplica?', estado: 'No aplica', referencia_requisito: '', evidencia_id: null, observaciones: '', justificacion_no_aplica: 'No subcontrata' },
+      { id: 'pr-1', lista_id: 'lv-p1', orden: 1, pregunta: '¿Hay proveedores aprobados?', estado: 'Cumple según la evidencia revisada', referencia_requisito: '8.4', evidencia_id: 'ev-p1', observaciones: 'Lista vigente', justificacion_no_aplica: '' },
     ],
     noConformidades: [
       {
@@ -225,6 +235,28 @@ describe('combinarDatosSesion', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
+  })
+
+  it('traduce las listas de verificación con su empresa y sus preguntas en orden', () => {
+    const { listasVerificacion } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(listasVerificacion).toEqual<ListaVerificacion[]>([
+      {
+        id: 'lv-p1',
+        nombre: 'Revisión de compras',
+        empresaId: E1,
+        proyectoId: P1,
+        procesoId: PROC1,
+        area: 'Compras',
+        responsableId: CARLOS,
+        fecha: '24/09/2024',
+        edicionNorma: 'ISO 9001:2026',
+        preguntas: [
+          { id: 'pr-1', pregunta: '¿Hay proveedores aprobados?', estado: 'Cumple según la evidencia revisada', referenciaRequisito: '8.4', evidenciaId: 'ev-p1', observaciones: 'Lista vigente', justificacionNoAplica: '' },
+          { id: 'pr-2', pregunta: '¿Aplica?', estado: 'No aplica', referenciaRequisito: '', evidenciaId: undefined, observaciones: '', justificacionNoAplica: 'No subcontrata' },
+        ],
+      },
+    ])
   })
 
   it('traduce las no conformidades de la BD con folio, empresa, acciones e historial', () => {
@@ -405,6 +437,8 @@ describe('cargarFilasSesion', () => {
       comentarios: filas.comentarios,
       tareas: filas.tareas,
       no_conformidades: filas.noConformidades,
+      listas_verificacion: filas.listas,
+      lista_preguntas: filas.preguntas,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -415,13 +449,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las dieciséis tablas y devuelve sus filas', async () => {
+  it('lee las dieciocho tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(16)
+    expect(cliente.from).toHaveBeenCalledTimes(18)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

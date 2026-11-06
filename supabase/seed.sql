@@ -288,3 +288,39 @@ Implementar programa anual', 'Observación para revisar: Podría estar relaciona
 Capacitar al equipo', '', 'aaaaaaaa-0000-0000-0000-000000000003'),
   ('88888888-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'Sin proceso formal de selección de proveedores nuevos', 'No existe criterio documentado para evaluación de proveedores nuevos.', 'Observación', 'Diagnóstico inicial', current_date + 0, 'aaaaaaaa-0000-0000-0000-000000000006', 'Abierta', '', 'Definir criterios de selección
 Crear lista de proveedores aprobados', 'Observación para revisar: Verificar si existe proceso informal formalizable.', 'aaaaaaaa-0000-0000-0000-000000000004');
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Listas de verificación (ejemplo para la demo; el demo original no traía listas)
+-- ════════════════════════════════════════════════════════════════════════════
+-- Una lista de Marketino con todos los casos: cumple (con evidencia), hallazgo con
+-- su tarea de seguimiento ya generada, pendiente y "No aplica" justificado.
+-- Referencias genéricas a 8.4: verificarlas contra el texto oficial de la norma.
+insert into public.listas_verificacion (id, consultoria_id, proyecto_id, proceso_id, nombre, area, responsable_id, fecha, edicion_norma, creada_por) values
+  ('99999999-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
+   '55555555-0000-0000-0000-000000000001', 'Revisión documental — Compras y proveedores', 'Compras',
+   'aaaaaaaa-0000-0000-0000-000000000005', current_date + 14, 'ISO 9001:2026', 'aaaaaaaa-0000-0000-0000-000000000003');
+
+insert into public.lista_preguntas (id, consultoria_id, proyecto_id, lista_id, orden, pregunta, estado, referencia_requisito, evidencia_id, observaciones, justificacion_no_aplica) values
+  ('99999999-0000-0000-0000-0000000000a1', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+   1, '¿Existe un procedimiento documentado para las compras?', 'Cumple según la evidencia revisada', '8.4', null,
+   'Procedimiento de compras aprobado en el módulo de documentación.', ''),
+  ('99999999-0000-0000-0000-0000000000a2', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+   2, '¿Se evalúa y selecciona a los proveedores con criterios definidos?', 'Cumple según la evidencia revisada', '8.4',
+   '44444444-0000-0000-0000-000000000001', 'El formato de evaluación incluye precio, calidad y tiempo de entrega.', ''),
+  ('99999999-0000-0000-0000-0000000000a3', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+   3, '¿Se reevalúa periódicamente el desempeño de los proveedores?', 'No cumple según la evidencia revisada', '8.4', null,
+   'No hay registros de reevaluación del último año.', ''),
+  ('99999999-0000-0000-0000-0000000000a4', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+   4, '¿Se inspecciona lo comprado al recibirlo en almacén?', 'Pendiente de verificar', '8.4',
+   '44444444-0000-0000-0000-000000000002', 'Revisar las fotografías del almacén en la próxima visita.', ''),
+  ('99999999-0000-0000-0000-0000000000a5', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '99999999-0000-0000-0000-000000000001',
+   5, '¿Se controlan los proveedores de desarrollo de software?', 'No aplica', '8.4', null, '',
+   'Marketino no subcontrata desarrollo de software.');
+
+-- La tarea que guardar_lista habría generado para el hallazgo de la pregunta 3.
+insert into public.tareas (id, consultoria_id, proyecto_id, titulo, descripcion, asignado_a, asignado_por, estado, prioridad, fecha_vencimiento, pregunta_id) values
+  ('77777777-0000-0000-0000-000000000021', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
+   'Seguimiento de hallazgo: ¿Se reevalúa periódicamente el desempeño de los proveedores?',
+   'Hallazgo identificado en la lista “Revisión documental — Compras y proveedores”. Estado: No cumple según la evidencia revisada.',
+   'aaaaaaaa-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000003', 'Pendiente', 'Alta', current_date + 14,
+   '99999999-0000-0000-0000-0000000000a3');

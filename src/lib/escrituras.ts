@@ -8,6 +8,7 @@ import type {
   EstadoProyecto,
   EstadoTarea,
   Evidencia,
+  ListaVerificacion,
   NoConformidad,
   PrioridadTarea,
   Proceso,
@@ -66,9 +67,10 @@ export interface ClienteEscritura {
       | 'decidir_documento'
       | 'cambiar_estado_tarea'
       | 'guardar_tratamiento_nc'
-      | 'cambiar_estado_nc',
+      | 'cambiar_estado_nc'
+      | 'guardar_lista',
     args: Record<string, unknown>,
-  ): PromiseLike<{ error: ErrorBD | null }>
+  ): PromiseLike<{ data?: unknown; error: ErrorBD | null }>
   storage: {
     from(bucket: 'evidencias'): {
       upload(ruta: string, archivo: File, opciones: { contentType: string }): PromiseLike<{ error: ErrorStorage | null }>
@@ -215,8 +217,10 @@ function filaRegistroNC(datos: DatosNC) {
 // 22023: el servidor rechazó la operación por una regla de negocio (estado, datos faltantes).
 // 42501: el RLS rechazó el INSERT. PGRST116: el UPDATE no encontró la fila, porque
 // el RLS no le deja ver esa fila a este usuario. Para quien usa la app, lo mismo.
+// 23514 (CHECK) y 23503 (FK): la BD rechazó los datos (p. ej. "No aplica" sin
+// justificar, o una evidencia de otro proyecto).
 function traducirError(error: ErrorBD): ErrorEscritura {
-  if (error.code === '22023') return 'datos_invalidos'
+  if (error.code === '22023' || error.code === '23514' || error.code === '23503') return 'datos_invalidos'
   return error.code === '42501' || error.code === 'PGRST116' ? 'sin_permiso' : 'servicio'
 }
 
@@ -546,6 +550,37 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_accion: tratamiento.accion.trim(),
       })
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    // ─── Listas de verificación ─────────────────────────────────────────────
+    // Lista + preguntas + tareas de seguimiento de los hallazgos en UNA transacción.
+    // Devuelve las tareas que el servidor creó (una por hallazgo nuevo).
+    async guardarLista(lista: ListaVerificacion): Promise<ResultadoEscritura<Tarea[]>> {
+      const { data, error } = await cliente.rpc('guardar_lista', {
+        p_lista: {
+          id: lista.id,
+          proyecto_id: lista.proyectoId,
+          proceso_id: lista.procesoId || null,
+          nombre: lista.nombre.trim(),
+          area: (lista.area ?? '').trim(),
+          responsable_id: lista.responsableId,
+          fecha: fechaISO(lista.fecha),
+          edicion_norma: lista.edicionNorma,
+        },
+        p_preguntas: lista.preguntas.map((p, i) => ({
+          id: p.id,
+          orden: i + 1,
+          pregunta: p.pregunta.trim(),
+          estado: p.estado,
+          referencia_requisito: (p.referenciaRequisito ?? '').trim(),
+          evidencia_id: p.evidenciaId || null,
+          observaciones: (p.observaciones ?? '').trim(),
+          justificacion_no_aplica: (p.justificacionNoAplica ?? '').trim(),
+        })),
+      })
+      if (error) return { ok: false, error: traducirError(error) }
+      const creadas = (Array.isArray(data) ? data : []) as FilaTarea[]
+      return { ok: true, valor: creadas.map((fila) => traducirTarea(fila, [], [])) }
     },
 
     async cambiarEstadoNC(id: string, estado: EstadoNC, verificacion?: string): Promise<ResultadoEscritura<void>> {

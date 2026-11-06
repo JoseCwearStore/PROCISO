@@ -44,7 +44,12 @@ const DEMO: DatosDemo = {
 export type EstadoDatosSesion = 'pendiente' | 'cargando' | 'listo' | 'error'
 
 // Al cerrar sesión no puede quedar en memoria nada del usuario anterior.
-const SIN_DATOS = {
+// El tipo se DERIVA de DatosSesion: si un módulo nuevo se carga de la BD y no se
+// vacía acá, tsc no compila (así se evita que otro usuario vea datos ajenos).
+type SinDatos = { [K in Exclude<keyof DatosSesion, 'historial'>]: [] } & { auditoria: [] }
+
+const SIN_DATOS: SinDatos = {
+  listasVerificacion: [],
   empresas: [],
   proyectos: [],
   tareas: [],
@@ -57,7 +62,7 @@ const SIN_DATOS = {
   auditoria: [],
   consultorias: [],
   notificaciones: [],
-} satisfies Partial<AppState>
+}
 
 interface CurrentUser {
   id: string
@@ -373,7 +378,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     datosSesion: 'pendiente',
     intentoCarga: 0,
     ...SIN_DATOS,
-    listasVerificacion: [],
     indicadores: [],
     comentariosGlobales: [],
     toasts: [],

@@ -10,7 +10,9 @@ import type {
   EntradaHistorial,
   Evidencia,
   Fase,
+  ListaVerificacion,
   NoConformidad,
+  PreguntaVerificacion,
   Notificacion,
   Proceso,
   Proyecto,
@@ -240,6 +242,29 @@ export interface FilaTarea {
   dependencias: string[]
 }
 
+export interface FilaLista {
+  id: string
+  proyecto_id: string
+  proceso_id: string | null
+  nombre: string
+  area: string
+  responsable_id: string
+  fecha: string
+  edicion_norma: ListaVerificacion['edicionNorma']
+}
+
+export interface FilaPregunta {
+  id: string
+  lista_id: string
+  orden: number
+  pregunta: string
+  estado: PreguntaVerificacion['estado']
+  referencia_requisito: string
+  evidencia_id: string | null
+  observaciones: string
+  justificacion_no_aplica: string
+}
+
 export interface FilaNoConformidad {
   id: string
   proyecto_id: string
@@ -281,6 +306,8 @@ export interface FilasSesion {
   comentarios: FilaComentario[]
   tareas: FilaTarea[]
   noConformidades: FilaNoConformidad[]
+  listas: FilaLista[]
+  preguntas: FilaPregunta[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
@@ -293,6 +320,7 @@ export interface DatosDemo {
 export interface DatosSesion extends DatosDemo {
   tareas: Tarea[]
   noConformidades: NoConformidad[]
+  listasVerificacion: ListaVerificacion[]
   consultorias: Consultoria[]
   empresas: Empresa[]
   usuarios: Usuario[]
@@ -329,6 +357,11 @@ const CONSULTAS = {
   noConformidades: [
     'no_conformidades',
     'id, proyecto_id, folio, titulo, descripcion, tipo, detectada_en, fecha_deteccion, proceso_id, evidencia_ids, responsable_id, responsable_accion_id, fecha_limite, estado, correccion_inmediata, analisis_causa, accion_correctiva, eficacia, verificacion_eficacia, fecha_cierre, observaciones',
+  ],
+  listas: ['listas_verificacion', 'id, proyecto_id, proceso_id, nombre, area, responsable_id, fecha, edicion_norma'],
+  preguntas: [
+    'lista_preguntas',
+    'id, lista_id, orden, pregunta, estado, referencia_requisito, evidencia_id, observaciones, justificacion_no_aplica',
   ],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
@@ -641,6 +674,32 @@ export function traducirTarea(fila: FilaTarea, historial: FilaHistorial[], comen
   }
 }
 
+export function traducirLista(fila: FilaLista, preguntas: FilaPregunta[], proyectos: FilaProyecto[]): ListaVerificacion {
+  return {
+    id: fila.id,
+    nombre: fila.nombre,
+    empresaId: proyectos.find((p) => p.id === fila.proyecto_id)?.empresa_id ?? '',
+    proyectoId: fila.proyecto_id,
+    procesoId: opcional(fila.proceso_id),
+    area: fila.area,
+    responsableId: fila.responsable_id,
+    fecha: formatearFecha(fila.fecha),
+    edicionNorma: fila.edicion_norma,
+    preguntas: preguntas
+      .filter((p) => p.lista_id === fila.id)
+      .sort((a, b) => a.orden - b.orden)
+      .map((p) => ({
+        id: p.id,
+        pregunta: p.pregunta,
+        estado: p.estado,
+        referenciaRequisito: p.referencia_requisito,
+        evidenciaId: opcional(p.evidencia_id),
+        observaciones: p.observaciones,
+        justificacionNoAplica: p.justificacion_no_aplica,
+      })),
+  }
+}
+
 export function traducirNoConformidad(fila: FilaNoConformidad, proyectos: FilaProyecto[], historial: FilaHistorial[]): NoConformidad {
   return {
     id: fila.id,
@@ -741,6 +800,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     tareas,
     entregables: delProyectoVisible(demo.entregables),
     noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
+    listasVerificacion: filas.listas.map((fila) => traducirLista(fila, filas.preguntas, filas.proyectos)),
     notificaciones: demo.notificaciones.filter((n) => !n.proyectoId || proyectosVisibles.has(n.proyectoId)),
     historial: demo.historial.filter((h) => visiblesPorTipo[h.entidadTipo].has(h.entidadId)),
   }
