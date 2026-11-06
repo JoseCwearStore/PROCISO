@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, Entregable, EntradaHistorial, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
+import type { Documento, Entregable, EntradaHistorial, IndicadorGestion, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -93,6 +93,12 @@ function filasBase(): FilasSesion {
         id: 'tar-p1', proyecto_id: P1, titulo: 'Cargar evidencias de compras', descripcion: 'Fotos del almacén',
         asignado_a: CARLOS, asignado_por: ROBERTO, estado: 'En revisión', prioridad: 'Alta',
         fecha_vencimiento: '2024-09-15', fecha_completada: null, dependencias: ['tar-p0'],
+      },
+    ],
+    indicadores: [
+      {
+        id: 'in-sgc', ambito: 'SGC', empresa_id: E1, nombre: 'Quejas en 48 h', descripcion: '', formula: 'a / b',
+        unidad: '%', frecuencia: 'Mensual', responsable_id: CARLOS, meta: '≥ 95 %', periodo: 'Octubre 2026', valor: '',
       },
     ],
     entregables: [
@@ -240,6 +246,17 @@ describe('combinarDatosSesion', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
+  })
+
+  it('traduce los indicadores; un valor vacío es "sin datos" (undefined), no "0"', () => {
+    const { indicadores } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(indicadores).toEqual<IndicadorGestion[]>([
+      {
+        id: 'in-sgc', ambito: 'SGC', empresaId: E1, nombre: 'Quejas en 48 h', descripcion: '', formula: 'a / b',
+        unidad: '%', frecuencia: 'Mensual', responsableId: CARLOS, meta: '≥ 95 %', periodo: 'Octubre 2026', valor: undefined,
+      },
+    ])
   })
 
   it('traduce los entregables de la BD con su aprobación y su documento', () => {
@@ -456,6 +473,7 @@ describe('cargarFilasSesion', () => {
       listas_verificacion: filas.listas,
       lista_preguntas: filas.preguntas,
       entregables: filas.entregables,
+      indicadores: filas.indicadores,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -466,13 +484,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las diecinueve tablas y devuelve sus filas', async () => {
+  it('lee las veinte tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(19)
+    expect(cliente.from).toHaveBeenCalledTimes(20)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

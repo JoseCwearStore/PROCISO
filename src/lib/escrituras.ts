@@ -10,6 +10,7 @@ import type {
   EstadoProyecto,
   EstadoTarea,
   Evidencia,
+  IndicadorGestion,
   ListaVerificacion,
   NoConformidad,
   PrioridadTarea,
@@ -24,6 +25,7 @@ import {
   traducirEmpresa,
   traducirEntregable,
   traducirEvidencia,
+  traducirIndicador,
   traducirNoConformidad,
   traducirProyecto,
   traducirTarea,
@@ -31,6 +33,7 @@ import {
   type FilaEmpresa,
   type FilaEntregable,
   type FilaEvidencia,
+  type FilaIndicador,
   type FilaNoConformidad,
   type FilaProyecto,
   type FilaTarea,
@@ -563,6 +566,39 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_accion: tratamiento.accion.trim(),
       })
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    // ─── Indicadores ────────────────────────────────────────────────────────
+    // Sin flujo de estados: el RLS decide quién (internos: solo el admin; SGC: quien
+    // trabaja con la empresa). Al editar no se manda la consultoría (no se muda).
+    async guardarIndicador(
+      consultoriaId: string | null,
+      indicador: IndicadorGestion,
+      nuevo: boolean,
+    ): Promise<ResultadoEscritura<IndicadorGestion>> {
+      const fila = {
+        ambito: indicador.ambito,
+        // Un indicador interno nunca lleva empresa (la BD lo exige con un CHECK).
+        empresa_id: indicador.ambito === 'SGC' ? indicador.empresaId || null : null,
+        nombre: indicador.nombre.trim(),
+        descripcion: indicador.descripcion.trim(),
+        formula: indicador.formula.trim(),
+        unidad: indicador.unidad.trim(),
+        frecuencia: indicador.frecuencia,
+        responsable_id: indicador.responsableId,
+        meta: indicador.meta.trim(),
+        periodo: indicador.periodo.trim(),
+        valor: (indicador.valor ?? '').trim(),
+      }
+      if (nuevo) {
+        if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+        const resultado = await insertar<FilaIndicador>('indicadores', { id: indicador.id, consultoria_id: consultoriaId, ...fila })
+        return resultado.ok ? { ok: true, valor: traducirIndicador(resultado.valor) } : resultado
+      }
+      const resultado = await actualizar('indicadores', indicador.id, fila)
+      return resultado.ok
+        ? { ok: true, valor: traducirIndicador({ id: indicador.id, ...fila }) }
+        : resultado
     },
 
     // ─── Entregables ────────────────────────────────────────────────────────

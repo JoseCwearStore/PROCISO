@@ -48,6 +48,7 @@ type SinDatos = { [K in Exclude<keyof DatosSesion, 'historial'>]: [] } & { audit
 
 const SIN_DATOS: SinDatos = {
   listasVerificacion: [],
+  indicadores: [],
   empresas: [],
   proyectos: [],
   tareas: [],
@@ -376,7 +377,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     datosSesion: 'pendiente',
     intentoCarga: 0,
     ...SIN_DATOS,
-    indicadores: [],
     comentariosGlobales: [],
     toasts: [],
     modal: null,

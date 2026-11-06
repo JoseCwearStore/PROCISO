@@ -23,7 +23,8 @@ export const PAGE_PERMISSIONS: Partial<Record<PageId, Rol[]>> = {
   'listas-verificacion': COLABORACION_CLIENTE,
   // El cliente participa: documenta corrección, causa y acción (la BD decide qué puede cada uno).
   'no-conformidades': COLABORACION_CLIENTE,
-  indicadores: EQUIPO,
+  // El cliente ve el SGC de su empresa en lectura (nunca los internos; lo decide la BD).
+  indicadores: COLABORACION_CLIENTE,
   notificaciones: TODOS,
   usuarios: ['Admin PROCISO', 'Admin Consultoría'],
   configuracion: ['Admin PROCISO', 'Admin Consultoría'],

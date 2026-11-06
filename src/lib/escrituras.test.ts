@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
-import type { FilaEmpresa, FilaEntregable, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
-import type { Documento, ListaVerificacion, Proceso } from '../types'
+import type { FilaEmpresa, FilaEntregable, FilaIndicador, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
+import type { Documento, IndicadorGestion, ListaVerificacion, Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
 const E_NUEVA = '22222222-0000-0000-0000-0000000000aa'
@@ -889,5 +889,64 @@ describe('decidirEntregable', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.decidirEntregable(EN_NUEVO, 'Aprobado')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+// ─── Indicadores ──────────────────────────────────────────────────────────────
+
+const IND: IndicadorGestion = {
+  id: 'cccccccc-0000-0000-0000-0000000000aa', ambito: 'SGC', empresaId: 'emp-1', proyectoId: '', nombre: ' Quejas en 48 h ',
+  descripcion: '', formula: ' a / b ', unidad: '%', frecuencia: 'Mensual', responsableId: CARLOS, meta: '≥ 95 %',
+  periodo: 'Octubre 2026', valor: ' 88 ',
+}
+
+const FILA_IND: FilaIndicador = {
+  id: IND.id, ambito: 'SGC', empresa_id: 'emp-1', nombre: 'Quejas en 48 h', descripcion: '', formula: 'a / b', unidad: '%',
+  frecuencia: 'Mensual', responsable_id: CARLOS, meta: '≥ 95 %', periodo: 'Octubre 2026', valor: '88',
+}
+
+describe('guardarIndicador', () => {
+  it('uno nuevo se inserta en la consultoría del usuario, con los textos recortados', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'indicadores.insert': { data: FILA_IND, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.guardarIndicador(C1, IND, true)
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'indicadores',
+        operacion: 'insert',
+        datos: {
+          id: IND.id, consultoria_id: C1, ambito: 'SGC', empresa_id: 'emp-1', nombre: 'Quejas en 48 h', descripcion: '',
+          formula: 'a / b', unidad: '%', frecuencia: 'Mensual', responsable_id: CARLOS, meta: '≥ 95 %', periodo: 'Octubre 2026', valor: '88',
+        },
+      },
+    ])
+    expect(resultado).toEqual({ ok: true, valor: expect.objectContaining({ id: IND.id, valor: '88' }) })
+  })
+
+  it('uno existente se actualiza sin tocar la consultoría (no se muda)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.guardarIndicador(C1, { ...IND, ambito: 'PROCISO', empresaId: 'emp-1' }, false)
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'indicadores',
+        operacion: 'update',
+        datos: expect.not.objectContaining({ consultoria_id: expect.anything() }),
+        id: IND.id,
+      },
+    ])
+    // Un indicador interno nunca lleva empresa (la BD lo exige con un CHECK).
+    expect(llamadas[0].datos).toMatchObject({ ambito: 'PROCISO', empresa_id: null })
+  })
+
+  it('un consultor que edita un indicador interno: el RLS no le devuelve la fila', async () => {
+    const { cliente } = crearClienteDoble({ 'indicadores.update': { data: null, error: SIN_FILAS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarIndicador(C1, IND, false)).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })

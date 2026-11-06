@@ -10,6 +10,7 @@ import type {
   EntradaHistorial,
   Evidencia,
   Fase,
+  IndicadorGestion,
   ListaVerificacion,
   NoConformidad,
   PreguntaVerificacion,
@@ -242,6 +243,21 @@ export interface FilaTarea {
   dependencias: string[]
 }
 
+export interface FilaIndicador {
+  id: string
+  ambito: IndicadorGestion['ambito']
+  empresa_id: string | null
+  nombre: string
+  descripcion: string
+  formula: string
+  unidad: string
+  frecuencia: string
+  responsable_id: string
+  meta: string
+  periodo: string
+  valor: string
+}
+
 export interface FilaEntregable {
   id: string
   proyecto_id: string
@@ -321,6 +337,7 @@ export interface FilasSesion {
   listas: FilaLista[]
   preguntas: FilaPregunta[]
   entregables: FilaEntregable[]
+  indicadores: FilaIndicador[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
@@ -334,6 +351,7 @@ export interface DatosSesion extends DatosDemo {
   noConformidades: NoConformidad[]
   listasVerificacion: ListaVerificacion[]
   entregables: Entregable[]
+  indicadores: IndicadorGestion[]
   consultorias: Consultoria[]
   empresas: Empresa[]
   usuarios: Usuario[]
@@ -370,6 +388,10 @@ const CONSULTAS = {
   noConformidades: [
     'no_conformidades',
     'id, proyecto_id, folio, titulo, descripcion, tipo, detectada_en, fecha_deteccion, proceso_id, evidencia_ids, responsable_id, responsable_accion_id, fecha_limite, estado, correccion_inmediata, analisis_causa, accion_correctiva, eficacia, verificacion_eficacia, fecha_cierre, observaciones',
+  ],
+  indicadores: [
+    'indicadores',
+    'id, ambito, empresa_id, nombre, descripcion, formula, unidad, frecuencia, responsable_id, meta, periodo, valor',
   ],
   entregables: [
     'entregables',
@@ -691,6 +713,24 @@ export function traducirTarea(fila: FilaTarea, historial: FilaHistorial[], comen
   }
 }
 
+export function traducirIndicador(fila: FilaIndicador): IndicadorGestion {
+  return {
+    id: fila.id,
+    ambito: fila.ambito,
+    empresaId: opcional(fila.empresa_id),
+    nombre: fila.nombre,
+    descripcion: fila.descripcion,
+    formula: fila.formula,
+    unidad: fila.unidad,
+    frecuencia: fila.frecuencia,
+    responsableId: fila.responsable_id,
+    meta: fila.meta,
+    periodo: fila.periodo,
+    // Vacío = todavía no hay medición ("Sin datos suficientes"), no un cero.
+    valor: fila.valor || undefined,
+  }
+}
+
 export function traducirEntregable(fila: FilaEntregable): Entregable {
   return {
     id: fila.id,
@@ -830,6 +870,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     documentos,
     tareas,
     entregables: filas.entregables.map(traducirEntregable),
+    indicadores: filas.indicadores.map(traducirIndicador),
     noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
     listasVerificacion: filas.listas.map((fila) => traducirLista(fila, filas.preguntas, filas.proyectos)),
     notificaciones: demo.notificaciones.filter((n) => !n.proyectoId || proyectosVisibles.has(n.proyectoId)),

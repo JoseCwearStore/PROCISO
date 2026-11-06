@@ -345,3 +345,26 @@ insert into public.entregables (id, consultoria_id, proyecto_id, nombre, tipo, e
   ('bbbbbbbb-0000-0000-0000-000000000012', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000004', 'Procedimientos actualizados', 'Procedimiento', 'Aprobado', current_date + -438, current_date + -433, 'aaaaaaaa-0000-0000-0000-000000000005', null, 'aaaaaaaa-0000-0000-0000-000000000003'),
   ('bbbbbbbb-0000-0000-0000-000000000013', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000004', 'Informe de auditoría interna', 'Informe', 'Aprobado', current_date + -315, current_date + -313, 'aaaaaaaa-0000-0000-0000-000000000005', null, 'aaaaaaaa-0000-0000-0000-000000000003'),
   ('bbbbbbbb-0000-0000-0000-000000000014', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000004', 'Informe de revisión por la dirección', 'Informe', 'Aprobado', current_date + -300, current_date + -300, 'aaaaaaaa-0000-0000-0000-000000000005', null, 'aaaaaaaa-0000-0000-0000-000000000003');
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- Indicadores (ejemplo para la demo; el demo original no traía indicadores)
+-- ════════════════════════════════════════════════════════════════════════════
+-- Internos de COWIN (los gestiona Ana, la admin) y del SGC de cada empresa (los
+-- registra el consultor que trabaja con ella). Uno sin valor, para mostrar el
+-- estado "Sin datos suficientes".
+insert into public.indicadores (id, consultoria_id, ambito, empresa_id, nombre, descripcion, formula, unidad, frecuencia, responsable_id, meta, periodo, valor, creado_por) values
+  ('cccccccc-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', 'PROCISO', null,
+   'Proyectos dentro del plazo', 'Proyectos activos que van en fecha según su plan.', 'Proyectos en fecha / proyectos activos × 100',
+   '%', 'Mensual', 'aaaaaaaa-0000-0000-0000-000000000002', '≥ 90 %', 'Noviembre 2026', '100', 'aaaaaaaa-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', 'PROCISO', null,
+   'Documentos aprobados a la primera', 'Documentos que el cliente aprobó sin pedir correcciones.', 'Aprobados sin corrección / documentos aprobados × 100',
+   '%', 'Trimestral', 'aaaaaaaa-0000-0000-0000-000000000002', '≥ 70 %', '4.º trimestre 2026', '', 'aaaaaaaa-0000-0000-0000-000000000002'),
+  ('cccccccc-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', 'SGC', '22222222-0000-0000-0000-000000000001',
+   'Quejas atendidas en 48 h', 'Quejas de clientes respondidas dentro de las 48 horas.', 'Quejas atendidas en 48 h / quejas recibidas × 100',
+   '%', 'Mensual', 'aaaaaaaa-0000-0000-0000-000000000005', '≥ 95 %', 'Octubre 2026', '88', 'aaaaaaaa-0000-0000-0000-000000000003'),
+  ('cccccccc-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001', 'SGC', '22222222-0000-0000-0000-000000000001',
+   'Proveedores evaluados', 'Proveedores críticos con evaluación vigente.', 'Proveedores evaluados / proveedores críticos × 100',
+   '%', 'Semestral', 'aaaaaaaa-0000-0000-0000-000000000003', '100 %', '2.º semestre 2026', '60', 'aaaaaaaa-0000-0000-0000-000000000003'),
+  ('cccccccc-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', 'SGC', '22222222-0000-0000-0000-000000000002',
+   'Entregas a tiempo', 'Pedidos entregados en la fecha comprometida.', 'Pedidos a tiempo / pedidos totales × 100',
+   '%', 'Mensual', 'aaaaaaaa-0000-0000-0000-000000000006', '≥ 92 %', 'Octubre 2026', '94', 'aaaaaaaa-0000-0000-0000-000000000004');
