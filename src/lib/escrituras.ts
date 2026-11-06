@@ -1,5 +1,6 @@
 import type {
   ComentarioDocumento,
+  ComentarioGlobal,
   ComentarioTarea,
   Documento,
   Empresa,
@@ -21,6 +22,7 @@ import type {
 } from '../types'
 import {
   traducirComentario,
+  traducirComentarioGlobal,
   traducirComentarioTarea,
   traducirEmpresa,
   traducirEntregable,
@@ -255,6 +257,26 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
   }
 
   return {
+    // Comentario sobre cualquier entidad del proyecto. El autor lo pone la BD
+    // (default auth.uid()); el trigger validar_comentario exige que la entidad
+    // exista, sea de ese tipo y de ese proyecto.
+    async comentar(
+      consultoriaId: string | null,
+      ref: Pick<ComentarioGlobal, 'entidadTipo' | 'entidadId' | 'proyectoId'>,
+      texto: string,
+    ): Promise<ResultadoEscritura<ComentarioGlobal>> {
+      if (!texto.trim()) return { ok: false, error: 'datos_invalidos' }
+      if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+      const resultado = await insertar<FilaComentario>('comentarios', {
+        consultoria_id: consultoriaId,
+        proyecto_id: ref.proyectoId,
+        entidad_tipo: ref.entidadTipo,
+        entidad_id: ref.entidadId,
+        texto: texto.trim(),
+      })
+      return resultado.ok ? { ok: true, valor: traducirComentarioGlobal(resultado.valor) } : resultado
+    },
+
     // Una sola llamada para una o todas; la BD pone el usuario y no duplica.
     async marcarNotificacionesLeidas(claves: string[]): Promise<ResultadoEscritura<void>> {
       if (claves.length === 0) return { ok: true, valor: undefined }

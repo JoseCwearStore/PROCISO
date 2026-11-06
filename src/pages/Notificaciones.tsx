@@ -6,41 +6,35 @@ import { EmptyState } from '../components/ui/EmptyState'
 import type { ComentarioGlobal, TipoNotificacion } from '../types'
 import { canAccess } from '../config/permissions'
 import { useAccionesNotificacion } from '../hooks/useAccionesNotificacion'
+import { useAccionesComentario } from '../hooks/useAccionesComentario'
+
+const ETIQUETA_ENTIDAD: Record<ComentarioGlobal['entidadTipo'], string> = {
+  tarea: 'Tarea', proceso: 'Proceso', documento: 'Documento', evidencia: 'Evidencia', no_conformidad: 'No conformidad', entregable: 'Entregable',
+}
 
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 
 export function Notificaciones() {
-  const { state, dispatch, navigate, getUsuario, showToast } = useApp()
+  const { state, navigate, getUsuario, showToast } = useApp()
   const { marcarLeidas } = useAccionesNotificacion()
+  const { comentar } = useAccionesComentario()
   const [tab, setTab] = useState<'notificaciones' | 'comentarios' | 'actividad'>('notificaciones')
   const [tipo, setTipo] = useState('')
   const [entidadTipo, setEntidadTipo] = useState<ComentarioGlobal['entidadTipo']>('tarea')
   const [entidadId, setEntidadId] = useState('')
   const [texto, setTexto] = useState('')
 
-  const usuarioSesion = state.usuarios.find((item) => item.email === state.currentUser?.email)
-  const usuarioCliente = usuarioSesion?.empresaId ? usuarioSesion : state.usuarios.find((item) => item.rol === 'Usuario Cliente' && item.activo)
-  const proyectosCliente = new Set(state.proyectos.filter((item) => item.empresaId === usuarioCliente?.empresaId).map((item) => item.id))
-  const tareasDisponibles = state.tareas.filter((item) => state.currentRole !== 'Usuario Cliente' || proyectosCliente.has(item.proyectoId))
-  const procesosDisponibles = state.procesos.filter((item) => state.currentRole !== 'Usuario Cliente' || proyectosCliente.has(item.proyectoId))
-  const documentosDisponibles = state.documentos.filter((item) => state.currentRole !== 'Usuario Cliente' || proyectosCliente.has(item.proyectoId))
-  const evidenciasDisponibles = state.evidencias.filter((item) => state.currentRole !== 'Usuario Cliente' || proyectosCliente.has(item.proyectoId))
-  const idsDisponibles = new Set([
-    ...tareasDisponibles.map((item) => item.id),
-    ...procesosDisponibles.map((item) => item.id),
-    ...documentosDisponibles.map((item) => item.id),
-    ...evidenciasDisponibles.map((item) => item.id),
-  ])
-  const comentariosVisibles = state.comentariosGlobales.filter(
-    (item) => state.currentRole !== 'Usuario Cliente' || idsDisponibles.has(item.entidadId)
-  )
-  const entidades = entidadTipo === 'tarea'
-    ? tareasDisponibles.map((item) => ({ id: item.id, nombre: item.titulo }))
-    : entidadTipo === 'proceso'
-      ? procesosDisponibles.map((item) => ({ id: item.id, nombre: item.nombre }))
-      : entidadTipo === 'documento'
-        ? documentosDisponibles.map((item) => ({ id: item.id, nombre: item.nombre }))
-        : evidenciasDisponibles.map((item) => ({ id: item.id, nombre: item.nombre }))
+  // El estado ya trae solo lo que el RLS deja ver a este usuario: no se filtra a mano.
+  const opciones: Record<ComentarioGlobal['entidadTipo'], { id: string; nombre: string; proyectoId: string }[]> = {
+    tarea: state.tareas.map((item) => ({ id: item.id, nombre: item.titulo, proyectoId: item.proyectoId })),
+    proceso: state.procesos.map((item) => ({ id: item.id, nombre: item.nombre, proyectoId: item.proyectoId })),
+    documento: state.documentos.map((item) => ({ id: item.id, nombre: item.nombre, proyectoId: item.proyectoId })),
+    evidencia: state.evidencias.map((item) => ({ id: item.id, nombre: item.nombre, proyectoId: item.proyectoId })),
+    no_conformidad: state.noConformidades.map((item) => ({ id: item.id, nombre: `${item.folio} ${item.titulo || item.descripcion}`, proyectoId: item.proyectoId })),
+    entregable: state.entregables.map((item) => ({ id: item.id, nombre: item.nombre, proyectoId: item.proyectoId })),
+  }
+  const nombreDe = new Map(Object.values(opciones).flat().map((item) => [item.id, item.nombre]))
+  const entidades = opciones[entidadTipo]
   const visibles = state.notificaciones.filter(
     (item) =>
       // La BD ya calculó las de este usuario; la página es un resguardo de UX.
@@ -49,33 +43,13 @@ export function Notificaciones() {
   const filtradas = visibles.filter((item) => !tipo || item.tipo === tipo)
   const noLeidas = visibles.filter((item) => !item.leida).length
 
-  function agregarComentario() {
-    if (!entidadId || !texto.trim()) return
-    dispatch({
-      type: 'ADD_COMENTARIO_GLOBAL',
-      comentario: {
-        id: `comentario-global-${Date.now()}`,
-        entidadTipo,
-        entidadId,
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        fecha: new Date().toLocaleString('es-MX'),
-        texto: texto.trim(),
-      },
-    })
-    dispatch({
-      type: 'APPEND_AUDIT',
-      entrada: {
-        id: `hist-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        accion: 'Comentario agregado',
-        descripcion: `Comentario en ${entidadTipo} ${entidadId}.`,
-        entidadId,
-        entidadTipo: entidadTipo === 'proceso' ? 'proyecto' : entidadTipo,
-      },
-    })
-    setTexto('')
-    showToast('Comentario agregado.', 'success')
+  async function agregarComentario() {
+    const entidad = entidades.find((item) => item.id === entidadId)
+    if (!entidad || !texto.trim()) return
+    if (await comentar({ entidadTipo, entidadId, proyectoId: entidad.proyectoId }, texto)) {
+      setTexto('')
+      showToast('Comentario agregado.', 'success')
+    }
   }
 
   return (
@@ -104,8 +78,8 @@ export function Notificaciones() {
       </div>}
 
       {tab === 'comentarios' && <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">
-        <div className="h-fit space-y-3 rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">Nuevo comentario</p><select className={inputClass} value={entidadTipo} onChange={(event) => { setEntidadTipo(event.target.value as ComentarioGlobal['entidadTipo']); setEntidadId('') }}><option value="tarea">Tarea</option><option value="proceso">Proceso</option><option value="documento">Documento</option><option value="evidencia">Evidencia</option></select><select className={inputClass} value={entidadId} onChange={(event) => setEntidadId(event.target.value)}><option value="">Selecciona un registro</option>{entidades.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select><textarea rows={4} className={inputClass} value={texto} onChange={(event) => setTexto(event.target.value)} placeholder="Escribe un comentario contextual..." /><Button className="w-full" disabled={!entidadId || !texto.trim()} onClick={agregarComentario} icon={<Send className="h-4 w-4" />}>Agregar comentario</Button></div>
-        <div className="space-y-3">{comentariosVisibles.length === 0 ? <EmptyState icon={<MessageSquare className="h-7 w-7" />} title="Sin comentarios transversales" description="Los comentarios de tareas, procesos, documentos y evidencias aparecerán aquí." /> : comentariosVisibles.slice().reverse().map((item) => <div key={item.id} className="rounded-xl border border-line bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">{getUsuario(item.autorId)?.nombre || item.autorId}</p><p className="mt-0.5 text-xs text-blue-600">{item.entidadTipo} · {item.entidadId}</p></div><span className="text-xs text-slate-400">{item.fecha}</span></div><p className="mt-3 text-sm text-slate-600">{item.texto}</p></div>)}</div>
+        <div className="h-fit space-y-3 rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">Nuevo comentario</p><select className={inputClass} value={entidadTipo} onChange={(event) => { setEntidadTipo(event.target.value as ComentarioGlobal['entidadTipo']); setEntidadId('') }}><option value="tarea">Tarea</option><option value="proceso">Proceso</option><option value="documento">Documento</option><option value="evidencia">Evidencia</option><option value="no_conformidad">No conformidad</option></select><select className={inputClass} value={entidadId} onChange={(event) => setEntidadId(event.target.value)}><option value="">Selecciona un registro</option>{entidades.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select><textarea rows={4} className={inputClass} value={texto} onChange={(event) => setTexto(event.target.value)} placeholder="Escribe un comentario contextual..." /><Button className="w-full" disabled={!entidadId || !texto.trim()} onClick={agregarComentario} icon={<Send className="h-4 w-4" />}>Agregar comentario</Button></div>
+        <div className="space-y-3">{state.comentariosGlobales.length === 0 ? <EmptyState icon={<MessageSquare className="h-7 w-7" />} title="Sin comentarios transversales" description="Los comentarios de tareas, procesos, documentos, evidencias y no conformidades aparecerán aquí." /> : state.comentariosGlobales.map((item) => <div key={item.id} className="rounded-xl border border-line bg-white p-4"><div className="flex items-start justify-between gap-3"><div><p className="text-sm font-semibold text-slate-800">{getUsuario(item.autorId)?.nombre || item.autorId}</p><p className="mt-0.5 text-xs text-blue-600">{ETIQUETA_ENTIDAD[item.entidadTipo]} · {nombreDe.get(item.entidadId) ?? '(sin acceso)'}{item.seccionId ? ` · sección ${item.seccionId}` : ''}</p></div><span className="text-xs text-slate-400">{item.fecha}</span></div><p className="mt-3 text-sm text-slate-600">{item.texto}</p></div>)}</div>
       </div>}
 
       {tab === 'actividad' && <div><div className="mb-4 rounded-lg border border-slate-200 bg-slate-50 p-3 text-sm text-slate-600"><strong>Registro de solo lectura.</strong> Nadie puede editar ni borrar los registros de auditoría.</div><div className="space-y-2">{state.auditoria.map((item) => <div key={item.id} className="flex gap-4 rounded-xl border border-line bg-white p-4"><History className="mt-0.5 h-4 w-4 shrink-0 text-slate-400" /><div className="flex-1"><div className="flex flex-wrap justify-between gap-2"><p className="text-sm font-semibold text-slate-700">{item.accion}</p><span className="text-xs text-slate-400">{item.fecha}</span></div><p className="mt-1 text-sm text-slate-500">{item.descripcion}</p><p className="mt-2 text-xs text-slate-400">{getUsuario(item.autorId)?.nombre || item.autorId} · {item.entidadTipo} {item.entidadId}</p></div></div>)}</div></div>}

@@ -446,10 +446,13 @@ export interface IndicadorGestion {
   valor?: string
 }
 
+// Cualquier fila de public.comentarios (la conversación transversal del proyecto).
 export interface ComentarioGlobal {
   id: string
-  entidadTipo: 'tarea' | 'proceso' | 'documento' | 'evidencia'
+  entidadTipo: 'tarea' | 'proceso' | 'documento' | 'evidencia' | 'no_conformidad' | 'entregable'
   entidadId: string
+  proyectoId: string
+  seccionId?: string // solo las observaciones de revisión de documentos
   autorId: string
   fecha: string
   texto: string

@@ -1,5 +1,6 @@
 import type {
   ActividadProceso,
+  ComentarioGlobal,
   ComentarioDocumento,
   ComentarioTarea,
   Consultoria,
@@ -211,6 +212,7 @@ export interface FilaVinculo {
 
 export interface FilaComentario {
   id: string
+  proyecto_id: string
   entidad_tipo: string
   entidad_id: string
   seccion_id: string | null
@@ -358,6 +360,7 @@ export interface FilasSesion {
 }
 
 export interface DatosSesion {
+  comentariosGlobales: ComentarioGlobal[]
   notificaciones: Notificacion[]
   historial: EntradaHistorial[]
   tareas: Tarea[]
@@ -397,7 +400,7 @@ const CONSULTAS = {
   documentos: ['documentos', '*'],
   versiones: ['documento_versiones', 'documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en'],
   vinculos: ['documento_evidencias', 'documento_id, evidencia_id'],
-  comentarios: ['comentarios', 'id, entidad_tipo, entidad_id, seccion_id, autor_id, texto, creado_en'],
+  comentarios: ['comentarios', 'id, proyecto_id, entidad_tipo, entidad_id, seccion_id, autor_id, texto, creado_en'],
   tareas: ['tareas', 'id, proyecto_id, titulo, descripcion, asignado_a, asignado_por, estado, prioridad, fecha_vencimiento, fecha_completada, dependencias'],
   noConformidades: [
     'no_conformidades',
@@ -870,6 +873,19 @@ export function traducirNotificacion(fila: FilaNotificacion): Notificacion {
   }
 }
 
+export function traducirComentarioGlobal(fila: FilaComentario): ComentarioGlobal {
+  return {
+    id: fila.id,
+    entidadTipo: fila.entidad_tipo as ComentarioGlobal['entidadTipo'],
+    entidadId: fila.entidad_id,
+    proyectoId: fila.proyecto_id,
+    seccionId: opcional(fila.seccion_id),
+    autorId: fila.autor_id,
+    fecha: formatearFecha(fila.creado_en),
+    texto: fila.texto,
+  }
+}
+
 // La actividad (auditoría) es el historial real: el RLS ya dejó solo lo visible.
 export function traducirHistorial(filas: FilaHistorial[]): EntradaHistorial[] {
   return [...filas]
@@ -908,6 +924,9 @@ export function combinarDatosSesion(filas: FilasSesion): DatosSesion {
     indicadores: filas.indicadores.map(traducirIndicador),
     noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
     listasVerificacion: filas.listas.map((fila) => traducirLista(fila, filas.preguntas, filas.proyectos)),
+    comentariosGlobales: [...filas.comentarios]
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map(traducirComentarioGlobal),
     notificaciones: filas.notificaciones.map(traducirNotificacion),
     historial: traducirHistorial(filas.historial),
   }

@@ -69,11 +69,6 @@ export function TopBar() {
         </span>
       </div>
 
-      {/* DEMO badge */}
-      <span className="bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded uppercase tracking-wider border border-amber-200">
-        DEMO
-      </span>
-
       {/* Notifications */}
       <button
         onClick={() => setSearchOpen(true)}

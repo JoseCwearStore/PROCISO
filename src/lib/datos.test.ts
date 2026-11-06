@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, Entregable, EntradaHistorial, IndicadorGestion, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
+import type { ComentarioGlobal, Documento, Entregable, EntradaHistorial, IndicadorGestion, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -140,10 +140,10 @@ function filasBase(): FilasSesion {
     ],
     vinculos: [{ documento_id: 'doc-p1', evidencia_id: 'ev-p1' }],
     comentarios: [
-      { id: 'com-2', entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: CARLOS, texto: 'Agregar el alcance', creado_en: '2024-07-20T10:00:00+00:00' },
-      { id: 'com-1', entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: ROBERTO, texto: 'Revisar redacción', creado_en: '2024-07-18T10:00:00+00:00' },
-      { id: 'com-ev', entidad_tipo: 'evidencia', entidad_id: 'ev-p1', seccion_id: null, autor_id: ROBERTO, texto: 'Otra entidad', creado_en: '2024-07-19T10:00:00+00:00' },
-      { id: 'com-t1', entidad_tipo: 'tarea', entidad_id: 'tar-p1', seccion_id: null, autor_id: CARLOS, texto: 'Listo', creado_en: '2024-09-12T10:00:00+00:00' },
+      { id: 'com-2', proyecto_id: P1, entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: CARLOS, texto: 'Agregar el alcance', creado_en: '2024-07-20T10:00:00+00:00' },
+      { id: 'com-1', proyecto_id: P1, entidad_tipo: 'documento', entidad_id: 'doc-p1', seccion_id: 's1', autor_id: ROBERTO, texto: 'Revisar redacción', creado_en: '2024-07-18T10:00:00+00:00' },
+      { id: 'com-ev', proyecto_id: P1, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', seccion_id: null, autor_id: ROBERTO, texto: 'Otra entidad', creado_en: '2024-07-19T10:00:00+00:00' },
+      { id: 'com-t1', proyecto_id: P1, entidad_tipo: 'tarea', entidad_id: 'tar-p1', seccion_id: null, autor_id: CARLOS, texto: 'Listo', creado_en: '2024-09-12T10:00:00+00:00' },
     ],
     // Lo que devuelve mis_notificaciones(): ya calculado y filtrado por la BD.
     notificaciones: [
@@ -443,6 +443,17 @@ describe('combinarDatosSesion', () => {
         fecha: '25/03/2024', leida: true, pagina: 'documentacion', proyectoId: P1,
       },
     ])
+  })
+
+  it('arma la conversación transversal con todos los comentarios, del más nuevo al más viejo', () => {
+    const { comentariosGlobales } = combinarDatosSesion(filasBase())
+
+    expect(ids(comentariosGlobales)).toEqual(['com-t1', 'com-2', 'com-ev', 'com-1'])
+    expect(comentariosGlobales[1]).toEqual<ComentarioGlobal>({
+      id: 'com-2', entidadTipo: 'documento', entidadId: 'doc-p1', proyectoId: P1, seccionId: 's1',
+      autorId: CARLOS, fecha: '20/07/2024', texto: 'Agregar el alcance',
+    })
+    expect(comentariosGlobales[0].seccionId).toBeUndefined()
   })
 
   it('arma la actividad con el historial real, del más nuevo al más viejo', () => {

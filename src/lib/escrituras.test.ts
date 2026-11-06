@@ -976,3 +976,46 @@ describe('marcarNotificacionesLeidas', () => {
     expect(await crearServicioEscritura(cliente).marcarNotificacionesLeidas(['h:1'])).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })
+
+describe('comentar', () => {
+  const NC = 'nc-1'
+  const FILA = {
+    id: 'com-n', proyecto_id: P_NUEVO, entidad_tipo: 'no_conformidad', entidad_id: NC, seccion_id: null,
+    autor_id: ROBERTO, texto: 'Ya están las firmas', creado_en: '2026-11-06T18:00:00+00:00',
+  }
+
+  it('inserta el comentario sobre cualquier entidad y lo devuelve traducido (el autor lo pone la BD)', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'comentarios.insert': { data: FILA, error: null } })
+
+    const resultado = await crearServicioEscritura(cliente).comentar(
+      C1, { entidadTipo: 'no_conformidad', entidadId: NC, proyectoId: P_NUEVO }, '  Ya están las firmas  ',
+    )
+
+    expect(llamadas).toEqual([{
+      tabla: 'comentarios', operacion: 'insert',
+      datos: { consultoria_id: C1, proyecto_id: P_NUEVO, entidad_tipo: 'no_conformidad', entidad_id: NC, texto: 'Ya están las firmas' },
+    }])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: {
+        id: 'com-n', entidadTipo: 'no_conformidad', entidadId: NC, proyectoId: P_NUEVO, seccionId: undefined,
+        autorId: ROBERTO, fecha: '06/11/2026', texto: 'Ya están las firmas',
+      },
+    })
+  })
+
+  it('no guarda un comentario vacío', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).comentar(C1, { entidadTipo: 'tarea', entidadId: 't', proyectoId: P_NUEVO }, '   '))
+      .toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toEqual([])
+  })
+
+  it('traduce el rechazo de integridad (entidad de otro proyecto) a datos inválidos', async () => {
+    const { cliente } = crearClienteDoble({ 'comentarios.insert': { data: null, error: { code: '22023', message: 'no existe' } } })
+
+    expect(await crearServicioEscritura(cliente).comentar(C1, { entidadTipo: 'proceso', entidadId: 'x', proyectoId: P_NUEVO }, 'Hola'))
+      .toEqual({ ok: false, error: 'datos_invalidos' })
+  })
+})

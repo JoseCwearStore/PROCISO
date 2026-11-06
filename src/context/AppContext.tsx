@@ -51,6 +51,7 @@ const SIN_DATOS: SinDatos = {
   auditoria: [],
   consultorias: [],
   notificaciones: [],
+  comentariosGlobales: [],
 }
 
 interface CurrentUser {
@@ -300,7 +301,8 @@ function reducer(state: AppState, action: Action): AppState {
       }
     }
     case 'ADD_COMENTARIO_GLOBAL':
-      return { ...state, comentariosGlobales: [...state.comentariosGlobales, action.comentario] }
+      // La lista va del más nuevo al más viejo (como la carga la BD).
+      return { ...state, comentariosGlobales: [action.comentario, ...state.comentariosGlobales] }
     case 'APPEND_AUDIT':
       return { ...state, auditoria: [action.entrada, ...state.auditoria] }
     case 'UPSERT_CONSULTORIA': {
