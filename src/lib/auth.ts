@@ -71,6 +71,11 @@ export function mapearRol(rol: RolBD): Rol {
   return ROLES[rol]
 }
 
+// El inverso: el rol de la interfaz como lo guarda la BD.
+export function rolDeBD(rol: Rol): RolBD {
+  return (Object.keys(ROLES) as RolBD[]).find((clave) => ROLES[clave] === rol)!
+}
+
 // El enlace del correo de recuperación vuelve con "#...&type=recovery".
 export function esEnlaceDeRecuperacion(hash: string): boolean {
   return new URLSearchParams(hash.replace(/^#/, '')).get('type') === 'recovery'

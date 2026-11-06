@@ -464,7 +464,7 @@ export function iniciales(nombre: string): string {
 
 const opcional = <T>(valor: T | null): T | undefined => valor ?? undefined
 
-function traducirConsultoria(fila: FilaConsultoria): Consultoria {
+export function traducirConsultoria(fila: FilaConsultoria): Consultoria {
   return {
     id: fila.id,
     nombre: fila.nombre,

@@ -1019,3 +1019,62 @@ describe('comentar', () => {
       .toEqual({ ok: false, error: 'datos_invalidos' })
   })
 })
+
+describe('administración de consultorías y usuarios', () => {
+  const FILA_CONSULTORIA = {
+    id: 'c-nueva', nombre: 'Calidad Total', rfc: 'CTO200101AA1', plan: 'Professional', activa: true,
+    contacto: 'Laura', email: 'laura@ct.test', limite_usuarios: 10, almacenamiento_gb: 5, renovacion: null,
+    creado_en: '2026-11-06T18:00:00+00:00',
+  }
+
+  it('crea la consultoría con su plan y la devuelve traducida', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'consultorias.insert': { data: FILA_CONSULTORIA, error: null } })
+
+    const resultado = await crearServicioEscritura(cliente).crearConsultoria({
+      nombre: ' Calidad Total ', rfc: 'CTO200101AA1', contacto: 'Laura', email: 'laura@ct.test',
+      plan: 'Professional', limiteUsuarios: 10, almacenamientoGb: 5,
+    })
+
+    expect(llamadas).toEqual([{
+      tabla: 'consultorias', operacion: 'insert',
+      datos: { nombre: 'Calidad Total', rfc: 'CTO200101AA1', contacto: 'Laura', email: 'laura@ct.test', plan: 'Professional', limite_usuarios: 10, almacenamiento_gb: 5 },
+    }])
+    expect(resultado).toEqual({ ok: true, valor: expect.objectContaining({ id: 'c-nueva', nombre: 'Calidad Total', activa: true, fechaAlta: '06/11/2026' }) })
+  })
+
+  it('suspende o reactiva la consultoría por la RPC (que deja historial)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).cambiarEstadoConsultoria('c1', false)).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([{ tabla: 'cambiar_estado_consultoria', operacion: 'rpc', datos: { p_id: 'c1', p_activa: false } }])
+  })
+
+  it('cambia el rol dentro del equipo traduciéndolo al nombre de la BD', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    await crearServicioEscritura(cliente).administrarUsuario('u1', { rol: 'Admin Consultoría' })
+
+    expect(llamadas).toEqual([{ tabla: 'administrar_usuario', operacion: 'rpc', datos: { p_id: 'u1', p_rol: 'admin_consultoria', p_activo: null } }])
+  })
+
+  it('suspende sin tocar el rol', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    await crearServicioEscritura(cliente).administrarUsuario('u1', { activo: false })
+
+    expect(llamadas).toEqual([{ tabla: 'administrar_usuario', operacion: 'rpc', datos: { p_id: 'u1', p_rol: null, p_activo: false } }])
+  })
+
+  it('no intenta cambiar a un rol fuera del equipo', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).administrarUsuario('u1', { rol: 'Admin PROCISO' })).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toEqual([])
+  })
+
+  it('traduce el rechazo de la BD a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'administrar_usuario.rpc': { data: null, error: ERROR_RLS } })
+
+    expect(await crearServicioEscritura(cliente).administrarUsuario('u1', { activo: false })).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})

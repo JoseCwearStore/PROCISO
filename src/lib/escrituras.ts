@@ -1,5 +1,7 @@
 import type {
   ComentarioDocumento,
+  Consultoria,
+  Rol,
   ComentarioGlobal,
   ComentarioTarea,
   Documento,
@@ -24,6 +26,7 @@ import {
   traducirComentario,
   traducirComentarioGlobal,
   traducirComentarioTarea,
+  traducirConsultoria,
   traducirEmpresa,
   traducirEntregable,
   traducirEvidencia,
@@ -32,6 +35,7 @@ import {
   traducirProyecto,
   traducirTarea,
   type FilaComentario,
+  type FilaConsultoria,
   type FilaEmpresa,
   type FilaEntregable,
   type FilaEvidencia,
@@ -41,6 +45,7 @@ import {
   type FilaTarea,
 } from './datos'
 import { fechaISO } from './tareas'
+import { rolDeBD } from './auth'
 
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
 // lo que la BD devolvió. Si el RLS lo rechaza, la pantalla no cambia.
@@ -79,7 +84,9 @@ export interface ClienteEscritura {
       | 'cambiar_estado_nc'
       | 'guardar_lista'
       | 'decidir_entregable'
-      | 'marcar_notificaciones_leidas',
+      | 'marcar_notificaciones_leidas'
+      | 'cambiar_estado_consultoria'
+      | 'administrar_usuario',
     args: Record<string, unknown>,
   ): PromiseLike<{ data?: unknown; error: ErrorBD | null }>
   storage: {
@@ -94,6 +101,19 @@ interface ErrorStorage {
   message: string
   statusCode?: string
 }
+
+export interface NuevaConsultoria {
+  nombre: string
+  rfc: string
+  contacto: string
+  email: string
+  plan: string
+  limiteUsuarios: number
+  almacenamientoGb: number
+}
+
+// Los únicos roles que se cambian desde la app (consultor ↔ admin de consultoría).
+export const ROLES_DEL_EQUIPO: Rol[] = ['Consultor', 'Admin Consultoría']
 
 export interface NuevaEvidencia {
   id: string // UUID generado en el navegador: es también el nombre del archivo
@@ -256,7 +276,42 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
   }
 
+  async function llamar(funcion: Parameters<ClienteEscritura['rpc']>[0], args: Record<string, unknown>): Promise<ResultadoEscritura<void>> {
+    const { error } = await cliente.rpc(funcion, args)
+    return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+  }
+
   return {
+    // ─── Administración ─────────────────────────────────────────────────────
+    // Solo el Admin PROCISO crea consultorías (lo decide el RLS).
+    async crearConsultoria(datos: NuevaConsultoria): Promise<ResultadoEscritura<Consultoria>> {
+      if (!datos.nombre.trim()) return { ok: false, error: 'datos_invalidos' }
+      const resultado = await insertar<FilaConsultoria>('consultorias', {
+        nombre: datos.nombre.trim(),
+        rfc: nulo(datos.rfc),
+        contacto: nulo(datos.contacto),
+        email: nulo(datos.email),
+        plan: datos.plan,
+        limite_usuarios: datos.limiteUsuarios,
+        almacenamiento_gb: datos.almacenamientoGb,
+      })
+      return resultado.ok ? { ok: true, valor: traducirConsultoria(resultado.valor) } : resultado
+    },
+
+    // Suspender bloquea a toda su gente; la RPC deja historial.
+    cambiarEstadoConsultoria: (id: string, activa: boolean) =>
+      llamar('cambiar_estado_consultoria', { p_id: id, p_activa: activa }),
+
+    // Rol (solo dentro del equipo) y/o acceso. null = no cambiar ese dato.
+    async administrarUsuario(id: string, cambios: { rol?: Rol; activo?: boolean }): Promise<ResultadoEscritura<void>> {
+      if (cambios.rol && !ROLES_DEL_EQUIPO.includes(cambios.rol)) return { ok: false, error: 'datos_invalidos' }
+      return llamar('administrar_usuario', {
+        p_id: id,
+        p_rol: cambios.rol ? rolDeBD(cambios.rol) : null,
+        p_activo: cambios.activo ?? null,
+      })
+    },
+
     // Comentario sobre cualquier entidad del proyecto. El autor lo pone la BD
     // (default auth.uid()); el trigger validar_comentario exige que la entidad
     // exista, sea de ese tipo y de ese proyecto.

@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { Modal } from '../components/ui/Modal'
+import { useAccionesAdministracion } from '../hooks/useAccionesAdministracion'
 import type { Consultoria } from '../types'
 
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
@@ -14,7 +15,8 @@ const PLANES = [
 ]
 
 export default function PanelAdminProciso() {
-  const { state, dispatch, showToast } = useApp()
+  const { state, showToast } = useApp()
+  const acciones = useAccionesAdministracion()
   const [modalOpen, setModalOpen] = useState(false)
   const [cambiarEstado, setCambiarEstado] = useState<Consultoria | null>(null)
   const [form, setForm] = useState({ nombre: '', rfc: '', contacto: '', email: '', plan: 'Básico' })
@@ -24,47 +26,27 @@ export default function PanelAdminProciso() {
     { id: 'inc-demo-02', titulo: 'Facturación no conectada', estado: 'Requiere integración', severidad: 'Información' },
   ]
 
-  function crear() {
+  async function crear() {
     if (!form.nombre.trim() || !form.rfc.trim() || !form.contacto.trim() || !form.email.trim()) return
     const plan = PLANES.find((item) => item.nombre === form.plan)!
-    dispatch({
-      type: 'UPSERT_CONSULTORIA',
-      consultoria: {
-        id: `cons-${Date.now()}`,
-        ...form,
-        activa: true,
-        fechaAlta: new Date().toLocaleDateString('es-MX'),
-        limiteUsuarios: plan.usuarios,
-        almacenamientoGb: plan.almacenamiento,
-      },
-    })
+    const creada = await acciones.crearConsultoria({ ...form, limiteUsuarios: plan.usuarios, almacenamientoGb: plan.almacenamiento })
+    if (!creada) return
     setModalOpen(false)
     setForm({ nombre: '', rfc: '', contacto: '', email: '', plan: 'Básico' })
-    showToast('Consultoría creada en modo demostrativo.', 'success')
+    showToast('Consultoría creada.', 'success')
   }
 
-  function alternarEstado(item: Consultoria) {
-    dispatch({ type: 'UPSERT_CONSULTORIA', consultoria: { ...item, activa: !item.activa } })
-    dispatch({
-      type: 'APPEND_AUDIT',
-      entrada: {
-        id: `hist-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000001',
-        accion: item.activa ? 'Consultoría suspendida' : 'Consultoría activada',
-        descripcion: `${item.nombre}; no se consultó información privada de sus clientes.`,
-        entidadId: item.id,
-        entidadTipo: 'empresa',
-      },
-    })
-    showToast(item.activa ? 'Consultoría suspendida.' : 'Consultoría activada.', 'success')
+  async function alternarEstado(item: Consultoria) {
+    if (await acciones.cambiarEstadoConsultoria(item, !item.activa)) {
+      showToast(item.activa ? 'Consultoría suspendida: su equipo y sus clientes perdieron el acceso.' : 'Consultoría reactivada.', 'success')
+    }
     setCambiarEstado(null)
   }
 
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-wider text-violet-600">Administración de plataforma</p><h2 className="mt-1 text-2xl font-bold text-navy">Panel Admin PROCISO</h2><p className="mt-1 text-sm text-slate-500">Gestión de cuentas de consultoría, planes e incidencias generales.</p></div>
-      <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-semibold">Privacidad por diseño</p><p className="mt-1 text-xs">Este rol no tiene acceso al contenido de documentos, evidencias, procesos ni registros privados de los clientes.</p></div></div>
+      <div className="mb-5 flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800"><ShieldCheck className="mt-0.5 h-5 w-5 shrink-0" /><div><p className="font-semibold">Acceso de soporte auditado</p><p className="mt-1 text-xs">Este rol puede consultar la información de todas las consultorías para dar soporte. Sus acciones administrativas (alta y suspensión de consultorías y usuarios) quedan registradas en el historial.</p></div></div>
       <div className="mb-6 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi icon={<Building2 className="h-5 w-5" />} label="Consultorías activas" value={state.consultorias.filter((item) => item.activa).length} />
         <Kpi icon={<Users className="h-5 w-5" />} label="Usuarios registrados" value={state.usuarios.length} />
