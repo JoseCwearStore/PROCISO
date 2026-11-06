@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
-import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type NuevaTarea, type NuevoProyecto } from './escrituras'
-import type { FilaEmpresa, FilaProyecto, FilaTarea } from './datos'
+import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
+import type { FilaEmpresa, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
 import type { Documento, Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
@@ -639,5 +639,121 @@ describe('comentarTarea', () => {
 
     expect(await escrituras.comentarTarea(C1, { id: T_NUEVA, proyectoId: P_NUEVO }, '  ')).toEqual({ ok: false, error: 'datos_invalidos' })
     expect(llamadas).toHaveLength(0)
+  })
+})
+
+// ─── No conformidades ─────────────────────────────────────────────────────────
+
+const NC_NUEVA = '88888888-0000-0000-0000-0000000000aa'
+
+const DATOS_NC: DatosNC = {
+  proyectoId: P_NUEVO, titulo: ' Sin calibración ', descripcion: ' No hay programa ', tipo: 'Mayor',
+  detectadaEn: 'Levantamiento', fechaDeteccion: '2026-11-07', procesoId: '', evidenciaIds: [],
+  responsableId: CARLOS, responsableAccionId: '', fechaLimite: '', observaciones: '',
+}
+
+const FILA_NC: FilaNoConformidad = {
+  id: NC_NUEVA, proyecto_id: P_NUEVO, folio: 'NC-004', titulo: 'Sin calibración', descripcion: 'No hay programa',
+  tipo: 'Mayor', detectada_en: 'Levantamiento', fecha_deteccion: '2026-11-07', proceso_id: null, evidencia_ids: [],
+  responsable_id: CARLOS, responsable_accion_id: null, fecha_limite: null, estado: 'Abierta',
+  correccion_inmediata: '', analisis_causa: '', accion_correctiva: '', eficacia: 'Pendiente',
+  verificacion_eficacia: '', fecha_cierre: null, observaciones: '',
+}
+
+describe('registrarNoConformidad', () => {
+  it('inserta solo los datos del registro: folio y estado los pone el servidor', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'no_conformidades.insert': { data: FILA_NC, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.registrarNoConformidad(C1, NC_NUEVA, DATOS_NC)
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'no_conformidades',
+        operacion: 'insert',
+        datos: {
+          id: NC_NUEVA, consultoria_id: C1, proyecto_id: P_NUEVO, titulo: 'Sin calibración', descripcion: 'No hay programa',
+          tipo: 'Mayor', detectada_en: 'Levantamiento', fecha_deteccion: '2026-11-07', proceso_id: null, evidencia_ids: [],
+          responsable_id: CARLOS, responsable_accion_id: null, fecha_limite: null, observaciones: '',
+        },
+      },
+    ])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: expect.objectContaining({ id: NC_NUEVA, folio: 'NC-004', estado: 'Abierta', fechaDeteccion: '07/11/2026', historial: [] }),
+    })
+  })
+
+  it('no intenta guardar si el usuario no pertenece a una consultoría', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.registrarNoConformidad(null, NC_NUEVA, DATOS_NC)).toEqual({ ok: false, error: 'sin_consultoria' })
+    expect(llamadas).toHaveLength(0)
+  })
+})
+
+describe('editarNoConformidad', () => {
+  it('actualiza los datos del registro (nunca estado, eficacia ni tratamiento)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.editarNoConformidad(NC_NUEVA, { ...DATOS_NC, fechaLimite: '15/12/2026', responsableAccionId: ROBERTO })
+
+    expect(resultado).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      {
+        tabla: 'no_conformidades',
+        operacion: 'update',
+        datos: {
+          titulo: 'Sin calibración', descripcion: 'No hay programa', tipo: 'Mayor', detectada_en: 'Levantamiento',
+          fecha_deteccion: '2026-11-07', proceso_id: null, evidencia_ids: [], responsable_id: CARLOS,
+          responsable_accion_id: ROBERTO, fecha_limite: '2026-12-15', observaciones: '',
+        },
+        id: NC_NUEVA,
+      },
+    ])
+  })
+})
+
+describe('guardarTratamientoNC', () => {
+  it('manda corrección, causa y acción por la RPC (el cliente no tiene UPDATE)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarTratamientoNC(NC_NUEVA, { correccion: 'Retiro', causa: 'Sin responsable', accion: 'Programa' }))
+      .toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      { tabla: 'guardar_tratamiento_nc', operacion: 'rpc', datos: { p_id: NC_NUEVA, p_correccion: 'Retiro', p_causa: 'Sin responsable', p_accion: 'Programa' } },
+    ])
+  })
+
+  it('una NC ya verificada llega como datos inválidos', async () => {
+    const { cliente } = crearClienteDoble({ 'guardar_tratamiento_nc.rpc': { data: null, error: { code: '22023', message: 'verificada' } } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarTratamientoNC(NC_NUEVA, { correccion: '', causa: '', accion: '' }))
+      .toEqual({ ok: false, error: 'datos_invalidos' })
+  })
+})
+
+describe('cambiarEstadoNC', () => {
+  it('cambia el estado por la RPC, con la verificación cuando corresponde', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.cambiarEstadoNC(NC_NUEVA, 'En análisis')
+    await escrituras.cambiarEstadoNC(NC_NUEVA, 'Verificada', ' Calibración vigente ')
+    expect(llamadas).toEqual([
+      { tabla: 'cambiar_estado_nc', operacion: 'rpc', datos: { p_id: NC_NUEVA, p_estado: 'En análisis', p_verificacion: null } },
+      { tabla: 'cambiar_estado_nc', operacion: 'rpc', datos: { p_id: NC_NUEVA, p_estado: 'Verificada', p_verificacion: 'Calibración vigente' } },
+    ])
+  })
+
+  it('si el cliente intenta verificar, el servidor lo rechaza y llega como "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'cambiar_estado_nc.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.cambiarEstadoNC(NC_NUEVA, 'Verificada', 'Bien')).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })

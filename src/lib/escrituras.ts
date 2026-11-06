@@ -4,9 +4,11 @@ import type {
   Documento,
   Empresa,
   EstadoEvidencia,
+  EstadoNC,
   EstadoProyecto,
   EstadoTarea,
   Evidencia,
+  NoConformidad,
   PrioridadTarea,
   Proceso,
   Proyecto,
@@ -18,11 +20,13 @@ import {
   traducirComentarioTarea,
   traducirEmpresa,
   traducirEvidencia,
+  traducirNoConformidad,
   traducirProyecto,
   traducirTarea,
   type FilaComentario,
   type FilaEmpresa,
   type FilaEvidencia,
+  type FilaNoConformidad,
   type FilaProyecto,
   type FilaTarea,
 } from './datos'
@@ -55,7 +59,14 @@ export interface ClienteEscritura {
     }
   }
   rpc(
-    funcion: 'guardar_proceso' | 'revisar_evidencia' | 'guardar_documento' | 'decidir_documento' | 'cambiar_estado_tarea',
+    funcion:
+      | 'guardar_proceso'
+      | 'revisar_evidencia'
+      | 'guardar_documento'
+      | 'decidir_documento'
+      | 'cambiar_estado_tarea'
+      | 'guardar_tratamiento_nc'
+      | 'cambiar_estado_nc',
     args: Record<string, unknown>,
   ): PromiseLike<{ error: ErrorBD | null }>
   storage: {
@@ -158,6 +169,47 @@ const COLUMNAS_TAREA: Record<keyof CambiosTarea, string> = {
   prioridad: 'prioridad',
   fechaVencimiento: 'fecha_vencimiento',
   dependencias: 'dependencias',
+}
+
+// Datos del REGISTRO de una NC (lo único que la BD deja escribir directo, y solo
+// al equipo). Folio, estado, eficacia y tratamiento van por sus RPC.
+export interface DatosNC {
+  proyectoId: string
+  titulo: string
+  descripcion: string
+  tipo: NoConformidad['tipo']
+  detectadaEn: string
+  fechaDeteccion: string // ISO (input date) o dd/mm/aaaa
+  procesoId: string
+  evidenciaIds: string[]
+  responsableId: string
+  responsableAccionId: string
+  fechaLimite: string
+  observaciones: string
+}
+
+export interface TratamientoNC {
+  correccion: string
+  causa: string
+  accion: string
+}
+
+const fechaONulo = (fecha: string) => (fecha.trim() ? fechaISO(fecha) : null)
+
+function filaRegistroNC(datos: DatosNC) {
+  return {
+    titulo: datos.titulo.trim(),
+    descripcion: datos.descripcion.trim(),
+    tipo: datos.tipo,
+    detectada_en: datos.detectadaEn.trim(),
+    fecha_deteccion: fechaISO(datos.fechaDeteccion),
+    proceso_id: datos.procesoId || null,
+    evidencia_ids: datos.evidenciaIds,
+    responsable_id: datos.responsableId,
+    responsable_accion_id: datos.responsableAccionId || null,
+    fecha_limite: fechaONulo(datos.fechaLimite),
+    observaciones: datos.observaciones.trim(),
+  }
 }
 
 // 22023: el servidor rechazó la operación por una regla de negocio (estado, datos faltantes).
@@ -463,6 +515,46 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         texto: texto.trim(),
       })
       return resultado.ok ? { ok: true, valor: traducirComentarioTarea(resultado.valor) } : resultado
+    },
+
+    // ─── No conformidades ───────────────────────────────────────────────────
+    async registrarNoConformidad(
+      consultoriaId: string | null,
+      id: string,
+      datos: DatosNC,
+    ): Promise<ResultadoEscritura<NoConformidad>> {
+      if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+      const resultado = await insertar<FilaNoConformidad>('no_conformidades', {
+        id,
+        consultoria_id: consultoriaId,
+        proyecto_id: datos.proyectoId,
+        ...filaRegistroNC(datos),
+      })
+      return resultado.ok ? { ok: true, valor: traducirNoConformidad(resultado.valor, [], []) } : resultado
+    },
+
+    editarNoConformidad(id: string, datos: DatosNC): Promise<ResultadoEscritura<void>> {
+      return actualizar('no_conformidades', id, filaRegistroNC(datos))
+    },
+
+    // Equipo o cliente, mientras no esté verificada (lo decide el servidor).
+    async guardarTratamientoNC(id: string, tratamiento: TratamientoNC): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('guardar_tratamiento_nc', {
+        p_id: id,
+        p_correccion: tratamiento.correccion.trim(),
+        p_causa: tratamiento.causa.trim(),
+        p_accion: tratamiento.accion.trim(),
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    async cambiarEstadoNC(id: string, estado: EstadoNC, verificacion?: string): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('cambiar_estado_nc', {
+        p_id: id,
+        p_estado: estado,
+        p_verificacion: verificacion?.trim() || null,
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },
   }
 }

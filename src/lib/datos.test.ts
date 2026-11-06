@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, EntradaHistorial, Notificacion, Tarea } from '../types'
+import type { Documento, EntradaHistorial, NoConformidad, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -84,6 +84,8 @@ function filasBase(): FilasSesion {
       { id: 7, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: 'Se ve bien', estado_anterior: 'Cargada', estado_nuevo: 'Revisada', creado_en: '2024-03-23T10:00:00+00:00' },
       { id: 9, entidad_tipo: 'documento', entidad_id: 'doc-p1', autor_id: ROBERTO, accion: 'Enviado a revisión', descripcion: 'Versión 1.0', estado_anterior: null, estado_nuevo: null, creado_en: '2024-03-25T10:00:00+00:00' },
       { id: 11, entidad_tipo: 'tarea', entidad_id: 'tar-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: 'Listo', estado_anterior: 'En proceso', estado_nuevo: 'En revisión', creado_en: '2024-09-12T10:00:00+00:00' },
+      { id: 21, entidad_tipo: 'no_conformidad', entidad_id: 'nc-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'En análisis', estado_nuevo: 'En corrección', creado_en: '2024-09-02T10:00:00+00:00' },
+      { id: 20, entidad_tipo: 'no_conformidad', entidad_id: 'nc-p1', autor_id: CARLOS, accion: 'Tratamiento actualizado', descripcion: 'Corrección, análisis de causa y acción correctiva.', estado_anterior: null, estado_nuevo: null, creado_en: '2024-09-01T10:00:00+00:00' },
       { id: 10, entidad_tipo: 'tarea', entidad_id: 'tar-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'Pendiente', estado_nuevo: 'En proceso', creado_en: '2024-09-11T10:00:00+00:00' },
     ],
     tareas: [
@@ -91,6 +93,16 @@ function filasBase(): FilasSesion {
         id: 'tar-p1', proyecto_id: P1, titulo: 'Cargar evidencias de compras', descripcion: 'Fotos del almacén',
         asignado_a: CARLOS, asignado_por: ROBERTO, estado: 'En revisión', prioridad: 'Alta',
         fecha_vencimiento: '2024-09-15', fecha_completada: null, dependencias: ['tar-p0'],
+      },
+    ],
+    noConformidades: [
+      {
+        id: 'nc-p1', proyecto_id: P1, folio: 'NC-001', titulo: 'Sin calibración', descripcion: 'No hay programa',
+        tipo: 'Mayor', detectada_en: 'Levantamiento', fecha_deteccion: '2024-04-10', proceso_id: PROC1,
+        evidencia_ids: ['ev-p1'], responsable_id: CARLOS, responsable_accion_id: null, fecha_limite: '2024-10-01',
+        estado: 'En corrección', correccion_inmediata: 'Se retiró el equipo', analisis_causa: 'Sin responsable',
+        accion_correctiva: 'Crear programa\n\nCapacitar', eficacia: 'Pendiente', verificacion_eficacia: '',
+        fecha_cierre: null, observaciones: '',
       },
     ],
     documentos: [
@@ -121,7 +133,6 @@ function filasBase(): FilasSesion {
 function demoBase(): DatosDemo {
   return {
     entregables: [],
-    noConformidades: [],
     notificaciones: [
       { id: 'n-global' },
       { id: 'n-p1', proyectoId: P1 },
@@ -214,6 +225,43 @@ describe('combinarDatosSesion', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
+  })
+
+  it('traduce las no conformidades de la BD con folio, empresa, acciones e historial', () => {
+    const { noConformidades } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(noConformidades).toEqual<NoConformidad[]>([
+      {
+        id: 'nc-p1',
+        folio: 'NC-001',
+        titulo: 'Sin calibración',
+        descripcion: 'No hay programa',
+        proyectoId: P1,
+        empresaId: E1,
+        procesoId: PROC1,
+        evidenciaIds: ['ev-p1'],
+        estado: 'En corrección',
+        tipo: 'Mayor',
+        detectadaEn: 'Levantamiento',
+        fechaDeteccion: '10/04/2024',
+        responsableId: CARLOS,
+        responsableAccionId: undefined,
+        fechaLimite: '01/10/2024',
+        // La acción correctiva es texto libre: cada línea no vacía es una acción.
+        acciones: ['Crear programa', 'Capacitar'],
+        correccionInmediata: 'Se retiró el equipo',
+        analisisCausa: 'Sin responsable',
+        accionCorrectiva: 'Crear programa\n\nCapacitar',
+        eficacia: 'Pendiente',
+        verificacionEficacia: '',
+        fechaCierre: undefined,
+        observaciones: '',
+        historial: [
+          { id: '20', fecha: '01/09/2024', autorId: CARLOS, accion: 'Tratamiento actualizado', detalle: 'Corrección, análisis de causa y acción correctiva.' },
+          { id: '21', fecha: '02/09/2024', autorId: CARLOS, accion: 'Cambio de estado', detalle: 'En análisis → En corrección' },
+        ],
+      },
+    ])
   })
 
   it('traduce las tareas de la BD con su historial y comentarios ordenados', () => {
@@ -356,6 +404,7 @@ describe('cargarFilasSesion', () => {
       documento_evidencias: filas.vinculos,
       comentarios: filas.comentarios,
       tareas: filas.tareas,
+      no_conformidades: filas.noConformidades,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -366,13 +415,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las quince tablas y devuelve sus filas', async () => {
+  it('lee las dieciséis tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(15)
+    expect(cliente.from).toHaveBeenCalledTimes(16)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

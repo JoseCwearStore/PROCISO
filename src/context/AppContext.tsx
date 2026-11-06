@@ -27,7 +27,6 @@ import type {
   LoginReason,
 } from '../types'
 import {
-  NO_CONFORMIDADES,
   NOTIFICACIONES,
   ENTREGABLES,
   HISTORIAL,
@@ -38,7 +37,6 @@ import { estaVencida, hoyLocal } from '../lib/tareas'
 // Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
 const DEMO: DatosDemo = {
   entregables: ENTREGABLES,
-  noConformidades: NO_CONFORMIDADES,
   notificaciones: NOTIFICACIONES,
   historial: HISTORIAL,
 }

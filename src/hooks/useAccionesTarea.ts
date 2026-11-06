@@ -1,4 +1,5 @@
 import { useApp } from '../context/AppContext'
+import { usuariosAsignables } from '../lib/asignables'
 import { formatearFecha } from '../lib/datos'
 import { MENSAJES_ERROR_ESCRITURA, type CambiosTarea, type NuevaTarea } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
@@ -26,9 +27,8 @@ export function useAccionesTarea() {
 
     permitidas: (tarea: Pick<Tarea, 'estado' | 'asignadoAId'>) => transicionesPermitidas(tarea, usuarioId, esEquipo),
 
-    // Mismo criterio que el trigger validar_tarea: equipo del proyecto o clientes de su empresa.
-    asignables: (proyectoId: string): Usuario[] =>
-      state.usuarios.filter((u) => u.activo && u.rol !== 'Admin PROCISO' && u.proyectosAsignados.includes(proyectoId)),
+    // Mismo criterio que la BD (private.es_asignable): equipo del proyecto o clientes de su empresa.
+    asignables: (proyectoId: string): Usuario[] => usuariosAsignables(state.usuarios, proyectoId),
 
     async crear(nueva: Omit<NuevaTarea, 'id'>): Promise<Tarea | null> {
       const resultado = await servicioEscritura.crearTarea(consultoriaId, { ...nueva, id: crypto.randomUUID() })

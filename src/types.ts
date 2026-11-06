@@ -364,6 +364,7 @@ export interface EntradaHistorial {
 
 export interface NoConformidad {
   id: string
+  folio: string // NC-001 por proyecto, lo pone el servidor
   titulo: string
   descripcion: string
   proyectoId: string

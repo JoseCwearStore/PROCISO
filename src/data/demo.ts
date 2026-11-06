@@ -714,7 +714,7 @@ export const TAREAS: Tarea[] = [
 
 export const NO_CONFORMIDADES = [
   {
-    id: 'nc-001',
+    id: '88888888-0000-0000-0000-000000000001',
     titulo: 'Falta de procedimiento documentado para control de equipos de medición',
     descripcion: 'No existe un procedimiento formal para calibración y control de equipos.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -727,7 +727,7 @@ export const NO_CONFORMIDADES = [
     observaciones: 'Observación para revisar: Podría estar relacionado con la gestión de compras de equipos.',
   },
   {
-    id: 'nc-002',
+    id: '88888888-0000-0000-0000-000000000002',
     titulo: 'Registros de atención al cliente incompletos',
     descripcion: 'Los registros de quejas no incluyen análisis de causa raíz.',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -739,7 +739,7 @@ export const NO_CONFORMIDADES = [
     acciones: ['Diseñar formato de registro completo', 'Capacitar al equipo'],
   },
   {
-    id: 'nc-003',
+    id: '88888888-0000-0000-0000-000000000003',
     titulo: 'Sin proceso formal de selección de proveedores nuevos',
     descripcion: 'No existe criterio documentado para evaluación de proveedores nuevos.',
     proyectoId: '33333333-0000-0000-0000-000000000002',

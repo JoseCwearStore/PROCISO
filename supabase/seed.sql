@@ -273,3 +273,18 @@ insert into public.comentarios (consultoria_id, proyecto_id, entidad_tipo, entid
   ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'tarea', '77777777-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000002', 'Prioridad alta, necesario para completar la fase 3.', now() - interval '5 days' - interval '499 minutes'),
   ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'tarea', '77777777-0000-0000-0000-000000000009', 'aaaaaaaa-0000-0000-0000-000000000004', 'Primera sesión realizada el 08/09. Pendiente segunda sesión.', now() - interval '0 days' - interval '495 minutes'),
   ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'tarea', '77777777-0000-0000-0000-000000000014', 'aaaaaaaa-0000-0000-0000-000000000002', 'Favor de agregar la sección de brechas identificadas vs requisitos de la norma.', now() - interval '0 days' - interval '490 minutes');
+
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- No conformidades
+-- ════════════════════════════════════════════════════════════════════════════
+-- Generado desde src/data/demo.ts (NO_CONFORMIDADES) con herramientas/generar_seed_no_conformidades.mts.
+-- nc-00N → 8888…00N. El folio lo pone el trigger (NC-001 por proyecto).
+insert into public.no_conformidades (id, consultoria_id, proyecto_id, titulo, descripcion, tipo, detectada_en, fecha_deteccion, responsable_id, estado, analisis_causa, accion_correctiva, observaciones, registrada_por) values
+  ('88888888-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'Falta de procedimiento documentado para control de equipos de medición', 'No existe un procedimiento formal para calibración y control de equipos.', 'Mayor', 'Levantamiento del proceso de producción', current_date + -153, 'aaaaaaaa-0000-0000-0000-000000000005', 'En corrección', 'Podría estar relacionado con la gestión de compras de equipos.', 'Elaborar procedimiento de calibración
+Recopilar registros históricos
+Implementar programa anual', 'Observación para revisar: Podría estar relacionado con la gestión de compras de equipos.', 'aaaaaaaa-0000-0000-0000-000000000003'),
+  ('88888888-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', 'Registros de atención al cliente incompletos', 'Los registros de quejas no incluyen análisis de causa raíz.', 'Menor', 'Levantamiento del proceso de atención al cliente', current_date + -108, 'aaaaaaaa-0000-0000-0000-000000000005', 'Abierta', '', 'Diseñar formato de registro completo
+Capacitar al equipo', '', 'aaaaaaaa-0000-0000-0000-000000000003'),
+  ('88888888-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'Sin proceso formal de selección de proveedores nuevos', 'No existe criterio documentado para evaluación de proveedores nuevos.', 'Observación', 'Diagnóstico inicial', current_date + 0, 'aaaaaaaa-0000-0000-0000-000000000006', 'Abierta', '', 'Definir criterios de selección
+Crear lista de proveedores aprobados', 'Observación para revisar: Verificar si existe proceso informal formalizable.', 'aaaaaaaa-0000-0000-0000-000000000004');

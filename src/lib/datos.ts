@@ -18,6 +18,7 @@ import type {
   Usuario,
 } from '../types'
 import { mapearRol, type RolBD } from './auth'
+import { lineasDeAccion } from './noConformidades'
 
 // ─── Filas tal como las devuelve la BD (ya filtradas por RLS) ───────────────
 
@@ -239,6 +240,30 @@ export interface FilaTarea {
   dependencias: string[]
 }
 
+export interface FilaNoConformidad {
+  id: string
+  proyecto_id: string
+  folio: string
+  titulo: string
+  descripcion: string
+  tipo: NoConformidad['tipo']
+  detectada_en: string
+  fecha_deteccion: string
+  proceso_id: string | null
+  evidencia_ids: string[]
+  responsable_id: string
+  responsable_accion_id: string | null
+  fecha_limite: string | null
+  estado: NoConformidad['estado']
+  correccion_inmediata: string
+  analisis_causa: string
+  accion_correctiva: string
+  eficacia: NonNullable<NoConformidad['eficacia']>
+  verificacion_eficacia: string
+  fecha_cierre: string | null
+  observaciones: string
+}
+
 export interface FilasSesion {
   consultorias: FilaConsultoria[]
   empresas: FilaEmpresa[]
@@ -255,18 +280,19 @@ export interface FilasSesion {
   vinculos: FilaVinculo[]
   comentarios: FilaComentario[]
   tareas: FilaTarea[]
+  noConformidades: FilaNoConformidad[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
 export interface DatosDemo {
   entregables: Entregable[]
-  noConformidades: NoConformidad[]
   notificaciones: Notificacion[]
   historial: EntradaHistorial[]
 }
 
 export interface DatosSesion extends DatosDemo {
   tareas: Tarea[]
+  noConformidades: NoConformidad[]
   consultorias: Consultoria[]
   empresas: Empresa[]
   usuarios: Usuario[]
@@ -300,6 +326,10 @@ const CONSULTAS = {
   vinculos: ['documento_evidencias', 'documento_id, evidencia_id'],
   comentarios: ['comentarios', 'id, entidad_tipo, entidad_id, seccion_id, autor_id, texto, creado_en'],
   tareas: ['tareas', 'id, proyecto_id, titulo, descripcion, asignado_a, asignado_por, estado, prioridad, fecha_vencimiento, fecha_completada, dependencias'],
+  noConformidades: [
+    'no_conformidades',
+    'id, proyecto_id, folio, titulo, descripcion, tipo, detectada_en, fecha_deteccion, proceso_id, evidencia_ids, responsable_id, responsable_accion_id, fecha_limite, estado, correccion_inmediata, analisis_causa, accion_correctiva, eficacia, verificacion_eficacia, fecha_cierre, observaciones',
+  ],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
@@ -611,6 +641,44 @@ export function traducirTarea(fila: FilaTarea, historial: FilaHistorial[], comen
   }
 }
 
+export function traducirNoConformidad(fila: FilaNoConformidad, proyectos: FilaProyecto[], historial: FilaHistorial[]): NoConformidad {
+  return {
+    id: fila.id,
+    folio: fila.folio,
+    titulo: fila.titulo,
+    descripcion: fila.descripcion,
+    proyectoId: fila.proyecto_id,
+    empresaId: proyectos.find((p) => p.id === fila.proyecto_id)?.empresa_id,
+    procesoId: opcional(fila.proceso_id),
+    evidenciaIds: fila.evidencia_ids,
+    estado: fila.estado,
+    tipo: fila.tipo,
+    detectadaEn: fila.detectada_en,
+    fechaDeteccion: formatearFecha(fila.fecha_deteccion),
+    responsableId: fila.responsable_id,
+    responsableAccionId: opcional(fila.responsable_accion_id),
+    fechaLimite: fila.fecha_limite ? formatearFecha(fila.fecha_limite) : undefined,
+    acciones: lineasDeAccion(fila.accion_correctiva),
+    correccionInmediata: fila.correccion_inmediata,
+    analisisCausa: fila.analisis_causa,
+    accionCorrectiva: fila.accion_correctiva,
+    eficacia: fila.eficacia,
+    verificacionEficacia: fila.verificacion_eficacia,
+    fechaCierre: fila.fecha_cierre ? formatearFecha(fila.fecha_cierre) : undefined,
+    observaciones: fila.observaciones,
+    historial: historial
+      .filter((h) => h.entidad_tipo === 'no_conformidad' && h.entidad_id === fila.id)
+      .sort((a, b) => a.creado_en.localeCompare(b.creado_en))
+      .map((h) => ({
+        id: String(h.id),
+        fecha: formatearFecha(h.creado_en),
+        autorId: h.autor_id ?? '',
+        accion: h.accion,
+        detalle: h.descripcion ?? (h.estado_nuevo ? `${h.estado_anterior} → ${h.estado_nuevo}` : ''),
+      })),
+  }
+}
+
 function proyectosDelUsuario(perfil: FilaPerfil, filas: FilasSesion): string[] {
   const { proyectos, miembros } = filas
   switch (perfil.rol) {
@@ -672,7 +740,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     documentos,
     tareas,
     entregables: delProyectoVisible(demo.entregables),
-    noConformidades: delProyectoVisible(demo.noConformidades),
+    noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
     notificaciones: demo.notificaciones.filter((n) => !n.proyectoId || proyectosVisibles.has(n.proyectoId)),
     historial: demo.historial.filter((h) => visiblesPorTipo[h.entidadTipo].has(h.entidadId)),
   }
