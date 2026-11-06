@@ -171,19 +171,28 @@ insert into public.evidencias (id, consultoria_id, proyecto_id, proceso_id, subi
   ('44444444-0000-0000-0000-000000000010', '11111111-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000003',
    null, 'aaaaaaaa-0000-0000-0000-000000000008', 'Audio de entrevista', 'Audio', 'Cargada', 'Entrevista con producción');
 
--- ─── Documentos ─────────────────────────────────────────────────────────────
+-- ─── Documentos (los mismos 5 de src/data/demo.ts, con su historial de versiones) ─
 
-insert into public.documentos (id, consultoria_id, proyecto_id, proceso_id, nombre, tipo, estado, version, codigo, categoria, creado_por, secciones) values
-  ('66666666-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   null, 'Política de calidad', 'Política', 'Pendiente de revisión', '1.0', 'POL-001', 'A', 'aaaaaaaa-0000-0000-0000-000000000003',
-   '[{"id":"s1","titulo":"Declaración","tipo":"texto","contenido":"En Marketino nos comprometemos a satisfacer los requisitos de nuestros clientes y a mejorar continuamente."}]'),
-  ('66666666-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   '55555555-0000-0000-0000-000000000001', 'Procedimiento de ventas', 'Procedimiento', 'Borrador', '0.1', 'PRO-VEN-001', 'B', 'aaaaaaaa-0000-0000-0000-000000000003',
-   '[{"id":"s1","titulo":"Objetivo","tipo":"texto","contenido":"Describir cómo se atienden y cierran las solicitudes de clientes."}]');
+-- Generado desde src/data/demo.ts (DOCUMENTOS). doc-00N → 6666…00N.
+insert into public.documentos (id, consultoria_id, proyecto_id, proceso_id, nombre, tipo, estado, version, codigo, categoria,
+                               secciones, referencia_normativa, contenido_pendiente, bloqueado,
+                               creado_por, revisado_por, aprobado_por, creado_en, actualizado_en) values
+  ('66666666-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'Procedimiento de selección y evaluación de proveedores', 'Procedimiento', 'Pendiente de revisión', '1.0', null, null, '[]'::jsonb, 'ISO 9001:2026', false, false, 'aaaaaaaa-0000-0000-0000-000000000003', null, null, '2024-06-01 12:00:00-06', '2024-07-15 12:00:00-06'),
+  ('66666666-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'Procedimiento de control de producción', 'Procedimiento', 'Aprobado', '2.0', null, null, '[]'::jsonb, 'ISO 9001:2026', false, true, 'aaaaaaaa-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000005', '2024-04-15 12:00:00-06', '2024-05-30 12:00:00-06'),
+  ('66666666-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'Instrucción de trabajo: Calibración de equipos', 'Instrucción de trabajo', 'En elaboración', '0.5', null, null, '[]'::jsonb, 'ISO 9001:2026', true, false, 'aaaaaaaa-0000-0000-0000-000000000003', null, null, '2024-07-20 12:00:00-06', '2024-07-20 12:00:00-06'),
+  ('66666666-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000003', 'Procedimiento de atención a quejas y reclamaciones', 'Procedimiento', 'Borrador', '0.1', null, null, '[]'::jsonb, 'ISO 9001:2026', true, false, 'aaaaaaaa-0000-0000-0000-000000000003', null, null, '2024-08-01 12:00:00-06', '2024-08-01 12:00:00-06'),
+  ('66666666-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', null, 'Manual de calidad', 'Manual', 'En corrección', '1.1', null, null, '[]'::jsonb, 'ISO 9001:2026', false, false, 'aaaaaaaa-0000-0000-0000-000000000003', 'aaaaaaaa-0000-0000-0000-000000000002', null, '2024-05-01 12:00:00-06', '2024-08-10 12:00:00-06');
 
-insert into public.documento_versiones (consultoria_id, proyecto_id, documento_id, version, autor_id, comentario, estado, secciones)
-select consultoria_id, proyecto_id, id, version, creado_por, 'Versión inicial', estado, secciones
-from public.documentos;
+insert into public.documento_versiones (consultoria_id, proyecto_id, documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en) values
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000001', '0.9', 'aaaaaaaa-0000-0000-0000-000000000003', 'Borrador inicial', null, '[]'::jsonb, null, '2024-06-01 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000001', '1.0', 'aaaaaaaa-0000-0000-0000-000000000003', 'Incorporación de comentarios del cliente', null, '[]'::jsonb, null, '2024-07-15 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000002', '1.0', 'aaaaaaaa-0000-0000-0000-000000000003', 'Borrador inicial', null, '[]'::jsonb, null, '2024-04-15 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000002', '1.1', 'aaaaaaaa-0000-0000-0000-000000000003', 'Correcciones post-revisión', null, '[]'::jsonb, null, '2024-05-05 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000002', '2.0', 'aaaaaaaa-0000-0000-0000-000000000003', 'Versión final aprobada', null, '[]'::jsonb, null, '2024-05-30 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000003', '0.5', 'aaaaaaaa-0000-0000-0000-000000000003', 'Borrador en elaboración', null, '[]'::jsonb, null, '2024-07-20 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000004', '0.1', 'aaaaaaaa-0000-0000-0000-000000000003', 'Primer borrador', null, '[]'::jsonb, null, '2024-08-01 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000005', '1.0', 'aaaaaaaa-0000-0000-0000-000000000003', 'Primera versión', null, '[]'::jsonb, null, '2024-05-01 12:00:00-06'),
+  ('11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '66666666-0000-0000-0000-000000000005', '1.1', 'aaaaaaaa-0000-0000-0000-000000000003', 'En corrección por observaciones', null, '[]'::jsonb, null, '2024-08-10 12:00:00-06');
 
 insert into public.documento_evidencias (documento_id, evidencia_id, proyecto_id, consultoria_id) values
   ('66666666-0000-0000-0000-000000000002', '44444444-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001');

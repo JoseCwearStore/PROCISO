@@ -213,10 +213,10 @@ export const ENTREGABLES: Entregable[] = [
   // proy-001
   { id: 'ent-001', nombre: 'Informe de diagnóstico inicial', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '31/03/2024', fechaAprobacion: '05/04/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: undefined },
   { id: 'ent-002', nombre: 'Mapa de procesos del SGC', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Documento técnico', estado: 'Aprobado', fechaEntrega: '30/04/2024', fechaAprobacion: '02/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
-  { id: 'ent-003', nombre: 'Manual de calidad v1.0', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Manual', estado: 'En revisión', fechaEntrega: '30/06/2024', documentoId: 'doc-005' },
-  { id: 'ent-004', nombre: 'Procedimiento de selección de proveedores', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'En revisión', fechaEntrega: '31/07/2024', documentoId: 'doc-001' },
-  { id: 'ent-005', nombre: 'Procedimiento de control de producción', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '31/05/2024', fechaAprobacion: '30/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: 'doc-002' },
-  { id: 'ent-006', nombre: 'Procedimiento de atención a quejas', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Pendiente', fechaEntrega: '30/09/2024', documentoId: 'doc-004' },
+  { id: 'ent-003', nombre: 'Manual de calidad v1.0', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Manual', estado: 'En revisión', fechaEntrega: '30/06/2024', documentoId: '66666666-0000-0000-0000-000000000005' },
+  { id: 'ent-004', nombre: 'Procedimiento de selección de proveedores', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'En revisión', fechaEntrega: '31/07/2024', documentoId: '66666666-0000-0000-0000-000000000001' },
+  { id: 'ent-005', nombre: 'Procedimiento de control de producción', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '31/05/2024', fechaAprobacion: '30/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: '66666666-0000-0000-0000-000000000002' },
+  { id: 'ent-006', nombre: 'Procedimiento de atención a quejas', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Pendiente', fechaEntrega: '30/09/2024', documentoId: '66666666-0000-0000-0000-000000000004' },
   { id: 'ent-007', nombre: 'Informe de auditoría interna', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Informe', estado: 'Pendiente', fechaEntrega: '30/10/2024' },
   // proy-002
   { id: 'ent-008', nombre: 'Informe de diagnóstico inicial', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Informe', estado: 'En revisión', fechaEntrega: '30/09/2024' },
@@ -250,7 +250,7 @@ export const PROCESOS: Proceso[] = [
     descripcion: 'Proceso para la selección, evaluación y seguimiento de proveedores.',
     fechaLevantamiento: '20/03/2024',
     evidenciasIds: ['44444444-0000-0000-0000-000000000001', '44444444-0000-0000-0000-000000000002'],
-    documentosIds: ['doc-001'],
+    documentosIds: ['66666666-0000-0000-0000-000000000001'],
     entradas: ['Necesidad de compra', 'Catálogo de proveedores aprobados'],
     salidas: ['Orden de compra autorizada', 'Evaluación de proveedor'],
   },
@@ -263,7 +263,7 @@ export const PROCESOS: Proceso[] = [
     descripcion: 'Proceso de planificación, control y seguimiento de la producción.',
     fechaLevantamiento: '05/04/2024',
     evidenciasIds: ['44444444-0000-0000-0000-000000000003'],
-    documentosIds: ['doc-002', 'doc-003'],
+    documentosIds: ['66666666-0000-0000-0000-000000000002', '66666666-0000-0000-0000-000000000003'],
     entradas: ['Plan de producción', 'Materias primas'],
     salidas: ['Producto terminado', 'Registros de producción'],
   },
@@ -276,7 +276,7 @@ export const PROCESOS: Proceso[] = [
     descripcion: 'Proceso para la recepción y atención de quejas y reclamaciones de clientes.',
     fechaLevantamiento: '18/05/2024',
     evidenciasIds: [],
-    documentosIds: ['doc-004'],
+    documentosIds: ['66666666-0000-0000-0000-000000000004'],
     entradas: ['Solicitud del cliente'],
     salidas: ['Respuesta al cliente', 'Registro de satisfacción'],
   },
@@ -329,7 +329,7 @@ export const EVIDENCIAS: Evidencia[] = [
 
 export const DOCUMENTOS: Documento[] = [
   {
-    id: 'doc-001',
+    id: '66666666-0000-0000-0000-000000000001',
     nombre: 'Procedimiento de selección y evaluación de proveedores',
     tipo: 'Procedimiento',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -346,7 +346,7 @@ export const DOCUMENTOS: Documento[] = [
     ],
   },
   {
-    id: 'doc-002',
+    id: '66666666-0000-0000-0000-000000000002',
     nombre: 'Procedimiento de control de producción',
     tipo: 'Procedimiento',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -366,7 +366,7 @@ export const DOCUMENTOS: Documento[] = [
     ],
   },
   {
-    id: 'doc-003',
+    id: '66666666-0000-0000-0000-000000000003',
     nombre: 'Instrucción de trabajo: Calibración de equipos',
     tipo: 'Instrucción de trabajo',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -383,7 +383,7 @@ export const DOCUMENTOS: Documento[] = [
     contenidoPendiente: true,
   },
   {
-    id: 'doc-004',
+    id: '66666666-0000-0000-0000-000000000004',
     nombre: 'Procedimiento de atención a quejas y reclamaciones',
     tipo: 'Procedimiento',
     proyectoId: '33333333-0000-0000-0000-000000000001',
@@ -400,7 +400,7 @@ export const DOCUMENTOS: Documento[] = [
     contenidoPendiente: true,
   },
   {
-    id: 'doc-005',
+    id: '66666666-0000-0000-0000-000000000005',
     nombre: 'Manual de calidad',
     tipo: 'Manual',
     proyectoId: '33333333-0000-0000-0000-000000000001',

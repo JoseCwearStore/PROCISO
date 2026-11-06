@@ -2,6 +2,7 @@ import type {
   ActividadProceso,
   Consultoria,
   Documento,
+  SeccionDocumento,
   Empresa,
   Entregable,
   EntradaHistorial,
@@ -159,11 +160,53 @@ export interface FilaEvidencia {
   creado_en: string
 }
 
+export interface FilaDocumento {
+  id: string
+  proyecto_id: string
+  proceso_id: string | null
+  nombre: string
+  tipo: Documento['tipo']
+  estado: Documento['estado']
+  version: string
+  codigo: string | null
+  categoria: Documento['categoria'] | null
+  plantilla: string | null
+  secciones: SeccionDocumento[]
+  referencia_normativa: 'ISO 9001:2026' | 'ISO 9001:2015'
+  motivo_cambio: string | null
+  bloqueado: boolean
+  contenido_pendiente: boolean
+  creado_por: string | null
+  revisado_por: string | null
+  aprobado_por: string | null
+  fecha_revision: string | null
+  fecha_aprobacion: string | null
+  creado_en: string
+  actualizado_en: string
+}
+
+export interface FilaVersion {
+  documento_id: string
+  version: string
+  autor_id: string | null
+  comentario: string | null
+  motivo: string | null
+  secciones: SeccionDocumento[]
+  estado: Documento['estado'] | null
+  creado_en: string
+}
+
+export interface FilaVinculo {
+  documento_id: string
+  evidencia_id: string
+}
+
 export interface FilaHistorial {
   id: number
   entidad_tipo: string
   entidad_id: string
   autor_id: string | null
+  accion: string
   descripcion: string | null
   estado_anterior: string | null
   estado_nuevo: string | null
@@ -181,11 +224,13 @@ export interface FilasSesion {
   actividades: FilaActividad[]
   evidencias: FilaEvidencia[]
   historial: FilaHistorial[]
+  documentos: FilaDocumento[]
+  versiones: FilaVersion[]
+  vinculos: FilaVinculo[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
 export interface DatosDemo {
-  documentos: Documento[]
   tareas: Tarea[]
   entregables: Entregable[]
   noConformidades: NoConformidad[]
@@ -200,6 +245,7 @@ export interface DatosSesion extends DatosDemo {
   proyectos: Proyecto[]
   procesos: Proceso[]
   evidencias: Evidencia[]
+  documentos: Documento[]
 }
 
 // ─── Lectura ────────────────────────────────────────────────────────────────
@@ -220,7 +266,10 @@ const CONSULTAS = {
   procesos: ['procesos', '*'],
   actividades: ['actividades', 'id, proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden'],
   evidencias: ['evidencias', 'id, proyecto_id, proceso_id, actividad_id, subido_por, nombre, tipo, estado, descripcion, categoria, archivo_ruta, archivo_nombre, archivo_mime, creado_en'],
-  historial: ['historial', 'id, entidad_tipo, entidad_id, autor_id, descripcion, estado_anterior, estado_nuevo, creado_en'],
+  historial: ['historial', 'id, entidad_tipo, entidad_id, autor_id, accion, descripcion, estado_anterior, estado_nuevo, creado_en'],
+  documentos: ['documentos', '*'],
+  versiones: ['documento_versiones', 'documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en'],
+  vinculos: ['documento_evidencias', 'documento_id, evidencia_id'],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
@@ -424,6 +473,67 @@ export function traducirEvidencia(
   }
 }
 
+export function traducirDocumento(
+  fila: FilaDocumento,
+  proyectos: FilaProyecto[],
+  versiones: FilaVersion[],
+  vinculos: FilaVinculo[],
+  historial: FilaHistorial[],
+): Documento {
+  const porFecha = (a: { creado_en: string }, b: { creado_en: string }) => a.creado_en.localeCompare(b.creado_en)
+
+  return {
+    id: fila.id,
+    nombre: fila.nombre,
+    tipo: fila.tipo,
+    proyectoId: fila.proyecto_id,
+    procesoId: opcional(fila.proceso_id),
+    empresaId: proyectos.find((p) => p.id === fila.proyecto_id)?.empresa_id,
+    estado: fila.estado,
+    version: fila.version,
+    fechaCreacion: formatearFecha(fila.creado_en),
+    fechaModificacion: formatearFecha(fila.actualizado_en),
+    creadoPorId: fila.creado_por ?? '',
+    revisadoPorId: opcional(fila.revisado_por),
+    aprobadoPorId: opcional(fila.aprobado_por),
+    fechaRevision: fila.fecha_revision ? formatearFecha(fila.fecha_revision) : undefined,
+    fechaAprobacion: fila.fecha_aprobacion ? formatearFecha(fila.fecha_aprobacion) : undefined,
+    contenidoPendiente: fila.contenido_pendiente,
+    codigo: opcional(fila.codigo),
+    categoria: opcional(fila.categoria),
+    plantilla: opcional(fila.plantilla),
+    secciones: fila.secciones,
+    referenciaNormativa: fila.referencia_normativa,
+    motivoCambio: opcional(fila.motivo_cambio),
+    bloqueado: fila.bloqueado,
+    evidenciasVinculadas: vinculos.filter((v) => v.documento_id === fila.id).map((v) => v.evidencia_id),
+    // Los comentarios por sección llegan con la revisión (E2).
+    comentarios: [],
+    historialVersiones: versiones
+      .filter((v) => v.documento_id === fila.id)
+      .sort(porFecha)
+      .map((v) => ({
+        version: v.version,
+        fecha: formatearFecha(v.creado_en),
+        autorId: v.autor_id ?? '',
+        comentario: v.comentario ?? '',
+        motivo: opcional(v.motivo),
+        secciones: v.secciones,
+        estado: opcional(v.estado),
+      })),
+    historial: historial
+      .filter((h) => h.entidad_tipo === 'documento' && h.entidad_id === fila.id)
+      .sort(porFecha)
+      .map((h) => ({
+        id: String(h.id),
+        fecha: formatearFecha(h.creado_en),
+        autorId: h.autor_id ?? '',
+        accion: h.accion,
+        detalle: h.descripcion ?? '',
+      })),
+  }
+}
+
 function proyectosDelUsuario(perfil: FilaPerfil, filas: FilasSesion): string[] {
   const { proyectos, miembros } = filas
   switch (perfil.rol) {
@@ -462,7 +572,9 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     lista.filter((item) => proyectosVisibles.has(item.proyectoId))
 
   const evidencias = filas.evidencias.map((fila) => traducirEvidencia(fila, filas.proyectos, filas.perfiles, filas.historial))
-  const documentos = delProyectoVisible(demo.documentos)
+  const documentos = filas.documentos.map((fila) =>
+    traducirDocumento(fila, filas.proyectos, filas.versiones, filas.vinculos, filas.historial),
+  )
   const tareas = delProyectoVisible(demo.tareas)
 
   const visiblesPorTipo: Record<EntradaHistorial['entidadTipo'], Set<string>> = {

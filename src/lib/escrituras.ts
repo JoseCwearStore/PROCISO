@@ -1,4 +1,4 @@
-import type { Empresa, EstadoEvidencia, EstadoProyecto, Evidencia, Proceso, Proyecto, TipoEvidencia } from '../types'
+import type { Documento, Empresa, EstadoEvidencia, EstadoProyecto, Evidencia, Proceso, Proyecto, TipoEvidencia } from '../types'
 import {
   traducirEmpresa,
   traducirEvidencia,
@@ -28,7 +28,10 @@ export interface ClienteEscritura {
       eq(columna: 'id', valor: string): { select(columnas: string): { single(): RespuestaFila } }
     }
   }
-  rpc(funcion: 'guardar_proceso' | 'revisar_evidencia', args: Record<string, unknown>): PromiseLike<{ error: ErrorBD | null }>
+  rpc(
+    funcion: 'guardar_proceso' | 'revisar_evidencia' | 'guardar_documento',
+    args: Record<string, unknown>,
+  ): PromiseLike<{ error: ErrorBD | null }>
   storage: {
     from(bucket: 'evidencias'): {
       upload(ruta: string, archivo: File, opciones: { contentType: string }): PromiseLike<{ error: ErrorStorage | null }>
@@ -277,6 +280,39 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
 
       const evidencia = traducirEvidencia(registro.valor, [], [], [])
       return { ok: true, valor: { ...evidencia, autor: datos.autor, empresaId: datos.empresaId } }
+    },
+
+    // Documento + evidencias vinculadas + instantánea de versión + evento, en una
+    // transacción. El servidor rechaza aprobar desde acá o tocar un aprobado.
+    async guardarDocumento(
+      documento: Documento,
+      opciones: {
+        version?: { version: string; comentario: string; motivo?: string }
+        evento?: { accion: string; detalle: string }
+      } = {},
+    ): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('guardar_documento', {
+        p_documento: {
+          id: documento.id,
+          proyecto_id: documento.proyectoId,
+          proceso_id: documento.procesoId,
+          nombre: documento.nombre,
+          tipo: documento.tipo,
+          estado: documento.estado,
+          version: documento.version,
+          codigo: documento.codigo,
+          categoria: documento.categoria,
+          plantilla: documento.plantilla,
+          secciones: documento.secciones ?? [],
+          referencia_normativa: documento.referenciaNormativa,
+          motivo_cambio: documento.motivoCambio,
+          contenido_pendiente: documento.contenidoPendiente ?? false,
+          evidencias: documento.evidenciasVinculadas ?? [],
+        },
+        p_version: opciones.version ?? null,
+        p_evento: opciones.evento ?? null,
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },
 
     cambiarEstadoProyecto(id: string, estado: EstadoProyecto): Promise<ResultadoEscritura<void>> {

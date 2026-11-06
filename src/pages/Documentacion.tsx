@@ -15,6 +15,9 @@ import {
   Trash2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { servicioEscritura } from '../lib/servicios'
+import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { formatearFecha } from '../lib/datos'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { StatusBadge } from '../components/ui/StatusBadge'
@@ -219,12 +222,12 @@ export default function Documentacion() {
     return true
   }), [documentosDisponibles, filtros, getProyecto])
 
-  function generar() {
+  async function generar() {
     const proceso = state.procesos.find((item) => item.id === generador.procesoId)
     if (!proceso || !generador.empresaId || !generador.proyectoId || !generador.titulo.trim() || !generador.codigo.trim()) return
-    const ahora = new Date().toLocaleDateString('es-MX')
+    const ahora = formatearFecha(new Date().toISOString())
     const nuevo: Documento = {
-      id: `doc-${Date.now()}`,
+      id: crypto.randomUUID(),
       codigo: generador.codigo.trim(),
       nombre: generador.titulo.trim(),
       tipo: generador.tipo,
@@ -236,24 +239,18 @@ export default function Documentacion() {
       version: '0.1',
       fechaCreacion: ahora,
       fechaModificacion: ahora,
-      creadoPorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
+      creadoPorId: state.currentUser?.id ?? '',
       plantilla: generador.plantilla,
       referenciaNormativa: generador.edicionNorma,
       secciones: crearSecciones(generador.plantilla, proceso, generador.codigo, generador.edicionNorma),
       evidenciasVinculadas: [],
       comentarios: [],
       historialVersiones: [],
-      historial: [{
-        id: `evento-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        accion: 'Borrador generado',
-        detalle: `Creado con la plantilla ${generador.plantilla}.`,
-      }],
+      historial: [],
       contenidoPendiente: true,
       bloqueado: false,
     }
-    dispatch({ type: 'UPSERT_DOCUMENTO', documento: nuevo })
+    if (!(await persistir(nuevo, { evento: { accion: 'Borrador generado', detalle: `Creado con la plantilla ${generador.plantilla}.` } }))) return
     setDocumentoId(nuevo.id)
     setVista('editor')
     setGeneradorOpen(false)
@@ -261,30 +258,45 @@ export default function Documentacion() {
     showToast('Borrador generado con la información disponible del proceso.', 'success')
   }
 
+  // Ediciones en pantalla: se guardan en la BD al pulsar Guardar o Enviar.
   function actualizar(updates: Partial<Documento>) {
-    if (!documento || documento.bloqueado || documento.estado === 'Aprobado') return
+    if (!documento || documento.bloqueado || documento.estado === 'Aprobado' || documento.estado === 'Obsoleto') return
     dispatch({
       type: 'UPSERT_DOCUMENTO',
-      documento: { ...documento, ...updates, fechaModificacion: new Date().toLocaleDateString('es-MX') },
+      documento: { ...documento, ...updates, fechaModificacion: formatearFecha(new Date().toISOString()) },
     })
   }
 
-  function guardarBorrador() {
+  // Escritura pesimista: la pantalla se actualiza solo si la BD aceptó el cambio.
+  async function persistir(
+    doc: Documento,
+    opciones: { version?: { version: string; comentario: string; motivo?: string }; evento: { accion: string; detalle: string } },
+  ): Promise<boolean> {
+    const resultado = await servicioEscritura.guardarDocumento(doc, opciones)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return false
+    }
+    const evento = {
+      id: crypto.randomUUID(),
+      fecha: formatearFecha(new Date().toISOString()),
+      autorId: state.currentUser?.id ?? '',
+      ...opciones.evento,
+    }
+    dispatch({ type: 'UPSERT_DOCUMENTO', documento: { ...doc, historial: [...(doc.historial || []), evento] } })
+    return true
+  }
+
+  async function guardarBorrador() {
     if (!documento) return
-    actualizar({
-      estado: 'Borrador',
-      historial: [...(documento.historial || []), {
-        id: `evento-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        accion: 'Borrador guardado',
-        detalle: 'Cambios conservados en la sesión local.',
-      }],
-    })
-    showToast('Borrador guardado en esta sesión.', 'success')
+    const guardado = await persistir(
+      { ...documento, estado: 'Borrador' },
+      { evento: { accion: 'Borrador guardado', detalle: 'Cambios guardados.' } },
+    )
+    if (guardado) showToast('Borrador guardado.', 'success')
   }
 
-  function enviarRevision() {
+  async function enviarRevision() {
     if (!documento) return
     const faltantes: string[] = []
     if (!documento.codigo?.trim() || documento.codigo.includes(PENDIENTE)) faltantes.push('Código')
@@ -303,35 +315,35 @@ export default function Documentacion() {
     }
     setErrores(faltantes)
     if (faltantes.length) return
+    const motivo = documento.motivoCambio || 'Envío a revisión'
     const snapshot: VersionDocumento = {
       version: documento.version,
-      fecha: new Date().toLocaleDateString('es-MX'),
-      autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-      comentario: documento.motivoCambio || 'Envío a revisión',
-      motivo: documento.motivoCambio || 'Envío a revisión',
+      fecha: formatearFecha(new Date().toISOString()),
+      autorId: state.currentUser?.id ?? '',
+      comentario: motivo,
+      motivo,
       secciones: documento.secciones?.map((seccion) => ({ ...seccion, filas: seccion.filas?.map((fila) => [...fila]) })),
       estado: 'Pendiente de revisión',
     }
-    actualizar({
-      estado: 'Pendiente de revisión',
-      fechaRevision: new Date().toLocaleDateString('es-MX'),
-      historialVersiones: [...documento.historialVersiones.filter((item) => item.version !== snapshot.version), snapshot],
-      historial: [...(documento.historial || []), {
-        id: `evento-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        accion: 'Enviado a revisión',
-        detalle: `Versión ${documento.version}.`,
-      }],
-    })
-    showToast('Documento enviado al flujo de revisión.', 'success')
+    const enviado = await persistir(
+      {
+        ...documento,
+        estado: 'Pendiente de revisión',
+        historialVersiones: [...documento.historialVersiones.filter((item) => item.version !== snapshot.version), snapshot],
+      },
+      {
+        version: { version: documento.version, comentario: motivo, motivo },
+        evento: { accion: 'Enviado a revisión', detalle: `Versión ${documento.version}.` },
+      },
+    )
+    if (enviado) showToast('Documento enviado al flujo de revisión.', 'success')
   }
 
-  function nuevaVersion() {
+  async function nuevaVersion() {
     if (!documento) return
     const nueva: Documento = {
       ...documento,
-      id: `doc-${Date.now()}`,
+      id: crypto.randomUUID(),
       version: versionSiguiente(documento.version),
       estado: 'Borrador',
       bloqueado: false,
@@ -340,15 +352,14 @@ export default function Documentacion() {
       fechaRevision: undefined,
       motivoCambio: '',
       comentarios: [],
-      historial: [{
-        id: `evento-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        accion: 'Nueva versión creada',
-        detalle: `Derivada de la versión ${documento.version}.`,
-      }],
+      // Cada versión es un registro propio: arranca sin instantáneas ni eventos.
+      historialVersiones: [],
+      historial: [],
     }
-    dispatch({ type: 'UPSERT_DOCUMENTO', documento: nueva })
+    const creada = await persistir(nueva, {
+      evento: { accion: 'Nueva versión creada', detalle: `Derivada de la versión ${documento.version}.` },
+    })
+    if (!creada) return
     setDocumentoId(nueva.id)
     showToast(`Versión ${nueva.version} creada como borrador.`, 'success')
   }
@@ -380,6 +391,7 @@ export default function Documentacion() {
     return (
       <EditorDocumento
         documento={documento}
+        referenciaNormativa={documento.referenciaNormativa || getProyecto(documento.proyectoId)?.edicionNorma || 'ISO 9001:2026'}
         actualizar={actualizar}
         volver={() => { setVista('lista'); setErrores([]) }}
         guardar={guardarBorrador}
@@ -387,7 +399,7 @@ export default function Documentacion() {
         nuevaVersion={nuevaVersion}
         errores={errores}
         evidencias={state.evidencias.filter((item) => item.proyectoId === documento.proyectoId)}
-        usuarioId={state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002'}
+        usuarioId={state.currentUser?.id ?? ''}
         comentarioSeccion={comentarioSeccion}
         setComentarioSeccion={setComentarioSeccion}
         comentarioTexto={comentarioTexto}
@@ -403,7 +415,6 @@ export default function Documentacion() {
           open={compararOpen}
           onClose={() => setCompararOpen(false)}
           documento={documento}
-          referenciaNormativa={documento.referenciaNormativa || getProyecto(documento.proyectoId)?.edicionNorma || 'ISO 9001:2026'}
           versionA={versionA}
           versionB={versionB}
           setVersionA={setVersionA}

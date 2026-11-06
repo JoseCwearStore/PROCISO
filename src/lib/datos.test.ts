@@ -80,17 +80,31 @@ function filasBase(): FilasSesion {
       },
     ],
     historial: [
-      { id: 8, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, descripcion: null, estado_anterior: 'Revisada', estado_nuevo: 'Revisada', creado_en: '2024-03-24T10:00:00+00:00' },
-      { id: 7, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, descripcion: 'Se ve bien', estado_anterior: 'Cargada', estado_nuevo: 'Revisada', creado_en: '2024-03-23T10:00:00+00:00' },
-      { id: 9, entidad_tipo: 'documento', entidad_id: 'doc-p1', autor_id: ROBERTO, descripcion: null, estado_anterior: null, estado_nuevo: null, creado_en: '2024-03-25T10:00:00+00:00' },
+      { id: 8, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'Revisada', estado_nuevo: 'Revisada', creado_en: '2024-03-24T10:00:00+00:00' },
+      { id: 7, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: 'Se ve bien', estado_anterior: 'Cargada', estado_nuevo: 'Revisada', creado_en: '2024-03-23T10:00:00+00:00' },
+      { id: 9, entidad_tipo: 'documento', entidad_id: 'doc-p1', autor_id: ROBERTO, accion: 'Enviado a revisión', descripcion: 'Versión 1.0', estado_anterior: null, estado_nuevo: null, creado_en: '2024-03-25T10:00:00+00:00' },
     ],
+    documentos: [
+      {
+        id: 'doc-p1', proyecto_id: P1, proceso_id: PROC1, nombre: 'Procedimiento de compras', tipo: 'Procedimiento',
+        estado: 'Pendiente de revisión', version: '1.0', codigo: 'PRO-001', categoria: null, plantilla: null,
+        secciones: [{ id: 's1', titulo: 'Objetivo', tipo: 'texto', contenido: 'Comprar bien' }],
+        referencia_normativa: 'ISO 9001:2026', motivo_cambio: 'Creación', bloqueado: false, contenido_pendiente: false,
+        creado_por: ROBERTO, revisado_por: null, aprobado_por: null, fecha_revision: null, fecha_aprobacion: null,
+        creado_en: '2024-06-01T10:00:00+00:00', actualizado_en: '2024-07-15T10:00:00+00:00',
+      },
+    ],
+    versiones: [
+      { documento_id: 'doc-p1', version: '1.0', autor_id: ROBERTO, comentario: 'Con comentarios del cliente', motivo: null, secciones: [], estado: 'Pendiente de revisión', creado_en: '2024-07-15T10:00:00+00:00' },
+      { documento_id: 'doc-p1', version: '0.9', autor_id: ROBERTO, comentario: 'Borrador inicial', motivo: 'Creación', secciones: [], estado: null, creado_en: '2024-06-01T10:00:00+00:00' },
+    ],
+    vinculos: [{ documento_id: 'doc-p1', evidencia_id: 'ev-p1' }],
   }
 }
 
 // Datos de demo de DOS proyectos: P1 (visible) y P2 (de otra empresa, no visible).
 function demoBase(): DatosDemo {
   return {
-    documentos: [{ id: 'doc-p1', proyectoId: P1, procesoId: PROC1 }, { id: 'doc-p2', proyectoId: P2 }] as Documento[],
     tareas: [{ id: 'tar-p2', proyectoId: P2 }] as Tarea[],
     entregables: [],
     noConformidades: [],
@@ -240,6 +254,35 @@ describe('combinarDatosSesion', () => {
     ])
   })
 
+  it('traduce los documentos de la BD con versiones, evidencias vinculadas e historial', () => {
+    const { documentos } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(documentos).toHaveLength(1)
+    expect(documentos[0]).toMatchObject({
+      id: 'doc-p1',
+      proyectoId: P1,
+      procesoId: PROC1,
+      empresaId: E1,
+      estado: 'Pendiente de revisión',
+      version: '1.0',
+      codigo: 'PRO-001',
+      creadoPorId: ROBERTO,
+      fechaCreacion: '01/06/2024',
+      fechaModificacion: '15/07/2024',
+      secciones: [{ id: 's1', titulo: 'Objetivo', tipo: 'texto', contenido: 'Comprar bien' }],
+      evidenciasVinculadas: ['ev-p1'],
+      motivoCambio: 'Creación',
+      bloqueado: false,
+      comentarios: [],
+      historialVersiones: [
+        { version: '0.9', fecha: '01/06/2024', autorId: ROBERTO, comentario: 'Borrador inicial', motivo: 'Creación' },
+        { version: '1.0', fecha: '15/07/2024', autorId: ROBERTO, comentario: 'Con comentarios del cliente', estado: 'Pendiente de revisión' },
+      ],
+      historial: [{ id: '9', fecha: '25/03/2024', autorId: ROBERTO, accion: 'Enviado a revisión', detalle: 'Versión 1.0' }],
+    })
+    expect(documentos[0].aprobadoPorId).toBeUndefined()
+  })
+
   it('conserva las notificaciones generales y descarta las de proyectos no visibles', () => {
     const { notificaciones } = combinarDatosSesion(filasBase(), demoBase())
 
@@ -267,6 +310,9 @@ describe('cargarFilasSesion', () => {
       actividades: filas.actividades,
       evidencias: filas.evidencias,
       historial: filas.historial,
+      documentos: filas.documentos,
+      documento_versiones: filas.versiones,
+      documento_evidencias: filas.vinculos,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -277,13 +323,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las diez tablas y devuelve sus filas', async () => {
+  it('lee las trece tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(10)
+    expect(cliente.from).toHaveBeenCalledTimes(13)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

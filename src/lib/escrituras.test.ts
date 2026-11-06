@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type NuevoProyecto } from './escrituras'
 import type { FilaEmpresa, FilaProyecto } from './datos'
-import type { Proceso } from '../types'
+import type { Documento, Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
 const E_NUEVA = '22222222-0000-0000-0000-0000000000aa'
@@ -356,6 +356,68 @@ describe('subirEvidencia', () => {
     expect(await escrituras.subirEvidencia(NUEVA, archivo('a.jpg'))).toEqual({ ok: false, error: 'sin_permiso' })
     expect(llamadas.map((l) => l.operacion)).toEqual(['upload', 'insert', 'remove'])
     expect(llamadas[2].datos).toEqual({ rutas: [`${C1}/${E_NUEVA}/${P_NUEVO}/${ID}.jpg`] })
+  })
+})
+
+describe('guardarDocumento', () => {
+  const DOCUMENTO: Documento = {
+    id: '66666666-0000-0000-0000-0000000000aa', nombre: 'Procedimiento de compras', tipo: 'Procedimiento', proyectoId: P_NUEVO,
+    procesoId: '55555555-0000-0000-0000-000000000001', estado: 'Pendiente de revisión', version: '0.1',
+    fechaCreacion: '06/11/2026', fechaModificacion: '06/11/2026', creadoPorId: ROBERTO, historialVersiones: [],
+    codigo: 'PRO-001', secciones: [{ id: 's1', titulo: 'Objetivo', tipo: 'texto', contenido: 'Comprar bien' }],
+    evidenciasVinculadas: ['44444444-0000-0000-0000-000000000001'], motivoCambio: 'Creación',
+    referenciaNormativa: 'ISO 9001:2026',
+  }
+
+  it('guarda documento, versión y evento en una sola llamada, en snake_case', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.guardarDocumento(DOCUMENTO, {
+      version: { version: '0.1', comentario: 'Primer envío', motivo: 'Creación' },
+      evento: { accion: 'Enviado a revisión', detalle: 'Versión 0.1' },
+    })
+
+    expect(resultado).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      {
+        tabla: 'guardar_documento',
+        operacion: 'rpc',
+        datos: {
+          p_documento: expect.objectContaining({
+            id: DOCUMENTO.id,
+            proyecto_id: P_NUEVO,
+            proceso_id: DOCUMENTO.procesoId,
+            estado: 'Pendiente de revisión',
+            codigo: 'PRO-001',
+            secciones: DOCUMENTO.secciones,
+            evidencias: ['44444444-0000-0000-0000-000000000001'],
+            motivo_cambio: 'Creación',
+            referencia_normativa: 'ISO 9001:2026',
+          }),
+          p_version: { version: '0.1', comentario: 'Primer envío', motivo: 'Creación' },
+          p_evento: { accion: 'Enviado a revisión', detalle: 'Versión 0.1' },
+        },
+      },
+    ])
+  })
+
+  it('manda versión y evento como null si no hay', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.guardarDocumento({ ...DOCUMENTO, evidenciasVinculadas: undefined })
+
+    expect(llamadas[0].datos).toEqual(
+      expect.objectContaining({ p_version: null, p_evento: null, p_documento: expect.objectContaining({ evidencias: [] }) }),
+    )
+  })
+
+  it('traduce el rechazo del servidor (documento aprobado, sin permiso) a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'guardar_documento.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarDocumento(DOCUMENTO)).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })
 
