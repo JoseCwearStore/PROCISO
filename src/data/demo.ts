@@ -14,7 +14,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: 'usr-admin',
     nombre: 'Admin PROCISO',
-    email: 'admin@prociso.mx',
+    email: 'admin@prociso.test',
     rol: 'Admin PROCISO',
     proyectosAsignados: [],
     activo: true,
@@ -23,7 +23,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: 'usr-001',
     nombre: 'Ana García López',
-    email: 'ana@demo.mx',
+    email: 'ana@cowin.test',
     rol: 'Admin Consultoría',
     consultoriaId: 'cons-001',
     proyectosAsignados: ['proy-001', 'proy-002', 'proy-003'],
@@ -33,7 +33,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: 'usr-002',
     nombre: 'Roberto Vázquez Hernández',
-    email: 'roberto@demo.mx',
+    email: 'roberto@cowin.test',
     rol: 'Consultor',
     consultoriaId: 'cons-001',
     proyectosAsignados: ['proy-001', 'proy-003'],
@@ -43,7 +43,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: 'usr-003',
     nombre: 'María Torres Salinas',
-    email: 'maria.torres@consulticalidad.mx',
+    email: 'maria@cowin.test',
     rol: 'Consultor',
     consultoriaId: 'cons-001',
     proyectosAsignados: ['proy-002'],
@@ -53,7 +53,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: 'usr-004',
     nombre: 'Carlos Mendoza Ortiz',
-    email: 'carlos@demo.mx',
+    email: 'carlos@marketino.test',
     rol: 'Usuario Cliente',
     empresaId: 'emp-001',
     proyectosAsignados: ['proy-001'],
@@ -63,7 +63,7 @@ export const USUARIOS: Usuario[] = [
   {
     id: 'usr-005',
     nombre: 'Lucía Ramírez Fuentes',
-    email: 'lramirez@altiplano.mx',
+    email: 'lucia@jaza.test',
     rol: 'Usuario Cliente',
     empresaId: 'emp-002',
     proyectosAsignados: ['proy-002'],

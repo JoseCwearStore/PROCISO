@@ -1,5 +1,5 @@
 // ─── Auth ─────────────────────────────────────────────────────────────────────
-export type AuthScreen = 'login' | 'recovery' | 'recovery-sent' | 'change-password' | 'app'
+export type AuthScreen = 'checking' | 'login' | 'recovery' | 'recovery-sent' | 'change-password' | 'app'
 export type LoginReason = 'expired' | 'blocked' | 'temp-password' | undefined
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
@@ -467,13 +467,3 @@ export interface ModalState {
 }
 
 export type SaveState = 'saved' | 'saving' | 'pending' | 'error'
-
-// ─── Demo credentials (visible simulation) ───────────────────────────────────
-export const DEMO_CREDENTIALS = [
-  { email: 'ana@demo.mx', password: 'Prociso2024', rol: 'Admin Consultoría', nombre: 'Ana García López' },
-  { email: 'roberto@demo.mx', password: 'Prociso2024', rol: 'Consultor', nombre: 'Roberto Vázquez' },
-  { email: 'carlos@demo.mx', password: 'Prociso2024', rol: 'Usuario Cliente', nombre: 'Carlos Mendoza' },
-  { email: 'admin@prociso.mx', password: 'Prociso2024', rol: 'Admin PROCISO', nombre: 'Admin PROCISO' },
-  { email: 'bloqueado@demo.mx', password: 'cualquiera', rol: null, nombre: null },
-  { email: 'temporal@demo.mx', password: 'Temporal01', rol: 'Consultor', nombre: 'María Torres' },
-] as const

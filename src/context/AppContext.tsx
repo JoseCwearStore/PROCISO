@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useReducer, useCallback } from 'react'
+import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
+import { servicioAuth } from '../lib/servicios'
 import type {
   Rol,
   PageId,
@@ -85,7 +86,7 @@ type Action =
   | { type: 'LOGIN_SUCCESS'; user: CurrentUser }
   | { type: 'LOGIN_FAIL'; error: string }
   | { type: 'LOGIN_RESET_ATTEMPTS' }
-  | { type: 'LOGOUT' }
+  | { type: 'LOGOUT'; reason?: LoginReason }
   | { type: 'SET_ROLE'; role: Rol }
   | { type: 'NAVIGATE'; page: PageId; params?: NavParams }
   | { type: 'DISMISS_BANNER' }
@@ -146,7 +147,7 @@ function reducer(state: AppState, action: Action): AppState {
       return {
         ...state,
         authScreen: 'login',
-        loginReason: 'expired',
+        loginReason: action.reason,
         currentUser: null,
         loginAttempts: 0,
         loginError: null,
@@ -317,7 +318,7 @@ const AppContext = createContext<AppContextType | null>(null)
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
   const [state, dispatch] = useReducer(reducer, {
-    authScreen: 'login',
+    authScreen: 'checking',
     loginReason: undefined,
     loginAttempts: 0,
     loginError: null,
@@ -354,6 +355,22 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     toasts: [],
     modal: null,
   })
+
+  // Al cargar la app: si hay una sesión de Supabase guardada, se restaura sin pedir login.
+  useEffect(() => {
+    let cancelado = false
+    servicioAuth
+      .obtenerUsuarioActual()
+      .catch(() => null)
+      .then((usuario) => {
+        if (cancelado) return
+        if (usuario) dispatch({ type: 'LOGIN_SUCCESS', user: usuario })
+        else dispatch({ type: 'SET_AUTH_SCREEN', screen: 'login' })
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [])
 
   const navigate = useCallback((page: PageId, params?: NavParams) => {
     dispatch({ type: 'NAVIGATE', page, params })

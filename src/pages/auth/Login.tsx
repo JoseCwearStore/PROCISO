@@ -1,11 +1,18 @@
 import { useState } from 'react'
-import { Eye, EyeOff, Lock, Mail, AlertCircle, Info } from 'lucide-react'
+import { Eye, EyeOff, Lock, Mail, AlertCircle } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
-import { DEMO_CREDENTIALS } from '../../types'
+import { servicioAuth } from '../../lib/servicios'
+import type { ErrorLogin } from '../../lib/auth'
 
-const BLOCKED_EMAIL = 'bloqueado@demo.mx'
-const TEMP_EMAIL = 'temporal@demo.mx'
+// Bloqueo de cortesía en la interfaz. La protección real contra fuerza bruta
+// es el límite de intentos de Supabase Auth.
 const MAX_ATTEMPTS = 3
+
+const MENSAJES_ERROR: Record<Exclude<ErrorLogin, 'credenciales'>, string> = {
+  servicio: 'No pudimos conectar con el servidor. Intenta de nuevo en unos momentos.',
+  sin_perfil: 'Esta cuenta no tiene acceso a PROCISO. Contacte al administrador.',
+  inactivo: 'Esta cuenta está desactivada. Contacte al administrador.',
+}
 
 export default function Login() {
   const { state, dispatch } = useApp()
@@ -19,63 +26,36 @@ export default function Login() {
 
   const isBlocked = loginAttempts >= MAX_ATTEMPTS
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (isBlocked) return
     setLoading(true)
     setLocalError('')
 
-    setTimeout(() => {
-      setLoading(false)
+    const resultado = await servicioAuth.iniciarSesion(email, password)
+    setLoading(false)
 
-      if (email.toLowerCase() === BLOCKED_EMAIL) {
-        dispatch({
-          type: 'SET_AUTH_SCREEN',
-          screen: 'login',
-          reason: 'blocked',
-        })
-        setLocalError('Esta cuenta ha sido bloqueada. Contacte al administrador.')
-        dispatch({ type: 'LOGIN_FAIL', error: 'blocked' })
-        return
-      }
+    if (resultado.ok) {
+      dispatch({ type: 'LOGIN_SUCCESS', user: resultado.usuario })
+      return
+    }
 
-      const cred = DEMO_CREDENTIALS.find(
-        (c) => c.email === email.toLowerCase() && c.password === password
+    if (resultado.error !== 'credenciales') {
+      setLocalError(MENSAJES_ERROR[resultado.error])
+      return
+    }
+
+    // Solo las credenciales incorrectas cuentan como intento fallido.
+    const newAttempts = loginAttempts + 1
+    const remaining = MAX_ATTEMPTS - newAttempts
+    dispatch({ type: 'LOGIN_FAIL', error: 'invalid' })
+    if (newAttempts >= MAX_ATTEMPTS) {
+      setLocalError('Cuenta bloqueada temporalmente por demasiados intentos fallidos.')
+    } else {
+      setLocalError(
+        `Correo o contraseña incorrectos. ${remaining} intento${remaining === 1 ? '' : 's'} restante${remaining === 1 ? '' : 's'}.`
       )
-
-      if (!cred) {
-        const newAttempts = loginAttempts + 1
-        const remaining = MAX_ATTEMPTS - newAttempts
-        dispatch({ type: 'LOGIN_FAIL', error: 'invalid' })
-        if (newAttempts >= MAX_ATTEMPTS) {
-          setLocalError('Cuenta bloqueada temporalmente por demasiados intentos fallidos.')
-        } else {
-          setLocalError(
-            `Correo o contraseña incorrectos. ${remaining} intento${remaining === 1 ? '' : 's'} restante${remaining === 1 ? '' : 's'}.`
-          )
-        }
-        return
-      }
-
-      if (cred.rol === null) {
-        setLocalError('Esta cuenta no tiene acceso activo. Contacte al administrador.')
-        dispatch({ type: 'LOGIN_FAIL', error: 'blocked' })
-        return
-      }
-
-      const isTemp = email.toLowerCase() === TEMP_EMAIL
-
-      dispatch({
-        type: 'LOGIN_SUCCESS',
-        user: {
-          id: `usr-${email}`,
-          nombre: cred.nombre ?? email,
-          email: cred.email,
-          rol: cred.rol as import('../../types').Rol,
-          passwordTemp: isTemp,
-        },
-      })
-    }, 700)
+    }
   }
 
   return (
@@ -192,36 +172,8 @@ export default function Login() {
           )}
         </div>
 
-        {/* Demo credentials panel */}
-        <div className="mt-4 bg-amber-50 border border-amber-200 rounded-xl p-4">
-          <div className="flex items-center gap-2 mb-2 text-amber-800">
-            <Info className="w-4 h-4 shrink-0" />
-            <span className="text-xs font-semibold uppercase tracking-wide">ENTORNO DEMO — Credenciales visibles</span>
-          </div>
-          <div className="space-y-1.5">
-            {DEMO_CREDENTIALS.filter((c) => c.rol !== null).map((c) => (
-              <button
-                key={c.email}
-                onClick={() => {
-                  setEmail(c.email)
-                  setPassword(c.password)
-                  dispatch({ type: 'LOGIN_RESET_ATTEMPTS' })
-                }}
-                className="w-full flex items-center justify-between text-left px-3 py-2 bg-white border border-amber-100 rounded-lg hover:border-amber-300 hover:bg-amber-50/60 transition text-xs"
-              >
-                <div>
-                  <span className="font-medium text-amber-900">{c.nombre}</span>
-                  <span className="text-amber-600 ml-1.5">· {c.rol}</span>
-                </div>
-                <span className="text-amber-500 font-mono">{c.email}</span>
-              </button>
-            ))}
-          </div>
-          <p className="text-[10px] text-amber-600 mt-2">Haz clic en cualquier fila para autocompletar las credenciales.</p>
-        </div>
-
         <p className="text-center text-xs text-fg/30 mt-6">
-          © {new Date().getFullYear()} PROCISO · ISO 9001:2026 · Simulación de demostración
+          © {new Date().getFullYear()} PROCISO · ISO 9001:2026
         </p>
       </div>
     </div>

@@ -1,7 +1,7 @@
-import { Menu, Bell, ChevronDown, Save, RefreshCw, WifiOff, AlertCircle, LogOut, Search } from 'lucide-react'
+import { Menu, Bell, Save, RefreshCw, WifiOff, AlertCircle, LogOut, Search } from 'lucide-react'
 import { useState } from 'react'
 import { useApp } from '../../context/AppContext'
-import type { Rol } from '../../types'
+import { servicioAuth } from '../../lib/servicios'
 import { GlobalSearch } from '../GlobalSearch'
 
 const PAGE_TITLES: Record<string, string> = {
@@ -27,8 +27,6 @@ const PAGE_TITLES: Record<string, string> = {
   unauthorized: 'Acceso no autorizado',
 }
 
-const ROLES: Rol[] = ['Admin PROCISO', 'Admin Consultoría', 'Consultor', 'Usuario Cliente']
-
 const SAVE_STATE_UI = {
   saved: { icon: Save, text: 'Guardado', color: 'text-green-600' },
   saving: { icon: RefreshCw, text: 'Guardando…', color: 'text-blue-600' },
@@ -38,15 +36,14 @@ const SAVE_STATE_UI = {
 
 export function TopBar() {
   const { state, dispatch, navigate, unreadCount } = useApp()
-  const [roleDropdownOpen, setRoleDropdownOpen] = useState(false)
   const [searchOpen, setSearchOpen] = useState(false)
   const title = PAGE_TITLES[state.currentPage] ?? 'PROCISO'
   const saveUI = SAVE_STATE_UI[state.saveState]
   const SaveIcon = saveUI.icon
 
-  function selectRole(role: Rol) {
-    dispatch({ type: 'SET_ROLE', role })
-    setRoleDropdownOpen(false)
+  async function cerrarSesion() {
+    await servicioAuth.cerrarSesion()
+    dispatch({ type: 'LOGOUT' })
   }
 
   return (
@@ -103,7 +100,7 @@ export function TopBar() {
 
       {/* Logout */}
       <button
-        onClick={() => dispatch({ type: 'LOGOUT' })}
+        onClick={cerrarSesion}
         className="p-2 rounded-lg text-slate-500 hover:bg-red-50 hover:text-red-600 transition-colors"
         title="Cerrar sesión"
         aria-label="Cerrar sesión"
@@ -111,43 +108,10 @@ export function TopBar() {
         <LogOut className="w-4 h-4" />
       </button>
 
-      {/* Role selector */}
-      <div className="relative">
-        <button
-          onClick={() => setRoleDropdownOpen((o) => !o)}
-          className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-slate-200 text-sm text-slate-700 hover:bg-slate-50 transition-colors"
-          aria-haspopup="listbox"
-          aria-expanded={roleDropdownOpen}
-        >
-          <span className="block font-medium max-w-20 sm:max-w-[140px] truncate">{state.currentRole}</span>
-          <ChevronDown className="w-4 h-4 text-slate-400" />
-        </button>
-
-        {roleDropdownOpen && (
-          <>
-            <div className="fixed inset-0 z-30" onClick={() => setRoleDropdownOpen(false)} />
-            <div className="absolute right-0 top-full mt-1.5 bg-white border border-slate-200 rounded-xl shadow-lg z-40 w-52 py-1 overflow-hidden">
-              <p className="text-[10px] uppercase tracking-wider text-slate-400 font-semibold px-3 py-2 border-b border-slate-100">
-                Cambiar rol (Demo)
-              </p>
-              {ROLES.map((role) => (
-                <button
-                  key={role}
-                  role="option"
-                  aria-selected={state.currentRole === role}
-                  onClick={() => selectRole(role)}
-                  className={`w-full text-left px-3 py-2.5 text-sm transition-colors ${
-                    state.currentRole === role
-                      ? 'bg-blue-50 text-blue-700 font-medium'
-                      : 'text-slate-700 hover:bg-slate-50'
-                  }`}
-                >
-                  {role}
-                </button>
-              ))}
-            </div>
-          </>
-        )}
+      {/* Usuario de la sesión: el rol viene de la base de datos, no se elige */}
+      <div className="flex flex-col items-end leading-tight px-3 py-1 rounded-lg border border-slate-200 text-slate-700">
+        <span className="block text-sm font-medium max-w-20 sm:max-w-[160px] truncate">{state.currentUser?.nombre}</span>
+        <span className="block text-[11px] text-slate-500 max-w-20 sm:max-w-[160px] truncate">{state.currentRole}</span>
       </div>
       <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
     </header>
