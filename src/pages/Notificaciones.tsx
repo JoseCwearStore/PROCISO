@@ -5,11 +5,13 @@ import { Button } from '../components/ui/Button'
 import { EmptyState } from '../components/ui/EmptyState'
 import type { ComentarioGlobal, TipoNotificacion } from '../types'
 import { canAccess } from '../config/permissions'
+import { useAccionesNotificacion } from '../hooks/useAccionesNotificacion'
 
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 
 export function Notificaciones() {
   const { state, dispatch, navigate, getUsuario, showToast } = useApp()
+  const { marcarLeidas } = useAccionesNotificacion()
   const [tab, setTab] = useState<'notificaciones' | 'comentarios' | 'actividad'>('notificaciones')
   const [tipo, setTipo] = useState('')
   const [entidadTipo, setEntidadTipo] = useState<ComentarioGlobal['entidadTipo']>('tarea')
@@ -41,8 +43,8 @@ export function Notificaciones() {
         : evidenciasDisponibles.map((item) => ({ id: item.id, nombre: item.nombre }))
   const visibles = state.notificaciones.filter(
     (item) =>
-      (!item.pagina || canAccess(item.pagina, state.currentRole)) &&
-      (state.currentRole !== 'Usuario Cliente' || !item.proyectoId || proyectosCliente.has(item.proyectoId))
+      // La BD ya calculó las de este usuario; la página es un resguardo de UX.
+      !item.pagina || canAccess(item.pagina, state.currentRole)
   )
   const filtradas = visibles.filter((item) => !tipo || item.tipo === tipo)
   const noLeidas = visibles.filter((item) => !item.leida).length
@@ -97,8 +99,8 @@ export function Notificaciones() {
       </div>
 
       {tab === 'notificaciones' && <div>
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><select className={`${inputClass} max-w-56`} value={tipo} onChange={(event) => setTipo(event.target.value)}><option value="">Todos los tipos</option>{(['info', 'success', 'warning', 'error'] as TipoNotificacion[]).map((item) => <option key={item} value={item}>{item === 'info' ? 'Información' : item === 'success' ? 'Éxito' : item === 'warning' ? 'Advertencia' : 'Error'}</option>)}</select>{noLeidas > 0 && <Button variant="outline" size="sm" onClick={() => dispatch({ type: 'MARCAR_TODAS_LEIDAS' })} icon={<CheckCheck className="h-4 w-4" />}>Marcar todas como leídas</Button>}</div>
-        {filtradas.length === 0 ? <EmptyState icon={<CheckCircle className="h-7 w-7" />} title="Sin notificaciones" description="No hay notificaciones para este filtro." /> : <div className="space-y-2">{filtradas.map((item) => <button key={item.id} onClick={() => { dispatch({ type: 'MARCAR_LEIDA', id: item.id }); if (item.pagina) navigate(item.pagina) }} className={`w-full rounded-xl border bg-white p-4 text-left ${item.leida ? 'border-line' : 'border-blue-200 shadow-sm'}`}><div className="flex items-start gap-3"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.tipo === 'error' ? 'bg-red-500' : item.tipo === 'warning' ? 'bg-amber-500' : item.tipo === 'success' ? 'bg-emerald-500' : 'bg-blue-500'}`} /><div className="flex-1"><div className="flex justify-between gap-3"><p className={`text-sm ${item.leida ? 'font-medium text-slate-700' : 'font-semibold text-slate-900'}`}>{item.titulo}</p><span className="text-xs text-slate-400">{item.fecha}</span></div><p className="mt-1 text-xs text-slate-500">{item.descripcion}</p></div></div></button>)}</div>}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3"><select className={`${inputClass} max-w-56`} value={tipo} onChange={(event) => setTipo(event.target.value)}><option value="">Todos los tipos</option>{(['info', 'success', 'warning', 'error'] as TipoNotificacion[]).map((item) => <option key={item} value={item}>{item === 'info' ? 'Información' : item === 'success' ? 'Éxito' : item === 'warning' ? 'Advertencia' : 'Error'}</option>)}</select>{noLeidas > 0 && <Button variant="outline" size="sm" onClick={() => void marcarLeidas(visibles.filter((item) => !item.leida).map((item) => item.id))} icon={<CheckCheck className="h-4 w-4" />}>Marcar todas como leídas</Button>}</div>
+        {filtradas.length === 0 ? <EmptyState icon={<CheckCircle className="h-7 w-7" />} title="Sin notificaciones" description="No hay notificaciones para este filtro." /> : <div className="space-y-2">{filtradas.map((item) => <button key={item.id} onClick={() => { if (!item.leida) void marcarLeidas([item.id]); if (item.pagina) navigate(item.pagina) }} className={`w-full rounded-xl border bg-white p-4 text-left ${item.leida ? 'border-line' : 'border-blue-200 shadow-sm'}`}><div className="flex items-start gap-3"><span className={`mt-1 h-2.5 w-2.5 shrink-0 rounded-full ${item.tipo === 'error' ? 'bg-red-500' : item.tipo === 'warning' ? 'bg-amber-500' : item.tipo === 'success' ? 'bg-emerald-500' : 'bg-blue-500'}`} /><div className="flex-1"><div className="flex justify-between gap-3"><p className={`text-sm ${item.leida ? 'font-medium text-slate-700' : 'font-semibold text-slate-900'}`}>{item.titulo}</p><span className="text-xs text-slate-400">{item.fecha}</span></div><p className="mt-1 text-xs text-slate-500">{item.descripcion}</p></div></div></button>)}</div>}
       </div>}
 
       {tab === 'comentarios' && <div className="grid gap-5 lg:grid-cols-[320px_minmax(0,1fr)]">

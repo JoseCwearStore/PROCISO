@@ -1,6 +1,6 @@
 import type {
   Consultoria, Usuario, Empresa, Proyecto, Proceso, Evidencia,
-  Documento, Tarea, NoConformidad, Notificacion, Entregable, EntradaHistorial,
+  Documento, Tarea, NoConformidad, Entregable,
 } from '../types'
 
 export const CONSULTORIA: Consultoria = {
@@ -227,17 +227,6 @@ export const ENTREGABLES: Entregable[] = [
   { id: 'bbbbbbbb-0000-0000-0000-000000000012', nombre: 'Procedimientos actualizados', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '30/06/2023', fechaAprobacion: '05/07/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
   { id: 'bbbbbbbb-0000-0000-0000-000000000013', nombre: 'Informe de auditoría interna', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '31/10/2023', fechaAprobacion: '02/11/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
   { id: 'bbbbbbbb-0000-0000-0000-000000000014', nombre: 'Informe de revisión por la dirección', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '15/11/2023', fechaAprobacion: '15/11/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
-]
-
-export const HISTORIAL: EntradaHistorial[] = [
-  { id: 'hist-001', fecha: '15/02/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', accion: 'Proyecto creado', descripcion: 'Se creó el proyecto "Implementación SGC ISO 9001:2026" para Manufacturas del Norte.', entidadId: '33333333-0000-0000-0000-000000000001', entidadTipo: 'proyecto' },
-  { id: 'hist-002', fecha: '05/04/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000003', accion: 'Entregable aprobado', descripcion: 'El informe de diagnóstico inicial fue aprobado por el cliente.', entidadId: '33333333-0000-0000-0000-000000000001', entidadTipo: 'proyecto' },
-  { id: 'hist-003', fecha: '02/05/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000003', accion: 'Entregable aprobado', descripcion: 'El mapa de procesos del SGC fue aprobado.', entidadId: '33333333-0000-0000-0000-000000000001', entidadTipo: 'proyecto' },
-  { id: 'hist-004', fecha: '30/05/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000005', accion: 'Documento aprobado', descripcion: 'El procedimiento de control de producción v2.0 fue aprobado.', entidadId: '33333333-0000-0000-0000-000000000001', entidadTipo: 'proyecto' },
-  { id: 'hist-005', fecha: '01/08/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', accion: 'Proyecto creado', descripcion: 'Se creó el proyecto para Distribuidora Comercial Altiplano.', entidadId: '33333333-0000-0000-0000-000000000002', entidadTipo: 'proyecto' },
-  { id: 'hist-006', fecha: '20/08/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000006', accion: 'Entregable aprobado', descripcion: 'Plan de implementación aprobado por la dirección.', entidadId: '33333333-0000-0000-0000-000000000002', entidadTipo: 'proyecto' },
-  { id: 'hist-007', fecha: '15/02/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', accion: 'Empresa registrada', descripcion: 'Se registró Manufacturas del Norte en la plataforma.', entidadId: '22222222-0000-0000-0000-000000000001', entidadTipo: 'empresa' },
-  { id: 'hist-008', fecha: '01/08/2024', autorId: 'aaaaaaaa-0000-0000-0000-000000000002', accion: 'Empresa registrada', descripcion: 'Se registró Distribuidora Comercial Altiplano en la plataforma.', entidadId: '22222222-0000-0000-0000-000000000002', entidadTipo: 'empresa' },
 ]
 
 export const PROCESOS: Proceso[] = [
@@ -751,16 +740,6 @@ export const NO_CONFORMIDADES = [
     acciones: ['Definir criterios de selección', 'Crear lista de proveedores aprobados'],
     observaciones: 'Observación para revisar: Verificar si existe proceso informal formalizable.',
   },
-]
-
-export const NOTIFICACIONES: Notificacion[] = [
-  { id: 'notif-001', titulo: 'Tarea vencida: Reunión de revisión con cliente', descripcion: 'La tarea venció el 31/08/2024 sin completarse.', tipo: 'error', leida: false, fecha: '01/09/2024', pagina: 'tablero-tareas', proyectoId: '33333333-0000-0000-0000-000000000001' },
-  { id: 'notif-002', titulo: 'Documento listo para revisión', descripcion: '"Procedimiento de selección y evaluación de proveedores" v1.0 pendiente de revisión.', tipo: 'info', leida: false, fecha: '15/07/2024', pagina: 'documentacion', proyectoId: '33333333-0000-0000-0000-000000000001' },
-  { id: 'notif-003', titulo: 'No conformidad sin actualización', descripcion: '"Registros de atención al cliente incompletos" lleva más de 30 días sin actualización.', tipo: 'warning', leida: false, fecha: '25/06/2024', pagina: 'no-conformidades', proyectoId: '33333333-0000-0000-0000-000000000001' },
-  { id: 'notif-004', titulo: 'Entregable aprobado', descripcion: '"Procedimiento de control de producción" fue aprobado exitosamente.', tipo: 'success', leida: true, fecha: '30/05/2024', pagina: 'proyectos', proyectoId: '33333333-0000-0000-0000-000000000001' },
-  { id: 'notif-005', titulo: 'Nuevo proyecto registrado', descripcion: 'Se creó el proyecto para Distribuidora Comercial Altiplano.', tipo: 'info', leida: true, fecha: '01/08/2024', pagina: 'proyectos', proyectoId: '33333333-0000-0000-0000-000000000002' },
-  { id: 'notif-006', titulo: 'Tarea requiere corrección', descripcion: '"Elaborar informe de diagnóstico inicial" fue devuelta con observaciones.', tipo: 'warning', leida: false, fecha: '28/09/2024', pagina: 'tablero-tareas', proyectoId: '33333333-0000-0000-0000-000000000002' },
-  { id: 'notif-007', titulo: 'Tarea vencida: Formato de no conformidades', descripcion: 'La tarea venció el 15/08/2024 sin completarse.', tipo: 'error', leida: false, fecha: '16/08/2024', pagina: 'tablero-tareas', proyectoId: '33333333-0000-0000-0000-000000000001' },
 ]
 
 // ─── Simulated evolution data for charts ─────────────────────────────────────

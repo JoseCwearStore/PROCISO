@@ -76,7 +76,8 @@ export interface ClienteEscritura {
       | 'guardar_tratamiento_nc'
       | 'cambiar_estado_nc'
       | 'guardar_lista'
-      | 'decidir_entregable',
+      | 'decidir_entregable'
+      | 'marcar_notificaciones_leidas',
     args: Record<string, unknown>,
   ): PromiseLike<{ data?: unknown; error: ErrorBD | null }>
   storage: {
@@ -254,6 +255,13 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
   }
 
   return {
+    // Una sola llamada para una o todas; la BD pone el usuario y no duplica.
+    async marcarNotificacionesLeidas(claves: string[]): Promise<ResultadoEscritura<void>> {
+      if (claves.length === 0) return { ok: true, valor: undefined }
+      const { error } = await cliente.rpc('marcar_notificaciones_leidas', { p_claves: claves })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
     async crearEmpresa(consultoriaId: string | null, datos: NuevaEmpresa): Promise<ResultadoEscritura<Empresa>> {
       if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
 

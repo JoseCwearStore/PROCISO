@@ -15,9 +15,11 @@ import type {
   NoConformidad,
   PreguntaVerificacion,
   Notificacion,
+  PageId,
   Proceso,
   Proyecto,
   Tarea,
+  TipoNotificacion,
   Usuario,
 } from '../types'
 import { mapearRol, type RolBD } from './auth'
@@ -317,6 +319,20 @@ export interface FilaNoConformidad {
   observaciones: string
 }
 
+// Una fila de mis_notificaciones(): la BD ya decidió qué le toca a quién.
+export interface FilaNotificacion {
+  clave: string
+  tipo: TipoNotificacion
+  titulo: string
+  descripcion: string
+  fecha: string
+  pagina: PageId | null
+  proyecto_id: string | null
+  entidad_tipo: string
+  entidad_id: string
+  leida: boolean
+}
+
 export interface FilasSesion {
   consultorias: FilaConsultoria[]
   empresas: FilaEmpresa[]
@@ -338,15 +354,12 @@ export interface FilasSesion {
   preguntas: FilaPregunta[]
   entregables: FilaEntregable[]
   indicadores: FilaIndicador[]
+  notificaciones: FilaNotificacion[]
 }
 
-// Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
-export interface DatosDemo {
+export interface DatosSesion {
   notificaciones: Notificacion[]
   historial: EntradaHistorial[]
-}
-
-export interface DatosSesion extends DatosDemo {
   tareas: Tarea[]
   noConformidades: NoConformidad[]
   listasVerificacion: ListaVerificacion[]
@@ -367,6 +380,7 @@ export interface ClienteDatos {
   from(tabla: string): {
     select(columnas: string): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
   }
+  rpc(funcion: 'mis_notificaciones'): PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>
 }
 
 const CONSULTAS = {
@@ -402,21 +416,26 @@ const CONSULTAS = {
     'lista_preguntas',
     'id, lista_id, orden, pregunta, estado, referencia_requisito, evidencia_id, observaciones, justificacion_no_aplica',
   ],
-} as const satisfies Record<keyof FilasSesion, readonly [string, string]>
+} as const satisfies Record<Exclude<keyof FilasSesion, 'notificaciones'>, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
+// Las notificaciones no son una tabla: las calcula mis_notificaciones() en cada lectura.
 export async function cargarFilasSesion(cliente: ClienteDatos): Promise<{ ok: true; filas: FilasSesion } | { ok: false }> {
-  const claves = Object.keys(CONSULTAS) as (keyof FilasSesion)[]
-  const respuestas = await Promise.all(
-    claves.map((clave) => {
+  const claves = Object.keys(CONSULTAS) as (keyof typeof CONSULTAS)[]
+  const [notificaciones, ...respuestas] = await Promise.all([
+    cliente.rpc('mis_notificaciones'),
+    ...claves.map((clave) => {
       const [tabla, columnas] = CONSULTAS[clave]
       return cliente.from(tabla).select(columnas)
     }),
-  )
+  ])
 
-  if (respuestas.some((respuesta) => respuesta.error || !respuesta.data)) return { ok: false }
+  if ([notificaciones, ...respuestas].some((respuesta) => respuesta.error || !respuesta.data)) return { ok: false }
 
-  const filas = Object.fromEntries(claves.map((clave, i) => [clave, respuestas[i].data])) as unknown as FilasSesion
+  const filas = {
+    ...Object.fromEntries(claves.map((clave, i) => [clave, respuestas[i].data])),
+    notificaciones: notificaciones.data,
+  } as unknown as FilasSesion
   return { ok: true, filas }
 }
 
@@ -838,27 +857,43 @@ function traducirUsuario(perfil: FilaPerfil, filas: FilasSesion): Usuario {
   }
 }
 
-// ─── Combinación: lo real de la BD + lo que todavía es demo ─────────────────
+export function traducirNotificacion(fila: FilaNotificacion): Notificacion {
+  return {
+    id: fila.clave,
+    titulo: fila.titulo,
+    descripcion: fila.descripcion,
+    tipo: fila.tipo,
+    leida: fila.leida,
+    fecha: formatearFecha(fila.fecha),
+    pagina: opcional(fila.pagina),
+    proyectoId: opcional(fila.proyecto_id),
+  }
+}
 
-export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosSesion {
-  const proyectosVisibles = new Set(filas.proyectos.map((p) => p.id))
-  const empresasVisibles = new Set(filas.empresas.map((e) => e.id))
-  const delProyectoVisible = <T extends { proyectoId: string }>(lista: T[]) =>
-    lista.filter((item) => proyectosVisibles.has(item.proyectoId))
+// La actividad (auditoría) es el historial real: el RLS ya dejó solo lo visible.
+export function traducirHistorial(filas: FilaHistorial[]): EntradaHistorial[] {
+  return [...filas]
+    .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+    .map((h) => ({
+      id: String(h.id),
+      fecha: formatearFecha(h.creado_en),
+      autorId: h.autor_id ?? '',
+      accion: h.accion,
+      descripcion: h.descripcion ?? (h.estado_nuevo ? `${h.estado_anterior} → ${h.estado_nuevo}` : ''),
+      entidadId: h.entidad_id,
+      entidadTipo: h.entidad_tipo as EntradaHistorial['entidadTipo'],
+    }))
+}
+
+// ─── Combinación: todo sale de la BD ────────────────────────────────────────
+
+export function combinarDatosSesion(filas: FilasSesion): DatosSesion {
 
   const evidencias = filas.evidencias.map((fila) => traducirEvidencia(fila, filas.proyectos, filas.perfiles, filas.historial))
   const documentos = filas.documentos.map((fila) =>
     traducirDocumento(fila, filas.proyectos, filas.versiones, filas.vinculos, filas.historial, filas.comentarios),
   )
   const tareas = filas.tareas.map((fila) => traducirTarea(fila, filas.historial, filas.comentarios))
-
-  const visiblesPorTipo: Record<EntradaHistorial['entidadTipo'], Set<string>> = {
-    proyecto: proyectosVisibles,
-    empresa: empresasVisibles,
-    tarea: new Set(tareas.map((t) => t.id)),
-    documento: new Set(documentos.map((d) => d.id)),
-    evidencia: new Set(evidencias.map((e) => e.id)),
-  }
 
   return {
     consultorias: filas.consultorias.map(traducirConsultoria),
@@ -873,7 +908,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     indicadores: filas.indicadores.map(traducirIndicador),
     noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
     listasVerificacion: filas.listas.map((fila) => traducirLista(fila, filas.preguntas, filas.proyectos)),
-    notificaciones: demo.notificaciones.filter((n) => !n.proyectoId || proyectosVisibles.has(n.proyectoId)),
-    historial: demo.historial.filter((h) => visiblesPorTipo[h.entidadTipo].has(h.entidadId)),
+    notificaciones: filas.notificaciones.map(traducirNotificacion),
+    historial: traducirHistorial(filas.historial),
   }
 }

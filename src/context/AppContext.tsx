@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
 import { cargarFilasDeSesion, llegoDesdeEnlaceDeRecuperacion, servicioArchivos, servicioAuth } from '../lib/servicios'
-import { combinarDatosSesion, type DatosDemo, type DatosSesion } from '../lib/datos'
+import { combinarDatosSesion, type DatosSesion } from '../lib/datos'
 import type {
   Rol,
   PageId,
@@ -26,18 +26,8 @@ import type {
   AuthScreen,
   LoginReason,
 } from '../types'
-import {
-  NOTIFICACIONES,
-  HISTORIAL,
-} from '../data/demo'
 import { canAccess } from '../config/permissions'
 import { estaVencida, hoyLocal } from '../lib/tareas'
-
-// Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
-const DEMO: DatosDemo = {
-  notificaciones: NOTIFICACIONES,
-  historial: HISTORIAL,
-}
 
 export type EstadoDatosSesion = 'pendiente' | 'cargando' | 'listo' | 'error'
 
@@ -147,8 +137,8 @@ type Action =
   | { type: 'ADD_COMENTARIO_GLOBAL'; comentario: ComentarioGlobal }
   | { type: 'APPEND_AUDIT'; entrada: EntradaHistorial }
   | { type: 'UPSERT_CONSULTORIA'; consultoria: Consultoria }
-  | { type: 'MARCAR_LEIDA'; id: string }
-  | { type: 'MARCAR_TODAS_LEIDAS' }
+  // Solo después de que la BD las guardó (useAccionesNotificacion).
+  | { type: 'MARCAR_LEIDAS'; ids: string[] }
   | { type: 'SET_SAVE_STATE'; state: SaveState }
 
 function reducer(state: AppState, action: Action): AppState {
@@ -322,16 +312,13 @@ function reducer(state: AppState, action: Action): AppState {
           : [...state.consultorias, action.consultoria],
       }
     }
-    case 'MARCAR_LEIDA':
+    case 'MARCAR_LEIDAS': {
+      const ids = new Set(action.ids)
       return {
         ...state,
-        notificaciones: state.notificaciones.map((n) => n.id === action.id ? { ...n, leida: true } : n),
+        notificaciones: state.notificaciones.map((n) => ids.has(n.id) ? { ...n, leida: true } : n),
       }
-    case 'MARCAR_TODAS_LEIDAS':
-      return {
-        ...state,
-        notificaciones: state.notificaciones.map((n) => ({ ...n, leida: true })),
-      }
+    }
     case 'SET_SAVE_STATE':
       return { ...state, saveState: action.state }
     default:
@@ -405,7 +392,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     }
   }, [])
 
-  // Con usuario en sesión: traer de la BD lo que el RLS le deja ver y combinarlo con el demo.
+  // Con usuario en sesión: traer de la BD lo que el RLS le deja ver (ya no queda nada de demo).
   // Depende SOLO de lo que debe reiniciar la carga (otro usuario o "Reintentar"). Si
   // dependiera de datosSesion, el propio dispatch('cargando') dispararía el cleanup y
   // cancelaría esta misma carga: la app quedaría en "Cargando…" para siempre.
@@ -418,7 +405,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     async function cargar() {
       const resultado = await cargarFilasDeSesion()
       if (!resultado.ok) return null
-      const datos = combinarDatosSesion(resultado.filas, DEMO)
+      const datos = combinarDatosSesion(resultado.filas)
       // Los archivos son privados: cada evidencia recibe una URL firmada que vence.
       return { ...datos, evidencias: await servicioArchivos.firmarEvidencias(datos.evidencias) }
     }
@@ -488,18 +475,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     [state.tareas, state.entregables]
   )
 
-  const usuarioSesion = state.usuarios.find((item) => item.email === state.currentUser?.email)
-  const usuarioCliente = usuarioSesion?.empresaId
-    ? usuarioSesion
-    : state.usuarios.find((item) => item.rol === 'Usuario Cliente' && item.activo)
-  const proyectosCliente = new Set(
-    state.proyectos.filter((item) => item.empresaId === usuarioCliente?.empresaId).map((item) => item.id)
-  )
+  // mis_notificaciones() ya trae solo las de este usuario; la página es un resguardo de UX.
   const unreadCount = state.notificaciones.filter(
-    (n) =>
-      !n.leida &&
-      (!n.pagina || canAccess(n.pagina, state.currentRole)) &&
-      (state.currentRole !== 'Usuario Cliente' || !n.proyectoId || proyectosCliente.has(n.proyectoId))
+    (n) => !n.leida && (!n.pagina || canAccess(n.pagina, state.currentRole))
   ).length
   const hoy = hoyLocal()
   const tareasVencidas = state.tareas.filter((t) => estaVencida(t, hoy)).length

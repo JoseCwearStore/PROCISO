@@ -950,3 +950,29 @@ describe('guardarIndicador', () => {
     expect(await escrituras.guardarIndicador(C1, IND, false)).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })
+
+describe('marcarNotificacionesLeidas', () => {
+  it('marca varias claves en una sola llamada (la BD pone el usuario)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    const resultado = await crearServicioEscritura(cliente).marcarNotificacionesLeidas(['h:1', 'tarea_vencida:t1'])
+
+    expect(resultado).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      { tabla: 'marcar_notificaciones_leidas', operacion: 'rpc', datos: { p_claves: ['h:1', 'tarea_vencida:t1'] } },
+    ])
+  })
+
+  it('no llama a la BD si no hay nada que marcar', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).marcarNotificacionesLeidas([])).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([])
+  })
+
+  it('traduce el rechazo de la BD a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'marcar_notificaciones_leidas.rpc': { data: null, error: ERROR_RLS } })
+
+    expect(await crearServicioEscritura(cliente).marcarNotificacionesLeidas(['h:1'])).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})

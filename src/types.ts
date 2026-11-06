@@ -359,7 +359,18 @@ export interface EntradaHistorial {
   accion: string
   descripcion: string
   entidadId: string
-  entidadTipo: 'proyecto' | 'empresa' | 'tarea' | 'documento' | 'evidencia'
+  // Los mismos tipos que acepta public.historial.
+  entidadTipo:
+    | 'consultoria'
+    | 'empresa'
+    | 'proyecto'
+    | 'proceso'
+    | 'evidencia'
+    | 'documento'
+    | 'usuario'
+    | 'tarea'
+    | 'no_conformidad'
+    | 'entregable'
 }
 
 export interface NoConformidad {

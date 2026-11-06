@@ -6,15 +6,12 @@ import {
   formatearFecha,
   iniciales,
   type ClienteDatos,
-  type DatosDemo,
   type FilasSesion,
 } from './datos'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
 const E1 = '22222222-0000-0000-0000-000000000001'
-const E2 = '22222222-0000-0000-0000-000000000002'
 const P1 = '33333333-0000-0000-0000-000000000001'
-const P2 = '33333333-0000-0000-0000-000000000002'
 const ANA = 'aaaaaaaa-0000-0000-0000-000000000002'
 const ROBERTO = 'aaaaaaaa-0000-0000-0000-000000000003'
 const CARLOS = 'aaaaaaaa-0000-0000-0000-000000000005'
@@ -148,24 +145,19 @@ function filasBase(): FilasSesion {
       { id: 'com-ev', entidad_tipo: 'evidencia', entidad_id: 'ev-p1', seccion_id: null, autor_id: ROBERTO, texto: 'Otra entidad', creado_en: '2024-07-19T10:00:00+00:00' },
       { id: 'com-t1', entidad_tipo: 'tarea', entidad_id: 'tar-p1', seccion_id: null, autor_id: CARLOS, texto: 'Listo', creado_en: '2024-09-12T10:00:00+00:00' },
     ],
-  }
-}
-
-// Datos de demo de DOS proyectos: P1 (visible) y P2 (de otra empresa, no visible).
-function demoBase(): DatosDemo {
-  return {
+    // Lo que devuelve mis_notificaciones(): ya calculado y filtrado por la BD.
     notificaciones: [
-      { id: 'n-global' },
-      { id: 'n-p1', proyectoId: P1 },
-      { id: 'n-p2', proyectoId: P2 },
-    ] as Notificacion[],
-    historial: [
-      { id: 'h-e1', entidadTipo: 'empresa', entidadId: E1 },
-      { id: 'h-e2', entidadTipo: 'empresa', entidadId: E2 },
-      { id: 'h-p2', entidadTipo: 'proyecto', entidadId: P2 },
-      { id: 'h-doc-p1', entidadTipo: 'documento', entidadId: 'doc-p1' },
-      { id: 'h-doc-p2', entidadTipo: 'documento', entidadId: 'doc-p2' },
-    ] as EntradaHistorial[],
+      {
+        clave: 'tarea_vencida:tar-p1', tipo: 'error', titulo: 'Tarea vencida: Cargar evidencias de compras',
+        descripcion: 'Venció el 30/09/2024 sin completarse.', fecha: '2024-10-01T10:00:00+00:00',
+        pagina: 'tablero-tareas', proyecto_id: P1, entidad_tipo: 'tarea', entidad_id: 'tar-p1', leida: false,
+      },
+      {
+        clave: 'h:9', tipo: 'warning', titulo: 'Documento con correcciones', descripcion: '"Manual" v1.0: corrección solicitada.',
+        fecha: '2024-03-25T10:00:00+00:00', pagina: 'documentacion', proyecto_id: P1, entidad_tipo: 'documento',
+        entidad_id: 'doc-p1', leida: true,
+      },
+    ],
   }
 }
 
@@ -191,7 +183,7 @@ describe('iniciales', () => {
 
 describe('combinarDatosSesion', () => {
   it('traduce la empresa y le asigna sus proyectos visibles', () => {
-    const { empresas } = combinarDatosSesion(filasBase(), demoBase())
+    const { empresas } = combinarDatosSesion(filasBase())
 
     expect(empresas).toHaveLength(1)
     expect(empresas[0]).toMatchObject({
@@ -209,7 +201,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce el proyecto con sus fases ordenadas y su equipo sin repetidos', () => {
-    const { proyectos } = combinarDatosSesion(filasBase(), demoBase())
+    const { proyectos } = combinarDatosSesion(filasBase())
 
     expect(proyectos[0]).toMatchObject({
       id: P1,
@@ -226,7 +218,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('arma los usuarios desde los perfiles, con sus proyectos según el rol', () => {
-    const { usuarios } = combinarDatosSesion(filasBase(), demoBase())
+    const { usuarios } = combinarDatosSesion(filasBase())
     const porId = Object.fromEntries(usuarios.map((usuario) => [usuario.id, usuario]))
 
     expect(porId[ANA]).toMatchObject({ rol: 'Admin Consultoría', consultoriaId: C1, proyectosAsignados: [P1] })
@@ -235,21 +227,21 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce la consultoría', () => {
-    const { consultorias } = combinarDatosSesion(filasBase(), demoBase())
+    const { consultorias } = combinarDatosSesion(filasBase())
 
     expect(consultorias).toEqual([
       expect.objectContaining({ id: C1, nombre: 'COWIN Consultores', limiteUsuarios: 20, fechaAlta: '10/01/2026' }),
     ])
   })
 
-  it('descarta los datos de demo de proyectos que la BD no deja ver', () => {
-    const datos = combinarDatosSesion(filasBase(), demoBase())
+  it('trae solo los documentos que la BD deja ver', () => {
+    const datos = combinarDatosSesion(filasBase())
 
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
   })
 
   it('traduce los indicadores; un valor vacío es "sin datos" (undefined), no "0"', () => {
-    const { indicadores } = combinarDatosSesion(filasBase(), demoBase())
+    const { indicadores } = combinarDatosSesion(filasBase())
 
     expect(indicadores).toEqual<IndicadorGestion[]>([
       {
@@ -260,7 +252,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce los entregables de la BD con su aprobación y su documento', () => {
-    const { entregables } = combinarDatosSesion(filasBase(), demoBase())
+    const { entregables } = combinarDatosSesion(filasBase())
 
     expect(entregables).toEqual<Entregable[]>([
       {
@@ -271,7 +263,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce las listas de verificación con su empresa y sus preguntas en orden', () => {
-    const { listasVerificacion } = combinarDatosSesion(filasBase(), demoBase())
+    const { listasVerificacion } = combinarDatosSesion(filasBase())
 
     expect(listasVerificacion).toEqual<ListaVerificacion[]>([
       {
@@ -293,7 +285,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce las no conformidades de la BD con folio, empresa, acciones e historial', () => {
-    const { noConformidades } = combinarDatosSesion(filasBase(), demoBase())
+    const { noConformidades } = combinarDatosSesion(filasBase())
 
     expect(noConformidades).toEqual<NoConformidad[]>([
       {
@@ -330,7 +322,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce las tareas de la BD con su historial y comentarios ordenados', () => {
-    const { tareas } = combinarDatosSesion(filasBase(), demoBase())
+    const { tareas } = combinarDatosSesion(filasBase())
 
     expect(tareas).toEqual<Tarea[]>([
       {
@@ -355,7 +347,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce los procesos de la BD con sus actividades ordenadas y sus vínculos', () => {
-    const { procesos } = combinarDatosSesion(filasBase(), demoBase())
+    const { procesos } = combinarDatosSesion(filasBase())
 
     expect(procesos).toHaveLength(1)
     expect(procesos[0]).toMatchObject({
@@ -378,7 +370,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce las evidencias de la BD con su autor, empresa e historial en orden', () => {
-    const { evidencias } = combinarDatosSesion(filasBase(), demoBase())
+    const { evidencias } = combinarDatosSesion(filasBase())
 
     expect(evidencias).toEqual([
       {
@@ -406,7 +398,7 @@ describe('combinarDatosSesion', () => {
   })
 
   it('traduce los documentos de la BD con versiones, evidencias vinculadas e historial', () => {
-    const { documentos } = combinarDatosSesion(filasBase(), demoBase())
+    const { documentos } = combinarDatosSesion(filasBase())
 
     expect(documentos).toHaveLength(1)
     expect(documentos[0]).toMatchObject({
@@ -437,16 +429,32 @@ describe('combinarDatosSesion', () => {
     expect(documentos[0].aprobadoPorId).toBeUndefined()
   })
 
-  it('conserva las notificaciones generales y descarta las de proyectos no visibles', () => {
-    const { notificaciones } = combinarDatosSesion(filasBase(), demoBase())
+  it('traduce las notificaciones calculadas por la BD (la clave es el id)', () => {
+    const { notificaciones } = combinarDatosSesion(filasBase())
 
-    expect(ids(notificaciones)).toEqual(['n-global', 'n-p1'])
+    expect(notificaciones).toEqual<Notificacion[]>([
+      {
+        id: 'tarea_vencida:tar-p1', tipo: 'error', titulo: 'Tarea vencida: Cargar evidencias de compras',
+        descripcion: 'Venció el 30/09/2024 sin completarse.', fecha: '01/10/2024', leida: false,
+        pagina: 'tablero-tareas', proyectoId: P1,
+      },
+      {
+        id: 'h:9', tipo: 'warning', titulo: 'Documento con correcciones', descripcion: '"Manual" v1.0: corrección solicitada.',
+        fecha: '25/03/2024', leida: true, pagina: 'documentacion', proyectoId: P1,
+      },
+    ])
   })
 
-  it('filtra el historial según la entidad a la que se refiere', () => {
-    const { historial } = combinarDatosSesion(filasBase(), demoBase())
+  it('arma la actividad con el historial real, del más nuevo al más viejo', () => {
+    const { historial } = combinarDatosSesion(filasBase())
 
-    expect(ids(historial)).toEqual(['h-e1', 'h-doc-p1'])
+    expect(ids(historial)).toEqual(['11', '10', '21', '20', '9', '8', '7'])
+    expect(historial[0]).toEqual<EntradaHistorial>({
+      id: '11', fecha: '12/09/2024', autorId: CARLOS, accion: 'Cambio de estado', descripcion: 'Listo',
+      entidadId: 'tar-p1', entidadTipo: 'tarea',
+    })
+    // Sin descripción, se explica con el cambio de estado.
+    expect(historial[1].descripcion).toBe('Pendiente → En proceso')
   })
 })
 
@@ -480,22 +488,37 @@ describe('cargarFilasSesion', () => {
         select: async (_columnas: string) =>
           error && tabla === 'proyectos' ? { data: null, error } : { data: porTabla[tabla], error: null },
       })),
+      rpc: vi.fn(async (_funcion: 'mis_notificaciones') =>
+        errorRpc ? { data: null, error: errorRpc } : { data: filas.notificaciones, error: null },
+      ),
     } satisfies ClienteDatos
     return cliente
   }
+  let errorRpc: { message: string } | null = null
 
-  it('lee las veinte tablas y devuelve sus filas', async () => {
+  it('lee las veinte tablas y las notificaciones calculadas', async () => {
+    errorRpc = null
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
     expect(cliente.from).toHaveBeenCalledTimes(20)
+    expect(cliente.rpc).toHaveBeenCalledWith('mis_notificaciones')
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {
+    errorRpc = null
     const cliente = crearClienteDoble({ message: 'Failed to fetch' })
 
     expect(await cargarFilasSesion(cliente)).toEqual({ ok: false })
+  })
+
+  it('falla si las notificaciones no se pudieron calcular', async () => {
+    errorRpc = { message: 'permission denied for function mis_notificaciones' }
+    const cliente = crearClienteDoble()
+
+    expect(await cargarFilasSesion(cliente)).toEqual({ ok: false })
+    errorRpc = null
   })
 })

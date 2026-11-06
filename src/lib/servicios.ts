@@ -35,6 +35,7 @@ function adaptarClienteDatos(cliente: SupabaseClient): ClienteDatos {
     from: (tabla) => ({
       select: (columnas) => cliente.from(tabla).select(columnas),
     }),
+    rpc: (funcion) => cliente.rpc(funcion),
   }
 }
 
