@@ -6,7 +6,6 @@ import { StatusBadge } from '../components/ui/StatusBadge'
 import { Modal } from '../components/ui/Modal'
 import { EmptyState } from '../components/ui/EmptyState'
 import type { Tarea, EstadoTarea } from '../types'
-import { USUARIOS } from '../data/demo'
 
 const ESTADOS: EstadoTarea[] = ['Pendiente', 'En proceso', 'En revisión', 'Requiere corrección', 'Completada', 'Vencida']
 const PRIORIDADES = ['Alta', 'Media', 'Baja'] as const

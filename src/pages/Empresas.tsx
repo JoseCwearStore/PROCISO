@@ -9,7 +9,6 @@ import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { Tabs } from '../components/ui/Tabs'
-import { USUARIOS, HISTORIAL } from '../data/demo'
 import type { Empresa, Proyecto } from '../types'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -77,7 +76,8 @@ function EmpresaForm({
 }) {
   const [form, setForm] = useState<FormData>(initial)
   const [errors, setErrors] = useState<Partial<FormData>>({})
-  const consultores = USUARIOS.filter((u) => u.rol === 'Consultor' || u.rol === 'Admin Consultoría')
+  const { state } = useApp()
+  const consultores = state.usuarios.filter((u) => u.rol === 'Consultor' || u.rol === 'Admin Consultoría')
 
   function set(field: keyof FormData, value: string) {
     setForm((f) => ({ ...f, [field]: value }))
@@ -264,9 +264,9 @@ export function EmpresaDetalle() {
   const procesos = proyectosEmpresa.flatMap((p) => getProcesos(p.id))
   const documentos = proyectosEmpresa.flatMap((p) => getDocumentos(p.id))
   const evidenciasEmpresa = state.evidencias.filter((ev) => proyectosEmpresa.some((p) => p.id === ev.proyectoId))
-  const usuariosEmpresa = USUARIOS.filter((u) => u.empresaId === empresa.id)
-  const historialEmpresa = HISTORIAL.filter((h) => h.entidadId === empresa.id || proyectosEmpresa.some((p) => p.id === h.entidadId))
-  const consultor = USUARIOS.find((u) => u.id === empresa.consultorAsignadoId)
+  const usuariosEmpresa = state.usuarios.filter((u) => u.empresaId === empresa.id)
+  const historialEmpresa = state.auditoria.filter((h) => h.entidadId === empresa.id || proyectosEmpresa.some((p) => p.id === h.entidadId))
+  const consultor = state.usuarios.find((u) => u.id === empresa.consultorAsignadoId)
 
   function handleArchive() {
     dispatch({ type: 'UPDATE_EMPRESA', id: empresa!.id, updates: { activa: false } })

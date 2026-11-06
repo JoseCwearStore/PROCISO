@@ -32,11 +32,7 @@ import { useApp } from '../context/AppContext'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import type { PageId } from '../types'
-import {
-  HISTORIAL,
-  EVOLUCION_AVANCE,
-  USUARIOS,
-} from '../data/demo'
+import { EVOLUCION_AVANCE } from '../data/demo'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
 
@@ -214,8 +210,8 @@ export function Dashboard() {
   // ── Filter options ────────────────────────────────────────────────────────
 
   const consultores = useMemo(
-    () => USUARIOS.filter((u) => u.rol === 'Consultor' || u.rol === 'Admin Consultoría'),
-    []
+    () => state.usuarios.filter((u) => u.rol === 'Consultor' || u.rol === 'Admin Consultoría'),
+    [state.usuarios]
   )
 
   const periodosDisponibles = useMemo(() => {
@@ -382,10 +378,10 @@ export function Dashboard() {
 
   const historialReciente = useMemo(
     () =>
-      [...HISTORIAL]
+      [...state.auditoria]
         .sort((a, b) => parseDate(b.fecha).getTime() - parseDate(a.fecha).getTime())
         .slice(0, 5),
-    []
+    [state.auditoria]
   )
 
   // ── Styles ────────────────────────────────────────────────────────────────

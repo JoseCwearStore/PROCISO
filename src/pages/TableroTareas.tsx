@@ -14,7 +14,6 @@ import {
   Info,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
-import { USUARIOS } from '../data/demo'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -96,7 +95,8 @@ function avatarColor(id: string): string {
 }
 
 function Avatar({ userId }: { userId: string }) {
-  const usuario = USUARIOS.find((u) => u.id === userId)
+  const { state } = useApp()
+  const usuario = state.usuarios.find((u) => u.id === userId)
   const name = usuario?.nombre ?? userId
   const initials = getInitials(name)
   return (
@@ -246,7 +246,7 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
   if (!localTarea) return null
 
   const proyecto = getProyecto(localTarea.proyectoId)
-  const usuario = USUARIOS.find((u) => u.id === localTarea.asignadoAId)
+  const usuario = state.usuarios.find((u) => u.id === localTarea.asignadoAId)
   const completandoAhora = localTarea.estado === 'Completada' && tarea?.estado !== 'Completada'
 
   function handleGuardar() {
@@ -365,7 +365,7 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
               value={localTarea.asignadoAId}
               onChange={(e) => setLocalTarea({ ...localTarea, asignadoAId: e.target.value })}
             >
-              {USUARIOS.map((u) => (
+              {state.usuarios.map((u) => (
                 <option key={u.id} value={u.id}>{u.nombre}</option>
               ))}
             </select>
@@ -413,7 +413,7 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
             <label className="block text-xs font-semibold text-slate-500 mb-2">Historial de cambios</label>
             <ul className="space-y-2">
               {localTarea.historial.map((h, i) => {
-                const autor = USUARIOS.find((u) => u.id === h.autorId)
+                const autor = state.usuarios.find((u) => u.id === h.autorId)
                 return (
                   <li key={i} className="flex items-center gap-2 text-xs text-slate-500">
                     <Clock className="w-3.5 h-3.5 flex-shrink-0" />
@@ -441,7 +441,7 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
           {localTarea.comentarios.length > 0 && (
             <ul className="space-y-2 mb-3">
               {localTarea.comentarios.map((c) => {
-                const autor = USUARIOS.find((u) => u.id === c.autorId)
+                const autor = state.usuarios.find((u) => u.id === c.autorId)
                 return (
                   <li key={c.id} className="bg-slate-50 rounded-lg px-3 py-2">
                     <div className="flex items-center gap-2 mb-1">
@@ -608,7 +608,7 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
             onChange={(e) => setAsignadoAId(e.target.value)}
           >
             <option value="">Seleccionar usuario...</option>
-            {USUARIOS.filter((u) => u.activo).map((u) => (
+            {state.usuarios.filter((u) => u.activo).map((u) => (
               <option key={u.id} value={u.id}>{u.nombre}</option>
             ))}
           </select>
@@ -797,7 +797,7 @@ export default function TableroTareas() {
             onChange={(e) => setFiltros({ ...filtros, asignadoAId: e.target.value })}
           >
             <option value="">Todos los usuarios</option>
-            {USUARIOS.filter((u) => u.activo).map((u) => (
+            {state.usuarios.filter((u) => u.activo).map((u) => (
               <option key={u.id} value={u.id}>{u.nombre}</option>
             ))}
           </select>
@@ -912,7 +912,7 @@ export default function TableroTareas() {
                   <tbody>
                     {tareasOrdenadas.map((tarea, idx) => {
                       const proyecto = getProyecto(tarea.proyectoId)
-                      const usuario = USUARIOS.find((u) => u.id === tarea.asignadoAId)
+                      const usuario = state.usuarios.find((u) => u.id === tarea.asignadoAId)
                       const vencida = isVencida(tarea.fechaVencimiento)
                       return (
                         <tr

@@ -115,15 +115,32 @@ insert into public.proyecto_miembros (proyecto_id, usuario_id, consultoria_id) v
   ('33333333-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001'),
   ('33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001');
 
+-- Las mismas 5 fases que muestra src/data/demo.ts, con el avance de cada proyecto.
 insert into public.fases (consultoria_id, proyecto_id, nombre, estado, avance, orden)
-select '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', f.nombre, f.estado, f.avance, f.orden
+select p.consultoria_id, p.id, f.nombre, f.estado, f.avance, f.orden
 from (values
-  ('Diagnóstico',               'Completada', 100, 1),
-  ('Recopilación de información','Completada', 100, 2),
-  ('Análisis de procesos',      'En curso',    40, 3),
-  ('Elaboración documental',    'Pendiente',    0, 4),
-  ('Revisión y validación',     'Pendiente',    0, 5)
-) as f (nombre, estado, avance, orden);
+  ('33333333-0000-0000-0000-000000000001'::uuid, 'Diagnóstico inicial',           'Completada', 100, 1),
+  ('33333333-0000-0000-0000-000000000001'::uuid, 'Levantamiento de procesos',     'Completada', 100, 2),
+  ('33333333-0000-0000-0000-000000000001'::uuid, 'Documentación del SGC',         'En curso',    60, 3),
+  ('33333333-0000-0000-0000-000000000001'::uuid, 'Implementación y capacitación', 'Pendiente',    0, 4),
+  ('33333333-0000-0000-0000-000000000001'::uuid, 'Auditoría interna',             'Pendiente',    0, 5),
+  ('33333333-0000-0000-0000-000000000002'::uuid, 'Diagnóstico inicial',           'En curso',    75, 1),
+  ('33333333-0000-0000-0000-000000000002'::uuid, 'Levantamiento de procesos',     'Pendiente',    0, 2),
+  ('33333333-0000-0000-0000-000000000002'::uuid, 'Documentación del SGC',         'Pendiente',    0, 3),
+  ('33333333-0000-0000-0000-000000000002'::uuid, 'Implementación y capacitación', 'Pendiente',    0, 4),
+  ('33333333-0000-0000-0000-000000000002'::uuid, 'Auditoría interna',             'Pendiente',    0, 5),
+  ('33333333-0000-0000-0000-000000000003'::uuid, 'Diagnóstico inicial',           'En curso',    30, 1),
+  ('33333333-0000-0000-0000-000000000003'::uuid, 'Levantamiento de procesos',     'Pendiente',    0, 2),
+  ('33333333-0000-0000-0000-000000000003'::uuid, 'Documentación del SGC',         'Pendiente',    0, 3),
+  ('33333333-0000-0000-0000-000000000003'::uuid, 'Implementación y capacitación', 'Pendiente',    0, 4),
+  ('33333333-0000-0000-0000-000000000003'::uuid, 'Auditoría interna',             'Pendiente',    0, 5),
+  ('33333333-0000-0000-0000-000000000004'::uuid, 'Diagnóstico inicial',           'Completada', 100, 1),
+  ('33333333-0000-0000-0000-000000000004'::uuid, 'Levantamiento de procesos',     'Completada', 100, 2),
+  ('33333333-0000-0000-0000-000000000004'::uuid, 'Documentación del SGC',         'Completada', 100, 3),
+  ('33333333-0000-0000-0000-000000000004'::uuid, 'Implementación y capacitación', 'Completada', 100, 4),
+  ('33333333-0000-0000-0000-000000000004'::uuid, 'Auditoría interna',             'Completada', 100, 5)
+) as f (proyecto_id, nombre, estado, avance, orden)
+join public.proyectos p on p.id = f.proyecto_id;
 
 -- ─── Procesos y actividades (Marketino) ─────────────────────────────────────
 

@@ -27,8 +27,7 @@ import { DataTable } from '../components/ui/DataTable'
 import { Modal } from '../components/ui/Modal'
 import { Tabs } from '../components/ui/Tabs'
 import type { Column } from '../components/ui/DataTable'
-import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId } from '../types'
-import { USUARIOS } from '../data/demo'
+import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId, Usuario } from '../types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -107,7 +106,7 @@ function NuevoProyectoModal({
   open: boolean
   onClose: () => void
   empresas: { id: string; nombre: string }[]
-  consultores: typeof USUARIOS
+  consultores: Usuario[]
   onCreated: (data: {
     nombre: string; empresaId: string; consultorId: string; edicionNorma: Proyecto['edicionNorma']
     objetivo: string; alcance: string; fechaInicio: string; fechaFinEstimada: string
@@ -227,7 +226,7 @@ function ListView({
   onNew: () => void
   calcularAvance: (id: string) => number
   getEmpresa: (id: string) => { nombre: string; logoInicial: string } | undefined
-  getUsuario: (id: string) => (typeof USUARIOS)[0] | undefined
+  getUsuario: (id: string) => Usuario | undefined
 }) {
   const columns: Column<ProyRow>[] = [
     {
@@ -325,7 +324,7 @@ function TarjetasView({
   onNew: () => void
   calcularAvance: (id: string) => number
   getEmpresa: (id: string) => { nombre: string; logoInicial: string } | undefined
-  getUsuario: (id: string) => (typeof USUARIOS)[0] | undefined
+  getUsuario: (id: string) => Usuario | undefined
 }) {
   if (proyectos.length === 0) {
     return (
@@ -574,7 +573,7 @@ export function Proyectos() {
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOver, setDragOver] = useState<EstadoProyecto | null>(null)
 
-  const consultores = USUARIOS.filter((u) => u.rol === 'Consultor')
+  const consultores = state.usuarios.filter((u) => u.rol === 'Consultor')
 
   let filtered = state.proyectos
   if (filterEmpresa) filtered = filtered.filter((p) => p.empresaId === filterEmpresa)
@@ -729,7 +728,7 @@ export function Proyectos() {
 function TabResumen({ proyecto, empresa, consultor, avance }: {
   proyecto: Proyecto
   empresa: { nombre: string } | undefined
-  consultor: (typeof USUARIOS)[0] | undefined
+  consultor: Usuario | undefined
   avance: number
 }) {
   const phaseColorMap: Record<Fase['estado'], 'green' | 'blue' | 'amber'> = {
@@ -822,7 +821,7 @@ function TabResumen({ proyecto, empresa, consultor, avance }: {
 
 function TabTareas({ tareas, getUsuario, navigate }: {
   tareas: Tarea[]
-  getUsuario: (id: string) => (typeof USUARIOS)[0] | undefined
+  getUsuario: (id: string) => Usuario | undefined
   navigate: (page: PageId, params?: NavParams) => void
 }) {
   const prioridadColor: Record<string, string> = {
@@ -948,8 +947,8 @@ function TabDocumentos({ documentos }: { documentos: Documento[] }) {
   )
 }
 
-function TabEquipo({ equipo }: { equipo: ((typeof USUARIOS)[0] | undefined)[] }) {
-  const members = equipo.filter(Boolean) as (typeof USUARIOS)[0][]
+function TabEquipo({ equipo }: { equipo: (Usuario | undefined)[] }) {
+  const members = equipo.filter(Boolean) as Usuario[]
   const rolColor: Record<string, string> = {
     'Admin PROCISO': 'bg-purple-100 text-purple-700',
     'Admin Consultoría': 'bg-blue-100 text-blue-700',

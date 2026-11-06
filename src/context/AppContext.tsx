@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
-import { llegoDesdeEnlaceDeRecuperacion, servicioAuth } from '../lib/servicios'
+import { cargarFilasDeSesion, llegoDesdeEnlaceDeRecuperacion, servicioAuth } from '../lib/servicios'
+import { combinarDatosSesion, type DatosDemo, type DatosSesion } from '../lib/datos'
 import type {
   Rol,
   PageId,
@@ -26,10 +27,6 @@ import type {
   LoginReason,
 } from '../types'
 import {
-  CONSULTORIA,
-  USUARIOS,
-  EMPRESAS,
-  PROYECTOS,
   PROCESOS,
   EVIDENCIAS,
   DOCUMENTOS,
@@ -40,6 +37,36 @@ import {
   HISTORIAL,
 } from '../data/demo'
 import { canAccess } from '../config/permissions'
+
+// Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
+const DEMO: DatosDemo = {
+  procesos: PROCESOS,
+  evidencias: EVIDENCIAS,
+  documentos: DOCUMENTOS,
+  tareas: TAREAS,
+  entregables: ENTREGABLES,
+  noConformidades: NO_CONFORMIDADES,
+  notificaciones: NOTIFICACIONES,
+  historial: HISTORIAL,
+}
+
+export type EstadoDatosSesion = 'pendiente' | 'cargando' | 'listo' | 'error'
+
+// Al cerrar sesión no puede quedar en memoria nada del usuario anterior.
+const SIN_DATOS = {
+  empresas: [],
+  proyectos: [],
+  tareas: [],
+  entregables: [],
+  procesos: [],
+  evidencias: [],
+  documentos: [],
+  usuarios: [],
+  noConformidades: [],
+  auditoria: [],
+  consultorias: [],
+  notificaciones: [],
+} satisfies Partial<AppState>
 
 interface CurrentUser {
   id: string
@@ -62,6 +89,8 @@ interface AppState {
   saveState: SaveState
   sidebarOpen: boolean
   sidebarCollapsed: boolean
+  datosSesion: EstadoDatosSesion
+  intentoCarga: number
   empresas: Empresa[]
   proyectos: Proyecto[]
   tareas: Tarea[]
@@ -87,6 +116,10 @@ type Action =
   | { type: 'LOGIN_FAIL'; error: string }
   | { type: 'LOGIN_RESET_ATTEMPTS' }
   | { type: 'LOGOUT'; reason?: LoginReason }
+  | { type: 'DATOS_CARGANDO' }
+  | { type: 'DATOS_CARGADOS'; datos: DatosSesion }
+  | { type: 'DATOS_ERROR' }
+  | { type: 'DATOS_REINTENTAR' }
   | { type: 'SET_ROLE'; role: Rol }
   | { type: 'NAVIGATE'; page: PageId; params?: NavParams }
   | { type: 'DISMISS_BANNER' }
@@ -146,12 +179,26 @@ function reducer(state: AppState, action: Action): AppState {
     case 'LOGOUT':
       return {
         ...state,
+        ...SIN_DATOS,
         authScreen: 'login',
         loginReason: action.reason,
         currentUser: null,
         loginAttempts: 0,
         loginError: null,
+        datosSesion: 'pendiente',
+        currentPage: 'inicio',
+        navParams: {},
       }
+    case 'DATOS_CARGANDO':
+      return { ...state, datosSesion: 'cargando' }
+    case 'DATOS_CARGADOS': {
+      const { historial, ...resto } = action.datos
+      return { ...state, ...resto, auditoria: historial, datosSesion: 'listo' }
+    }
+    case 'DATOS_ERROR':
+      return { ...state, datosSesion: 'error' }
+    case 'DATOS_REINTENTAR':
+      return { ...state, datosSesion: 'pendiente', intentoCarga: state.intentoCarga + 1 }
     case 'SET_ROLE':
       return { ...state, currentRole: action.role, currentPage: 'inicio', navParams: {} }
     case 'NAVIGATE':
@@ -330,28 +377,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     saveState: 'saved',
     sidebarOpen: false,
     sidebarCollapsed: false,
-    empresas: EMPRESAS,
-    proyectos: PROYECTOS,
-    tareas: TAREAS,
-    entregables: ENTREGABLES,
-    procesos: PROCESOS,
-    evidencias: EVIDENCIAS,
-    documentos: DOCUMENTOS,
-    usuarios: USUARIOS,
-    noConformidades: NO_CONFORMIDADES,
+    datosSesion: 'pendiente',
+    intentoCarga: 0,
+    ...SIN_DATOS,
     listasVerificacion: [],
     indicadores: [],
     comentariosGlobales: [],
-    auditoria: HISTORIAL,
-    consultorias: [{
-      ...CONSULTORIA,
-      activa: true,
-      contacto: 'Ana García López',
-      email: 'ana@demo.mx',
-      limiteUsuarios: 10,
-      almacenamientoGb: 5,
-    }],
-    notificaciones: NOTIFICACIONES,
     toasts: [],
     modal: null,
   })
@@ -378,6 +409,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       cancelado = true
     }
   }, [])
+
+  // Con usuario en sesión: traer de la BD lo que el RLS le deja ver y combinarlo con el demo.
+  // Depende SOLO de lo que debe reiniciar la carga (otro usuario o "Reintentar"). Si
+  // dependiera de datosSesion, el propio dispatch('cargando') dispararía el cleanup y
+  // cancelaría esta misma carga: la app quedaría en "Cargando…" para siempre.
+  const usuarioId = state.currentUser?.id
+  const intentoCarga = state.intentoCarga
+  useEffect(() => {
+    if (!usuarioId) return
+    let cancelado = false
+    dispatch({ type: 'DATOS_CARGANDO' })
+    cargarFilasDeSesion()
+      .catch(() => ({ ok: false as const }))
+      .then((resultado) => {
+        if (cancelado) return
+        if (resultado.ok) dispatch({ type: 'DATOS_CARGADOS', datos: combinarDatosSesion(resultado.filas, DEMO) })
+        else dispatch({ type: 'DATOS_ERROR' })
+      })
+    return () => {
+      cancelado = true
+    }
+  }, [usuarioId, intentoCarga])
 
   const navigate = useCallback((page: PageId, params?: NavParams) => {
     dispatch({ type: 'NAVIGATE', page, params })
