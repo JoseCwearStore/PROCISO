@@ -28,7 +28,6 @@ import type {
 } from '../types'
 import {
   NOTIFICACIONES,
-  ENTREGABLES,
   HISTORIAL,
 } from '../data/demo'
 import { canAccess } from '../config/permissions'
@@ -36,7 +35,6 @@ import { estaVencida, hoyLocal } from '../lib/tareas'
 
 // Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
 const DEMO: DatosDemo = {
-  entregables: ENTREGABLES,
   notificaciones: NOTIFICACIONES,
   historial: HISTORIAL,
 }

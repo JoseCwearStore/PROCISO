@@ -156,7 +156,7 @@ export const PROYECTOS: Proyecto[] = [
       { id: 'f001-5', nombre: 'Auditoría interna', estado: 'Pendiente', avance: 0, orden: 5 },
     ],
     procesosIds: ['55555555-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', '55555555-0000-0000-0000-000000000003', '55555555-0000-0000-0000-000000000004'],
-    entregablesIds: ['ent-001', 'ent-002', 'ent-003', 'ent-004', 'ent-005', 'ent-006', 'ent-007'],
+    entregablesIds: ['bbbbbbbb-0000-0000-0000-000000000001', 'bbbbbbbb-0000-0000-0000-000000000002', 'bbbbbbbb-0000-0000-0000-000000000003', 'bbbbbbbb-0000-0000-0000-000000000004', 'bbbbbbbb-0000-0000-0000-000000000005', 'bbbbbbbb-0000-0000-0000-000000000006', 'bbbbbbbb-0000-0000-0000-000000000007'],
   },
   {
     id: '33333333-0000-0000-0000-000000000002',
@@ -180,7 +180,7 @@ export const PROYECTOS: Proyecto[] = [
       { id: 'f002-5', nombre: 'Auditoría interna', estado: 'Pendiente', avance: 0, orden: 5 },
     ],
     procesosIds: ['55555555-0000-0000-0000-000000000005', '55555555-0000-0000-0000-000000000006'],
-    entregablesIds: ['ent-008', 'ent-009', 'ent-010'],
+    entregablesIds: ['bbbbbbbb-0000-0000-0000-000000000008', 'bbbbbbbb-0000-0000-0000-000000000009', 'bbbbbbbb-0000-0000-0000-000000000010'],
   },
   {
     id: '33333333-0000-0000-0000-000000000004',
@@ -205,28 +205,28 @@ export const PROYECTOS: Proyecto[] = [
       { id: 'f003-5', nombre: 'Auditoría interna', estado: 'Completada', avance: 100, orden: 5 },
     ],
     procesosIds: ['55555555-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002'],
-    entregablesIds: ['ent-011', 'ent-012', 'ent-013', 'ent-014'],
+    entregablesIds: ['bbbbbbbb-0000-0000-0000-000000000011', 'bbbbbbbb-0000-0000-0000-000000000012', 'bbbbbbbb-0000-0000-0000-000000000013', 'bbbbbbbb-0000-0000-0000-000000000014'],
   },
 ]
 
 export const ENTREGABLES: Entregable[] = [
   // proy-001
-  { id: 'ent-001', nombre: 'Informe de diagnóstico inicial', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '31/03/2024', fechaAprobacion: '05/04/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: undefined },
-  { id: 'ent-002', nombre: 'Mapa de procesos del SGC', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Documento técnico', estado: 'Aprobado', fechaEntrega: '30/04/2024', fechaAprobacion: '02/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
-  { id: 'ent-003', nombre: 'Manual de calidad v1.0', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Manual', estado: 'En revisión', fechaEntrega: '30/06/2024', documentoId: '66666666-0000-0000-0000-000000000005' },
-  { id: 'ent-004', nombre: 'Procedimiento de selección de proveedores', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'En revisión', fechaEntrega: '31/07/2024', documentoId: '66666666-0000-0000-0000-000000000001' },
-  { id: 'ent-005', nombre: 'Procedimiento de control de producción', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '31/05/2024', fechaAprobacion: '30/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: '66666666-0000-0000-0000-000000000002' },
-  { id: 'ent-006', nombre: 'Procedimiento de atención a quejas', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Pendiente', fechaEntrega: '30/09/2024', documentoId: '66666666-0000-0000-0000-000000000004' },
-  { id: 'ent-007', nombre: 'Informe de auditoría interna', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Informe', estado: 'Pendiente', fechaEntrega: '30/10/2024' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000001', nombre: 'Informe de diagnóstico inicial', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '31/03/2024', fechaAprobacion: '05/04/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: undefined },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000002', nombre: 'Mapa de procesos del SGC', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Documento técnico', estado: 'Aprobado', fechaEntrega: '30/04/2024', fechaAprobacion: '02/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000003', nombre: 'Manual de calidad v1.0', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Manual', estado: 'En revisión', fechaEntrega: '30/06/2024', documentoId: '66666666-0000-0000-0000-000000000005' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000004', nombre: 'Procedimiento de selección de proveedores', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'En revisión', fechaEntrega: '31/07/2024', documentoId: '66666666-0000-0000-0000-000000000001' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000005', nombre: 'Procedimiento de control de producción', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '31/05/2024', fechaAprobacion: '30/05/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005', documentoId: '66666666-0000-0000-0000-000000000002' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000006', nombre: 'Procedimiento de atención a quejas', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Procedimiento', estado: 'Pendiente', fechaEntrega: '30/09/2024', documentoId: '66666666-0000-0000-0000-000000000004' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000007', nombre: 'Informe de auditoría interna', proyectoId: '33333333-0000-0000-0000-000000000001', tipo: 'Informe', estado: 'Pendiente', fechaEntrega: '30/10/2024' },
   // proy-002
-  { id: 'ent-008', nombre: 'Informe de diagnóstico inicial', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Informe', estado: 'En revisión', fechaEntrega: '30/09/2024' },
-  { id: 'ent-009', nombre: 'Plan de implementación', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Plan', estado: 'Aprobado', fechaEntrega: '15/08/2024', fechaAprobacion: '20/08/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000006' },
-  { id: 'ent-010', nombre: 'Mapa de procesos del SGC', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Documento técnico', estado: 'Pendiente', fechaEntrega: '31/10/2024' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000008', nombre: 'Informe de diagnóstico inicial', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Informe', estado: 'En revisión', fechaEntrega: '30/09/2024' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000009', nombre: 'Plan de implementación', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Plan', estado: 'Aprobado', fechaEntrega: '15/08/2024', fechaAprobacion: '20/08/2024', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000006' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000010', nombre: 'Mapa de procesos del SGC', proyectoId: '33333333-0000-0000-0000-000000000002', tipo: 'Documento técnico', estado: 'Pendiente', fechaEntrega: '31/10/2024' },
   // proy-003
-  { id: 'ent-011', nombre: 'Informe de revisión documental', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '28/02/2023', fechaAprobacion: '02/03/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
-  { id: 'ent-012', nombre: 'Procedimientos actualizados', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '30/06/2023', fechaAprobacion: '05/07/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
-  { id: 'ent-013', nombre: 'Informe de auditoría interna', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '31/10/2023', fechaAprobacion: '02/11/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
-  { id: 'ent-014', nombre: 'Informe de revisión por la dirección', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '15/11/2023', fechaAprobacion: '15/11/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000011', nombre: 'Informe de revisión documental', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '28/02/2023', fechaAprobacion: '02/03/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000012', nombre: 'Procedimientos actualizados', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Procedimiento', estado: 'Aprobado', fechaEntrega: '30/06/2023', fechaAprobacion: '05/07/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000013', nombre: 'Informe de auditoría interna', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '31/10/2023', fechaAprobacion: '02/11/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
+  { id: 'bbbbbbbb-0000-0000-0000-000000000014', nombre: 'Informe de revisión por la dirección', proyectoId: '33333333-0000-0000-0000-000000000004', tipo: 'Informe', estado: 'Aprobado', fechaEntrega: '15/11/2023', fechaAprobacion: '15/11/2023', aprobadoPorId: 'aaaaaaaa-0000-0000-0000-000000000005' },
 ]
 
 export const HISTORIAL: EntradaHistorial[] = [

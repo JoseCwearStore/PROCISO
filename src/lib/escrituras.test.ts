@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
-import type { FilaEmpresa, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
+import type { FilaEmpresa, FilaEntregable, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
 import type { Documento, ListaVerificacion, Proceso } from '../types'
 
 const C1 = '11111111-0000-0000-0000-000000000001'
@@ -818,5 +818,76 @@ describe('guardarLista', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.guardarLista(LISTA)).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+// ─── Entregables ──────────────────────────────────────────────────────────────
+
+const EN_NUEVO = 'bbbbbbbb-0000-0000-0000-0000000000aa'
+
+describe('registrarEntregable', () => {
+  it('inserta solo los datos del registro: el estado y la aprobación los maneja el servidor', async () => {
+    const fila: FilaEntregable = {
+      id: EN_NUEVO, proyecto_id: P_NUEVO, nombre: 'Mapa de procesos', tipo: 'Documento técnico', estado: 'Pendiente',
+      fecha_entrega: '2026-12-15', fecha_aprobacion: null, aprobado_por: null, documento_id: null,
+    }
+    const { cliente, llamadas } = crearClienteDoble({ 'entregables.insert': { data: fila, error: null } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.registrarEntregable(C1, EN_NUEVO, {
+      proyectoId: P_NUEVO, nombre: ' Mapa de procesos ', tipo: 'Documento técnico', fechaEntrega: '15/12/2026', documentoId: '',
+    })
+
+    expect(llamadas).toEqual([
+      {
+        tabla: 'entregables',
+        operacion: 'insert',
+        datos: {
+          id: EN_NUEVO, consultoria_id: C1, proyecto_id: P_NUEVO, nombre: 'Mapa de procesos', tipo: 'Documento técnico',
+          fecha_entrega: '2026-12-15', documento_id: null,
+        },
+      },
+    ])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: expect.objectContaining({ id: EN_NUEVO, estado: 'Pendiente', fechaEntrega: '15/12/2026', documentoId: undefined }),
+    })
+  })
+
+  it('no intenta guardar si el usuario no pertenece a una consultoría', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.registrarEntregable(null, EN_NUEVO, { proyectoId: P_NUEVO, nombre: 'x', tipo: '', fechaEntrega: '', documentoId: '' }))
+      .toEqual({ ok: false, error: 'sin_consultoria' })
+    expect(llamadas).toHaveLength(0)
+  })
+})
+
+describe('decidirEntregable', () => {
+  it('entrega, aprueba o rechaza por la RPC, con el motivo cuando hay', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.decidirEntregable(EN_NUEVO, 'En revisión')
+    await escrituras.decidirEntregable(EN_NUEVO, 'Rechazado', ' Falta el alcance ')
+    expect(llamadas).toEqual([
+      { tabla: 'decidir_entregable', operacion: 'rpc', datos: { p_id: EN_NUEVO, p_estado: 'En revisión', p_comentario: null } },
+      { tabla: 'decidir_entregable', operacion: 'rpc', datos: { p_id: EN_NUEVO, p_estado: 'Rechazado', p_comentario: 'Falta el alcance' } },
+    ])
+  })
+
+  it('aprobar con el documento vinculado sin aprobar llega como datos inválidos', async () => {
+    const { cliente } = crearClienteDoble({ 'decidir_entregable.rpc': { data: null, error: { code: '22023', message: 'documento' } } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.decidirEntregable(EN_NUEVO, 'Aprobado')).toEqual({ ok: false, error: 'datos_invalidos' })
+  })
+
+  it('si el equipo intenta aprobar, el servidor lo rechaza y llega como "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'decidir_entregable.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.decidirEntregable(EN_NUEVO, 'Aprobado')).toEqual({ ok: false, error: 'sin_permiso' })
   })
 })

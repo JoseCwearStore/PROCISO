@@ -242,6 +242,18 @@ export interface FilaTarea {
   dependencias: string[]
 }
 
+export interface FilaEntregable {
+  id: string
+  proyecto_id: string
+  nombre: string
+  tipo: string
+  estado: Entregable['estado']
+  fecha_entrega: string | null
+  fecha_aprobacion: string | null
+  aprobado_por: string | null
+  documento_id: string | null
+}
+
 export interface FilaLista {
   id: string
   proyecto_id: string
@@ -308,11 +320,11 @@ export interface FilasSesion {
   noConformidades: FilaNoConformidad[]
   listas: FilaLista[]
   preguntas: FilaPregunta[]
+  entregables: FilaEntregable[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
 export interface DatosDemo {
-  entregables: Entregable[]
   notificaciones: Notificacion[]
   historial: EntradaHistorial[]
 }
@@ -321,6 +333,7 @@ export interface DatosSesion extends DatosDemo {
   tareas: Tarea[]
   noConformidades: NoConformidad[]
   listasVerificacion: ListaVerificacion[]
+  entregables: Entregable[]
   consultorias: Consultoria[]
   empresas: Empresa[]
   usuarios: Usuario[]
@@ -357,6 +370,10 @@ const CONSULTAS = {
   noConformidades: [
     'no_conformidades',
     'id, proyecto_id, folio, titulo, descripcion, tipo, detectada_en, fecha_deteccion, proceso_id, evidencia_ids, responsable_id, responsable_accion_id, fecha_limite, estado, correccion_inmediata, analisis_causa, accion_correctiva, eficacia, verificacion_eficacia, fecha_cierre, observaciones',
+  ],
+  entregables: [
+    'entregables',
+    'id, proyecto_id, nombre, tipo, estado, fecha_entrega, fecha_aprobacion, aprobado_por, documento_id',
   ],
   listas: ['listas_verificacion', 'id, proyecto_id, proceso_id, nombre, area, responsable_id, fecha, edicion_norma'],
   preguntas: [
@@ -674,6 +691,20 @@ export function traducirTarea(fila: FilaTarea, historial: FilaHistorial[], comen
   }
 }
 
+export function traducirEntregable(fila: FilaEntregable): Entregable {
+  return {
+    id: fila.id,
+    nombre: fila.nombre,
+    proyectoId: fila.proyecto_id,
+    tipo: fila.tipo,
+    estado: fila.estado,
+    fechaEntrega: fila.fecha_entrega ? formatearFecha(fila.fecha_entrega) : undefined,
+    fechaAprobacion: fila.fecha_aprobacion ? formatearFecha(fila.fecha_aprobacion) : undefined,
+    aprobadoPorId: opcional(fila.aprobado_por),
+    documentoId: opcional(fila.documento_id),
+  }
+}
+
 export function traducirLista(fila: FilaLista, preguntas: FilaPregunta[], proyectos: FilaProyecto[]): ListaVerificacion {
   return {
     id: fila.id,
@@ -798,7 +829,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
     evidencias,
     documentos,
     tareas,
-    entregables: delProyectoVisible(demo.entregables),
+    entregables: filas.entregables.map(traducirEntregable),
     noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
     listasVerificacion: filas.listas.map((fila) => traducirLista(fila, filas.preguntas, filas.proyectos)),
     notificaciones: demo.notificaciones.filter((n) => !n.proyectoId || proyectosVisibles.has(n.proyectoId)),

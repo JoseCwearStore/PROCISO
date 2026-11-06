@@ -3,6 +3,8 @@ import type {
   ComentarioTarea,
   Documento,
   Empresa,
+  Entregable,
+  EstadoEntregable,
   EstadoEvidencia,
   EstadoNC,
   EstadoProyecto,
@@ -20,12 +22,14 @@ import {
   traducirComentario,
   traducirComentarioTarea,
   traducirEmpresa,
+  traducirEntregable,
   traducirEvidencia,
   traducirNoConformidad,
   traducirProyecto,
   traducirTarea,
   type FilaComentario,
   type FilaEmpresa,
+  type FilaEntregable,
   type FilaEvidencia,
   type FilaNoConformidad,
   type FilaProyecto,
@@ -68,7 +72,8 @@ export interface ClienteEscritura {
       | 'cambiar_estado_tarea'
       | 'guardar_tratamiento_nc'
       | 'cambiar_estado_nc'
-      | 'guardar_lista',
+      | 'guardar_lista'
+      | 'decidir_entregable',
     args: Record<string, unknown>,
   ): PromiseLike<{ data?: unknown; error: ErrorBD | null }>
   storage: {
@@ -188,6 +193,14 @@ export interface DatosNC {
   responsableAccionId: string
   fechaLimite: string
   observaciones: string
+}
+
+export interface NuevoEntregable {
+  proyectoId: string
+  nombre: string
+  tipo: string
+  fechaEntrega: string // ISO (input date) o dd/mm/aaaa; vacío = sin fecha
+  documentoId: string // vacío = sin documento
 }
 
 export interface TratamientoNC {
@@ -548,6 +561,36 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_correccion: tratamiento.correccion.trim(),
         p_causa: tratamiento.causa.trim(),
         p_accion: tratamiento.accion.trim(),
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    // ─── Entregables ────────────────────────────────────────────────────────
+    // Solo los datos del registro: el estado lo cambia decidirEntregable.
+    async registrarEntregable(
+      consultoriaId: string | null,
+      id: string,
+      datos: NuevoEntregable,
+    ): Promise<ResultadoEscritura<Entregable>> {
+      if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
+      const resultado = await insertar<FilaEntregable>('entregables', {
+        id,
+        consultoria_id: consultoriaId,
+        proyecto_id: datos.proyectoId,
+        nombre: datos.nombre.trim(),
+        tipo: datos.tipo.trim(),
+        fecha_entrega: fechaONulo(datos.fechaEntrega),
+        documento_id: datos.documentoId || null,
+      })
+      return resultado.ok ? { ok: true, valor: traducirEntregable(resultado.valor) } : resultado
+    },
+
+    // El equipo entrega; el cliente aprueba o rechaza (con motivo). Lo decide el servidor.
+    async decidirEntregable(id: string, estado: Exclude<EstadoEntregable, 'Pendiente'>, comentario?: string): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('decidir_entregable', {
+        p_id: id,
+        p_estado: estado,
+        p_comentario: comentario?.trim() || null,
       })
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },

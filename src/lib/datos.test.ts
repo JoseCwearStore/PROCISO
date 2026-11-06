@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, EntradaHistorial, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
+import type { Documento, Entregable, EntradaHistorial, ListaVerificacion, NoConformidad, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -95,6 +95,12 @@ function filasBase(): FilasSesion {
         fecha_vencimiento: '2024-09-15', fecha_completada: null, dependencias: ['tar-p0'],
       },
     ],
+    entregables: [
+      {
+        id: 'en-p1', proyecto_id: P1, nombre: 'Procedimiento de compras', tipo: 'Procedimiento', estado: 'Aprobado',
+        fecha_entrega: '2024-09-30', fecha_aprobacion: '2024-10-02', aprobado_por: CARLOS, documento_id: 'doc-p1',
+      },
+    ],
     listas: [
       {
         id: 'lv-p1', proyecto_id: P1, proceso_id: PROC1, nombre: 'Revisión de compras', area: 'Compras',
@@ -142,7 +148,6 @@ function filasBase(): FilasSesion {
 // Datos de demo de DOS proyectos: P1 (visible) y P2 (de otra empresa, no visible).
 function demoBase(): DatosDemo {
   return {
-    entregables: [],
     notificaciones: [
       { id: 'n-global' },
       { id: 'n-p1', proyectoId: P1 },
@@ -235,6 +240,17 @@ describe('combinarDatosSesion', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
+  })
+
+  it('traduce los entregables de la BD con su aprobación y su documento', () => {
+    const { entregables } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(entregables).toEqual<Entregable[]>([
+      {
+        id: 'en-p1', nombre: 'Procedimiento de compras', proyectoId: P1, tipo: 'Procedimiento', estado: 'Aprobado',
+        fechaEntrega: '30/09/2024', fechaAprobacion: '02/10/2024', aprobadoPorId: CARLOS, documentoId: 'doc-p1',
+      },
+    ])
   })
 
   it('traduce las listas de verificación con su empresa y sus preguntas en orden', () => {
@@ -439,6 +455,7 @@ describe('cargarFilasSesion', () => {
       no_conformidades: filas.noConformidades,
       listas_verificacion: filas.listas,
       lista_preguntas: filas.preguntas,
+      entregables: filas.entregables,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -449,13 +466,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las dieciocho tablas y devuelve sus filas', async () => {
+  it('lee las diecinueve tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(18)
+    expect(cliente.from).toHaveBeenCalledTimes(19)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

@@ -29,7 +29,8 @@ import { Tabs } from '../components/ui/Tabs'
 import type { Column } from '../components/ui/DataTable'
 import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId, Usuario } from '../types'
 import { servicioEscritura } from '../lib/servicios'
-import { MENSAJES_ERROR_ESCRITURA, type NuevoProyecto } from '../lib/escrituras'
+import { MENSAJES_ERROR_ESCRITURA, type NuevoEntregable, type NuevoProyecto } from '../lib/escrituras'
+import { useAccionesEntregable } from '../hooks/useAccionesEntregable'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -860,15 +861,66 @@ function TabTareas({ tareas, getUsuario, navigate }: {
   )
 }
 
-function TabEntregables({ entregables }: { entregables: Entregable[] }) {
+const ENTREGABLE_VACIO = (proyectoId: string): NuevoEntregable => ({ proyectoId, nombre: '', tipo: '', fechaEntrega: '', documentoId: '' })
+
+// El equipo registra y entrega; el cliente aprueba o rechaza desde su panel de inicio.
+function TabEntregables({ proyectoId, entregables, documentos }: { proyectoId: string; entregables: Entregable[]; documentos: Documento[] }) {
+  const { showToast } = useApp()
+  const acciones = useAccionesEntregable()
+  const [nuevo, setNuevo] = useState<NuevoEntregable | null>(null)
+  const [guardando, setGuardando] = useState(false)
+
+  async function registrar() {
+    if (!nuevo || guardando) return
+    if (!nuevo.nombre.trim()) {
+      showToast('El entregable necesita un nombre.', 'error')
+      return
+    }
+    setGuardando(true)
+    const registrado = await acciones.registrar(nuevo)
+    setGuardando(false)
+    if (!registrado) return
+    setNuevo(null)
+    showToast(`Entregable "${registrado.nombre}" registrado.`, 'success')
+  }
+
+  async function entregar(entregable: Entregable) {
+    if (guardando) return
+    setGuardando(true)
+    const ok = await acciones.decidir(entregable, 'En revisión')
+    setGuardando(false)
+    if (ok) showToast(`"${entregable.nombre}" entregado: el cliente ya puede aprobarlo.`, 'success')
+  }
+
+  const inputClass = 'w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500'
+
   return (
     <div className="space-y-3">
       <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 flex items-start gap-2">
         <AlertTriangle className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
         <p className="text-xs text-amber-700">
-          <strong>Aviso:</strong> La aprobación de entregables en este prototipo es de carácter informativo. No equivale a una firma certificada ni a un proceso de aprobación formal.
+          <strong>Aviso:</strong> La consultoría entrega y el cliente de la empresa aprueba desde su panel. La aprobación no equivale a una firma certificada.
         </p>
       </div>
+      {acciones.esEquipo && (nuevo ? (
+        <div className="bg-white rounded-xl border border-slate-200 p-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <input className={inputClass} placeholder="Nombre del entregable *" value={nuevo.nombre} onChange={(e) => setNuevo({ ...nuevo, nombre: e.target.value })} />
+          <input className={inputClass} placeholder="Tipo (Informe, Manual…)" value={nuevo.tipo} onChange={(e) => setNuevo({ ...nuevo, tipo: e.target.value })} />
+          <input className={inputClass} type="date" value={nuevo.fechaEntrega} onChange={(e) => setNuevo({ ...nuevo, fechaEntrega: e.target.value })} title="Fecha comprometida de entrega" />
+          <select className={inputClass} value={nuevo.documentoId} onChange={(e) => setNuevo({ ...nuevo, documentoId: e.target.value })}>
+            <option value="">Sin documento vinculado</option>
+            {documentos.filter((d) => d.estado !== 'Obsoleto').map((d) => <option key={d.id} value={d.id}>{d.codigo ? `${d.codigo} · ` : ''}{d.nombre}</option>)}
+          </select>
+          <div className="flex gap-2 sm:col-span-2 lg:col-span-4 justify-end">
+            <Button variant="outline" size="sm" onClick={() => setNuevo(null)}>Cancelar</Button>
+            <Button size="sm" onClick={registrar} disabled={guardando}>{guardando ? 'Guardando…' : 'Registrar entregable'}</Button>
+          </div>
+        </div>
+      ) : (
+        <div className="flex justify-end">
+          <Button size="sm" icon={<Plus className="w-4 h-4" />} onClick={() => setNuevo(ENTREGABLE_VACIO(proyectoId))}>Nuevo entregable</Button>
+        </div>
+      ))}
       {entregables.length === 0 ? (
         <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
           <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
@@ -879,7 +931,7 @@ function TabEntregables({ entregables }: { entregables: Entregable[] }) {
           <table className="w-full text-sm">
             <thead>
               <tr className="bg-slate-50 border-b border-slate-200">
-                {['Nombre', 'Tipo', 'Estado', 'F. Entrega', 'F. Aprobación'].map((col) => (
+                {['Nombre', 'Tipo', 'Documento', 'Estado', 'F. Entrega', 'F. Aprobación', ''].map((col) => (
                   <th key={col} className="px-4 py-3 text-left text-xs font-semibold text-slate-500 uppercase tracking-wide">{col}</th>
                 ))}
               </tr>
@@ -889,9 +941,24 @@ function TabEntregables({ entregables }: { entregables: Entregable[] }) {
                 <tr key={e.id} className="border-b border-slate-100 last:border-0 hover:bg-slate-50">
                   <td className="px-4 py-3 font-medium text-slate-800">{e.nombre}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{e.tipo}</td>
+                  <td className="px-4 py-3 text-xs">
+                    {acciones.documento(e) ? (
+                      <span className={acciones.documentoListo(e) ? 'text-emerald-600' : 'text-amber-600'}>
+                        {acciones.documento(e)?.codigo ?? acciones.documento(e)?.nombre}
+                        {!acciones.documentoListo(e) && ' · sin aprobar'}
+                      </span>
+                    ) : <span className="text-slate-400">—</span>}
+                  </td>
                   <td className="px-4 py-3"><StatusBadge status={e.estado} size="sm" /></td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{e.fechaEntrega ?? '—'}</td>
                   <td className="px-4 py-3 text-slate-500 text-xs">{e.fechaAprobacion ?? '—'}</td>
+                  <td className="px-4 py-3 text-right">
+                    {acciones.acciones(e).includes('En revisión') && (
+                      <Button size="sm" variant="outline" disabled={guardando} onClick={() => entregar(e)}>
+                        {e.estado === 'Rechazado' ? 'Volver a entregar' : 'Entregar'}
+                      </Button>
+                    )}
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -1080,7 +1147,7 @@ export function ProyectoDetalle() {
           <>
             {tab === 'resumen' && <TabResumen proyecto={proyecto} empresa={empresa} consultor={consultor} avance={avance} />}
             {tab === 'tareas' && <TabTareas tareas={tareas} getUsuario={getUsuario} navigate={navigate} />}
-            {tab === 'entregables' && <TabEntregables entregables={entregables} />}
+            {tab === 'entregables' && <TabEntregables proyectoId={proyecto.id} entregables={entregables} documentos={documentos} />}
             {tab === 'documentos' && <TabDocumentos documentos={documentos} />}
             {tab === 'equipo' && <TabEquipo equipo={equipo} />}
           </>
