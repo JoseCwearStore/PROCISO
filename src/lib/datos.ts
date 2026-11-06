@@ -444,10 +444,15 @@ export async function cargarFilasSesion(cliente: ClienteDatos): Promise<{ ok: tr
 
 // ─── Traducción BD → tipos de la interfaz ───────────────────────────────────
 
-// '2026-09-01' o '2026-09-01T12:00:00+00:00' → '01/09/2026'
+// El calendario de México: un timestamp de las 01:30 UTC del 7 es del día 6 allá.
+const CALENDARIO_MEXICO = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Mexico_City' })
+
+// '2026-09-01' → '01/09/2026' (una fecha sin hora no se mueve).
+// '2026-09-01T03:00:00+00:00' → '31/08/2026' (un timestamp se lee en hora de México).
 export function formatearFecha(valor: string | null): string {
   if (!valor) return ''
-  const [anio, mes, dia] = valor.slice(0, 10).split('-')
+  const iso = valor.length > 10 ? CALENDARIO_MEXICO.format(new Date(valor)) : valor
+  const [anio, mes, dia] = iso.slice(0, 10).split('-')
   return `${dia}/${mes}/${anio}`
 }
 

@@ -169,6 +169,17 @@ describe('formatearFecha', () => {
     expect(formatearFecha('2026-11-05T18:20:00.123+00:00')).toBe('05/11/2026')
   })
 
+  it('muestra los timestamps con el calendario de México, no con el de UTC', () => {
+    // 01:30 UTC del 7 = 19:30 del 6 en México: el comentario es del día 6.
+    expect(formatearFecha('2026-11-07T01:30:00+00:00')).toBe('06/11/2026')
+    // Si la BD ya devuelve la hora de México, el resultado es el mismo.
+    expect(formatearFecha('2026-11-06T19:30:00-06:00')).toBe('06/11/2026')
+  })
+
+  it('no mueve las fechas sin hora (fecha límite, fecha de detección)', () => {
+    expect(formatearFecha('2026-11-07')).toBe('07/11/2026')
+  })
+
   it('devuelve vacío si no hay fecha', () => {
     expect(formatearFecha(null)).toBe('')
   })
