@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import type { Documento, EntradaHistorial, Evidencia, Notificacion, Tarea } from '../types'
+import type { Documento, EntradaHistorial, Notificacion, Tarea } from '../types'
 import {
   cargarFilasSesion,
   combinarDatosSesion,
@@ -72,13 +72,24 @@ function filasBase(): FilasSesion {
       { id: 'act-2', proceso_id: PROC1, responsable_id: null, tipo: 'Fin', descripcion: 'Emitir orden', entradas: null, recursos: null, controles: null, resultado: 'Orden', orden: 2 },
       { id: 'act-1', proceso_id: PROC1, responsable_id: ROBERTO, tipo: 'Inicio', descripcion: 'Recibir requisición', entradas: 'Requisición', recursos: null, controles: null, resultado: null, orden: 1 },
     ],
+    evidencias: [
+      {
+        id: 'ev-p1', proyecto_id: P1, proceso_id: PROC1, actividad_id: 'act-1', subido_por: CARLOS, nombre: 'Foto del almacén',
+        tipo: 'Foto', estado: 'Revisada', descripcion: null, categoria: null, archivo_ruta: null, archivo_nombre: 'almacen.jpg',
+        archivo_mime: 'image/jpeg', creado_en: '2024-03-22T18:00:00+00:00',
+      },
+    ],
+    historial: [
+      { id: 8, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, descripcion: null, estado_anterior: 'Revisada', estado_nuevo: 'Revisada', creado_en: '2024-03-24T10:00:00+00:00' },
+      { id: 7, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, descripcion: 'Se ve bien', estado_anterior: 'Cargada', estado_nuevo: 'Revisada', creado_en: '2024-03-23T10:00:00+00:00' },
+      { id: 9, entidad_tipo: 'documento', entidad_id: 'doc-p1', autor_id: ROBERTO, descripcion: null, estado_anterior: null, estado_nuevo: null, creado_en: '2024-03-25T10:00:00+00:00' },
+    ],
   }
 }
 
 // Datos de demo de DOS proyectos: P1 (visible) y P2 (de otra empresa, no visible).
 function demoBase(): DatosDemo {
   return {
-    evidencias: [{ id: 'ev-p1', proyectoId: P1, procesoId: PROC1 }, { id: 'ev-p2', proyectoId: P2 }] as Evidencia[],
     documentos: [{ id: 'doc-p1', proyectoId: P1, procesoId: PROC1 }, { id: 'doc-p2', proyectoId: P2 }] as Documento[],
     tareas: [{ id: 'tar-p2', proyectoId: P2 }] as Tarea[],
     entregables: [],
@@ -174,7 +185,6 @@ describe('combinarDatosSesion', () => {
   it('descarta los datos de demo de proyectos que la BD no deja ver', () => {
     const datos = combinarDatosSesion(filasBase(), demoBase())
 
-    expect(ids(datos.evidencias)).toEqual(['ev-p1'])
     expect(ids(datos.documentos)).toEqual(['doc-p1'])
     expect(datos.tareas).toEqual([])
   })
@@ -199,6 +209,34 @@ describe('combinarDatosSesion', () => {
     expect(procesos[0].actividades).toEqual([
       { id: 'act-1', tipo: 'Inicio', responsableId: ROBERTO, descripcion: 'Recibir requisición', entradas: 'Requisición', recursos: '', controles: '', resultado: '', orden: 1 },
       { id: 'act-2', tipo: 'Fin', responsableId: undefined, descripcion: 'Emitir orden', entradas: '', recursos: '', controles: '', resultado: 'Orden', orden: 2 },
+    ])
+  })
+
+  it('traduce las evidencias de la BD con su autor, empresa e historial en orden', () => {
+    const { evidencias } = combinarDatosSesion(filasBase(), demoBase())
+
+    expect(evidencias).toEqual([
+      {
+        id: 'ev-p1',
+        nombre: 'Foto del almacén',
+        tipo: 'Foto',
+        procesoId: PROC1,
+        actividadId: 'act-1',
+        proyectoId: P1,
+        empresaId: E1,
+        estado: 'Revisada',
+        descripcion: '',
+        categoria: undefined,
+        archivoNombre: 'almacen.jpg',
+        archivoMime: 'image/jpeg',
+        autor: 'Carlos',
+        fechaCarga: '22/03/2024',
+        fecha: '22/03/2024',
+        historial: [
+          { id: '7', fecha: '23/03/2024', autor: 'Roberto', estadoAnterior: 'Cargada', estadoNuevo: 'Revisada', comentario: 'Se ve bien' },
+          { id: '8', fecha: '24/03/2024', autor: 'Roberto', estadoAnterior: 'Revisada', estadoNuevo: 'Revisada', comentario: undefined },
+        ],
+      },
     ])
   })
 
@@ -227,6 +265,8 @@ describe('cargarFilasSesion', () => {
       proyecto_miembros: filas.miembros,
       procesos: filas.procesos,
       actividades: filas.actividades,
+      evidencias: filas.evidencias,
+      historial: filas.historial,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -237,13 +277,13 @@ describe('cargarFilasSesion', () => {
     return cliente
   }
 
-  it('lee las ocho tablas y devuelve sus filas', async () => {
+  it('lee las diez tablas y devuelve sus filas', async () => {
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(8)
+    expect(cliente.from).toHaveBeenCalledTimes(10)
   })
 
   it('falla si alguna tabla no se pudo leer', async () => {

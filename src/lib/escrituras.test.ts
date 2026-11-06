@@ -229,6 +229,40 @@ describe('guardarProceso', () => {
   })
 })
 
+describe('revisarEvidencia', () => {
+  const EVIDENCIA = '44444444-0000-0000-0000-000000000001'
+
+  it('cambia el estado con un comentario en una sola llamada', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.revisarEvidencia(EVIDENCIA, 'Requiere corrección', 'Está borrosa')).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      {
+        tabla: 'revisar_evidencia',
+        operacion: 'rpc',
+        datos: { p_id: EVIDENCIA, p_estado: 'Requiere corrección', p_comentario: 'Está borrosa' },
+      },
+    ])
+  })
+
+  it('manda el comentario como null si no hay', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.revisarEvidencia(EVIDENCIA, 'Aceptada')
+
+    expect(llamadas[0].datos).toEqual({ p_id: EVIDENCIA, p_estado: 'Aceptada', p_comentario: null })
+  })
+
+  it('traduce el rechazo del RLS a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'revisar_evidencia.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.revisarEvidencia(EVIDENCIA, 'Aceptada')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
 describe('cambiarEstadoProyecto', () => {
   it('actualiza el estado del proyecto', async () => {
     const { cliente, llamadas } = crearClienteDoble()

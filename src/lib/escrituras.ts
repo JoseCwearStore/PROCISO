@@ -1,4 +1,4 @@
-import type { Empresa, EstadoProyecto, Proceso, Proyecto } from '../types'
+import type { Empresa, EstadoEvidencia, EstadoProyecto, Proceso, Proyecto } from '../types'
 import { traducirEmpresa, traducirProyecto, type FilaEmpresa, type FilaProyecto } from './datos'
 
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
@@ -21,7 +21,7 @@ export interface ClienteEscritura {
       eq(columna: 'id', valor: string): { select(columnas: string): { single(): RespuestaFila } }
     }
   }
-  rpc(funcion: 'guardar_proceso', args: Record<string, unknown>): PromiseLike<{ error: ErrorBD | null }>
+  rpc(funcion: 'guardar_proceso' | 'revisar_evidencia', args: Record<string, unknown>): PromiseLike<{ error: ErrorBD | null }>
 }
 
 export interface NuevaEmpresa {
@@ -178,6 +178,16 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
           resultado: a.resultado,
           orden: a.orden,
         })),
+      })
+      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    // Estado + historial en una transacción (la función de la BD lo garantiza).
+    async revisarEvidencia(id: string, estado: EstadoEvidencia, comentario?: string): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('revisar_evidencia', {
+        p_id: id,
+        p_estado: estado,
+        p_comentario: comentario?.trim() || null,
       })
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
     },

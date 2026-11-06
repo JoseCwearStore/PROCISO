@@ -156,16 +156,19 @@ insert into public.procesos (id, consultoria_id, proyecto_id, responsable_id, no
   ('55555555-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000006', 'Recepción y almacenamiento de mercancía', 'Recepción, inspección y almacenamiento de productos.', 'En levantamiento', '2024-09-10', null, null, null, null, array['Guía de remisión']::text[], array['Producto almacenado']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
   ('55555555-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000006', 'Despacho y entrega a clientes', 'Preparación de pedidos y entrega de mercancía a clientes.', 'Pendiente', null, null, null, null, null, array['Pedido confirmado']::text[], array['Entrega confirmada']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb);
 
--- ─── Evidencias (solo metadatos; los archivos llegan con la integración de Storage) ─
+-- ─── Evidencias (las mismas 5 de src/data/demo.ts; los archivos llegan con Storage) ─
 
+-- Generado desde src/data/demo.ts (EVIDENCIAS). evid-00N → 4444…00N.
+insert into public.evidencias (id, consultoria_id, proyecto_id, proceso_id, subido_por, nombre, tipo, estado, descripcion, archivo_nombre, creado_en) values
+  ('44444444-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Formato de evaluación de proveedores', 'Formulario', 'Revisada', 'Formato actual para evaluar y dar seguimiento a proveedores.', 'evaluacion_proveedores_v2.xlsx', '2024-03-22 12:00:00-06'),
+  ('44444444-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Fotografías del área de almacén', 'Foto', 'Cargada', 'Fotografías del área de recepción y almacenamiento.', 'fotos_almacen_mar2024.zip', '2024-03-25 12:00:00-06'),
+  ('44444444-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000005', 'Video recorrido de planta de producción', 'Video', 'Cargada', 'Recorrido por las líneas de producción principales.', 'recorrido_planta_abr2024.mp4', '2024-04-08 12:00:00-06'),
+  ('44444444-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', '55555555-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000006', 'Formulario de recepción de mercancía', 'Formulario', 'Cargada', 'Formato actual de recepción e inspección de productos.', 'formato_recepcion_actual.pdf', '2024-09-12 12:00:00-06'),
+  ('44444444-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000005', 'Audio entrevista con jefe de producción', 'Audio', 'Pendiente', 'Entrevista de levantamiento pendiente de carga.', null, now());
+
+-- Evidencia de Consultoría 2 (fuera del rango del puente 4444…001-005).
 insert into public.evidencias (id, consultoria_id, proyecto_id, proceso_id, subido_por, nombre, tipo, estado, descripcion) values
-  ('44444444-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Formato de propuesta comercial', 'Documento', 'Revisada', 'Plantilla vigente de propuestas'),
-  ('44444444-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001',
-   null, 'aaaaaaaa-0000-0000-0000-000000000005', 'Foto del área de trabajo', 'Foto', 'Cargada', 'Oficina principal'),
-  ('44444444-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002',
-   null, 'aaaaaaaa-0000-0000-0000-000000000006', 'Video del almacén', 'Video', 'Pendiente', 'Recorrido por el almacén'),
-  ('44444444-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000003',
+  ('44444444-0000-0000-0000-000000000010', '11111111-0000-0000-0000-000000000002', '33333333-0000-0000-0000-000000000003',
    null, 'aaaaaaaa-0000-0000-0000-000000000008', 'Audio de entrevista', 'Audio', 'Cargada', 'Entrevista con producción');
 
 -- ─── Documentos ─────────────────────────────────────────────────────────────

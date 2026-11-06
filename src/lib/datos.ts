@@ -142,6 +142,34 @@ export interface FilaActividad {
   orden: number
 }
 
+export interface FilaEvidencia {
+  id: string
+  proyecto_id: string
+  proceso_id: string | null
+  actividad_id: string | null
+  subido_por: string | null
+  nombre: string
+  tipo: Evidencia['tipo']
+  estado: Evidencia['estado']
+  descripcion: string | null
+  categoria: string | null
+  archivo_ruta: string | null
+  archivo_nombre: string | null
+  archivo_mime: string | null
+  creado_en: string
+}
+
+export interface FilaHistorial {
+  id: number
+  entidad_tipo: string
+  entidad_id: string
+  autor_id: string | null
+  descripcion: string | null
+  estado_anterior: string | null
+  estado_nuevo: string | null
+  creado_en: string
+}
+
 export interface FilasSesion {
   consultorias: FilaConsultoria[]
   empresas: FilaEmpresa[]
@@ -151,11 +179,12 @@ export interface FilasSesion {
   miembros: FilaMiembro[]
   procesos: FilaProceso[]
   actividades: FilaActividad[]
+  evidencias: FilaEvidencia[]
+  historial: FilaHistorial[]
 }
 
 // Datos que todavía viven en src/data/demo.ts (se van migrando de a uno).
 export interface DatosDemo {
-  evidencias: Evidencia[]
   documentos: Documento[]
   tareas: Tarea[]
   entregables: Entregable[]
@@ -170,6 +199,7 @@ export interface DatosSesion extends DatosDemo {
   usuarios: Usuario[]
   proyectos: Proyecto[]
   procesos: Proceso[]
+  evidencias: Evidencia[]
 }
 
 // ─── Lectura ────────────────────────────────────────────────────────────────
@@ -189,6 +219,8 @@ const CONSULTAS = {
   miembros: ['proyecto_miembros', 'proyecto_id, usuario_id'],
   procesos: ['procesos', '*'],
   actividades: ['actividades', 'id, proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden'],
+  evidencias: ['evidencias', 'id, proyecto_id, proceso_id, actividad_id, subido_por, nombre, tipo, estado, descripcion, categoria, archivo_ruta, archivo_nombre, archivo_mime, creado_en'],
+  historial: ['historial', 'id, entidad_tipo, entidad_id, autor_id, descripcion, estado_anterior, estado_nuevo, creado_en'],
 } as const satisfies Record<keyof FilasSesion, readonly [string, string]>
 
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
@@ -352,6 +384,45 @@ export function traducirProceso(
   }
 }
 
+export function traducirEvidencia(
+  fila: FilaEvidencia,
+  proyectos: FilaProyecto[],
+  perfiles: FilaPerfil[],
+  historial: FilaHistorial[],
+): Evidencia {
+  const nombreDe = (id: string | null) => perfiles.find((p) => p.id === id)?.nombre
+  const fechaCarga = formatearFecha(fila.creado_en)
+
+  return {
+    id: fila.id,
+    nombre: fila.nombre,
+    tipo: fila.tipo,
+    procesoId: opcional(fila.proceso_id),
+    actividadId: opcional(fila.actividad_id),
+    proyectoId: fila.proyecto_id,
+    empresaId: proyectos.find((p) => p.id === fila.proyecto_id)?.empresa_id,
+    estado: fila.estado,
+    descripcion: fila.descripcion ?? '',
+    categoria: opcional(fila.categoria),
+    archivoNombre: opcional(fila.archivo_nombre),
+    archivoMime: opcional(fila.archivo_mime),
+    autor: nombreDe(fila.subido_por),
+    fechaCarga,
+    fecha: fechaCarga,
+    historial: historial
+      .filter((h) => h.entidad_tipo === 'evidencia' && h.entidad_id === fila.id)
+      .sort((a, b) => a.creado_en.localeCompare(b.creado_en))
+      .map((h) => ({
+        id: String(h.id),
+        fecha: formatearFecha(h.creado_en),
+        autor: nombreDe(h.autor_id) ?? '',
+        estadoAnterior: opcional(h.estado_anterior) as Evidencia['estado'] | undefined,
+        estadoNuevo: h.estado_nuevo as Evidencia['estado'],
+        comentario: opcional(h.descripcion),
+      })),
+  }
+}
+
 function proyectosDelUsuario(perfil: FilaPerfil, filas: FilasSesion): string[] {
   const { proyectos, miembros } = filas
   switch (perfil.rol) {
@@ -389,7 +460,7 @@ export function combinarDatosSesion(filas: FilasSesion, demo: DatosDemo): DatosS
   const delProyectoVisible = <T extends { proyectoId: string }>(lista: T[]) =>
     lista.filter((item) => proyectosVisibles.has(item.proyectoId))
 
-  const evidencias = delProyectoVisible(demo.evidencias)
+  const evidencias = filas.evidencias.map((fila) => traducirEvidencia(fila, filas.proyectos, filas.perfiles, filas.historial))
   const documentos = delProyectoVisible(demo.documentos)
   const tareas = delProyectoVisible(demo.tareas)
 

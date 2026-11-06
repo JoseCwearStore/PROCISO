@@ -16,6 +16,9 @@ import {
   X,
 } from "lucide-react"
 import { useApp } from "../context/AppContext"
+import { servicioEscritura } from "../lib/servicios"
+import { MENSAJES_ERROR_ESCRITURA } from "../lib/escrituras"
+import { formatearFecha } from "../lib/datos"
 import { Button } from "../components/ui/Button"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
@@ -241,8 +244,14 @@ export default function Evidencias() {
     }
   }
 
-  function cambiarEstado(evidencia: Evidencia, estadoNuevo: EstadoEvidencia) {
+  async function cambiarEstado(evidencia: Evidencia, estadoNuevo: EstadoEvidencia) {
     if (evidencia.estado === estadoNuevo) return
+    const resultado = await servicioEscritura.revisarEvidencia(evidencia.id, estadoNuevo)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], "error")
+      return
+    }
+    // La BD ya registró el cambio en el historial; acá se refleja sin recargar.
     dispatch({
       type: "UPDATE_EVIDENCIA",
       id: evidencia.id,
@@ -251,9 +260,9 @@ export default function Evidencias() {
         historial: [
           ...(evidencia.historial || []),
           {
-            id: `hist-evid-${Date.now()}`,
-            fecha: new Date().toLocaleString("es-MX"),
-            autor: state.currentUser?.nombre || "Usuario de demostración",
+            id: crypto.randomUUID(),
+            fecha: formatearFecha(new Date().toISOString()),
+            autor: state.currentUser?.nombre ?? "",
             estadoAnterior: evidencia.estado,
             estadoNuevo,
           },
@@ -380,7 +389,8 @@ export default function Evidencias() {
                       {evidencia.nombre}
                     </p>
                     <p className="mt-0.5 text-xs text-slate-400">
-                      {evidencia.id} · {evidencia.tipo}
+                      {evidencia.tipo}
+                      {evidencia.fechaCarga ? ` · ${evidencia.fechaCarga}` : ""}
                     </p>
                   </div>
                   <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">

@@ -249,7 +249,7 @@ export const PROCESOS: Proceso[] = [
     estado: 'Documentado',
     descripcion: 'Proceso para la selección, evaluación y seguimiento de proveedores.',
     fechaLevantamiento: '20/03/2024',
-    evidenciasIds: ['evid-001', 'evid-002'],
+    evidenciasIds: ['44444444-0000-0000-0000-000000000001', '44444444-0000-0000-0000-000000000002'],
     documentosIds: ['doc-001'],
     entradas: ['Necesidad de compra', 'Catálogo de proveedores aprobados'],
     salidas: ['Orden de compra autorizada', 'Evaluación de proveedor'],
@@ -262,7 +262,7 @@ export const PROCESOS: Proceso[] = [
     estado: 'Revisado',
     descripcion: 'Proceso de planificación, control y seguimiento de la producción.',
     fechaLevantamiento: '05/04/2024',
-    evidenciasIds: ['evid-003'],
+    evidenciasIds: ['44444444-0000-0000-0000-000000000003'],
     documentosIds: ['doc-002', 'doc-003'],
     entradas: ['Plan de producción', 'Materias primas'],
     salidas: ['Producto terminado', 'Registros de producción'],
@@ -300,7 +300,7 @@ export const PROCESOS: Proceso[] = [
     estado: 'En levantamiento',
     descripcion: 'Recepción, inspección y almacenamiento de productos.',
     fechaLevantamiento: '10/09/2024',
-    evidenciasIds: ['evid-004'],
+    evidenciasIds: ['44444444-0000-0000-0000-000000000004'],
     documentosIds: [],
     entradas: ['Guía de remisión'],
     salidas: ['Producto almacenado'],
@@ -320,11 +320,11 @@ export const PROCESOS: Proceso[] = [
 ]
 
 export const EVIDENCIAS: Evidencia[] = [
-  { id: 'evid-001', nombre: 'Formato de evaluación de proveedores', tipo: 'Formulario', procesoId: '55555555-0000-0000-0000-000000000001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Revisada', fechaCarga: '22/03/2024', descripcion: 'Formato actual para evaluar y dar seguimiento a proveedores.', archivoNombre: 'evaluacion_proveedores_v2.xlsx' },
-  { id: 'evid-002', nombre: 'Fotografías del área de almacén', tipo: 'Foto', procesoId: '55555555-0000-0000-0000-000000000001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '25/03/2024', descripcion: 'Fotografías del área de recepción y almacenamiento.', archivoNombre: 'fotos_almacen_mar2024.zip' },
-  { id: 'evid-003', nombre: 'Video recorrido de planta de producción', tipo: 'Video', procesoId: '55555555-0000-0000-0000-000000000002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '08/04/2024', descripcion: 'Recorrido por las líneas de producción principales.', archivoNombre: 'recorrido_planta_abr2024.mp4' },
-  { id: 'evid-004', nombre: 'Formulario de recepción de mercancía', tipo: 'Formulario', procesoId: '55555555-0000-0000-0000-000000000005', proyectoId: '33333333-0000-0000-0000-000000000002', estado: 'Cargada', fechaCarga: '12/09/2024', descripcion: 'Formato actual de recepción e inspección de productos.', archivoNombre: 'formato_recepcion_actual.pdf' },
-  { id: 'evid-005', nombre: 'Audio entrevista con jefe de producción', tipo: 'Audio', procesoId: '55555555-0000-0000-0000-000000000002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Pendiente', descripcion: 'Entrevista de levantamiento pendiente de carga.' },
+  { id: '44444444-0000-0000-0000-000000000001', nombre: 'Formato de evaluación de proveedores', tipo: 'Formulario', procesoId: '55555555-0000-0000-0000-000000000001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Revisada', fechaCarga: '22/03/2024', descripcion: 'Formato actual para evaluar y dar seguimiento a proveedores.', archivoNombre: 'evaluacion_proveedores_v2.xlsx' },
+  { id: '44444444-0000-0000-0000-000000000002', nombre: 'Fotografías del área de almacén', tipo: 'Foto', procesoId: '55555555-0000-0000-0000-000000000001', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '25/03/2024', descripcion: 'Fotografías del área de recepción y almacenamiento.', archivoNombre: 'fotos_almacen_mar2024.zip' },
+  { id: '44444444-0000-0000-0000-000000000003', nombre: 'Video recorrido de planta de producción', tipo: 'Video', procesoId: '55555555-0000-0000-0000-000000000002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Cargada', fechaCarga: '08/04/2024', descripcion: 'Recorrido por las líneas de producción principales.', archivoNombre: 'recorrido_planta_abr2024.mp4' },
+  { id: '44444444-0000-0000-0000-000000000004', nombre: 'Formulario de recepción de mercancía', tipo: 'Formulario', procesoId: '55555555-0000-0000-0000-000000000005', proyectoId: '33333333-0000-0000-0000-000000000002', estado: 'Cargada', fechaCarga: '12/09/2024', descripcion: 'Formato actual de recepción e inspección de productos.', archivoNombre: 'formato_recepcion_actual.pdf' },
+  { id: '44444444-0000-0000-0000-000000000005', nombre: 'Audio entrevista con jefe de producción', tipo: 'Audio', procesoId: '55555555-0000-0000-0000-000000000002', proyectoId: '33333333-0000-0000-0000-000000000001', estado: 'Pendiente', descripcion: 'Entrevista de levantamiento pendiente de carga.' },
 ]
 
 export const DOCUMENTOS: Documento[] = [

@@ -27,7 +27,6 @@ import type {
   LoginReason,
 } from '../types'
 import {
-  EVIDENCIAS,
   DOCUMENTOS,
   TAREAS,
   NO_CONFORMIDADES,
@@ -39,7 +38,6 @@ import { canAccess } from '../config/permissions'
 
 // Lo que todavía no está en la BD. Se filtra por los proyectos que la BD deja ver.
 const DEMO: DatosDemo = {
-  evidencias: EVIDENCIAS,
   documentos: DOCUMENTOS,
   tareas: TAREAS,
   entregables: ENTREGABLES,
