@@ -1,6 +1,6 @@
 // ─── Auth ─────────────────────────────────────────────────────────────────────
 export type AuthScreen = 'checking' | 'login' | 'recovery' | 'recovery-sent' | 'change-password' | 'app'
-export type LoginReason = 'expired' | 'blocked' | 'temp-password' | undefined
+export type LoginReason = 'expired' | 'blocked' | 'temp-password' | 'recovery' | undefined
 
 // ─── Roles ────────────────────────────────────────────────────────────────────
 export type Rol = 'Admin PROCISO' | 'Admin Consultoría' | 'Consultor' | 'Usuario Cliente'

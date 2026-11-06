@@ -1,6 +1,14 @@
 import { useState } from 'react'
 import { Lock, Eye, EyeOff, CheckCircle, AlertCircle } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
+import { servicioAuth } from '../../lib/servicios'
+import type { ErrorCambioContrasena } from '../../lib/auth'
+
+const MENSAJES_ERROR: Record<ErrorCambioContrasena, string> = {
+  debil: 'La contraseña no cumple los requisitos de seguridad.',
+  igual: 'La nueva contraseña debe ser distinta de la actual.',
+  servicio: 'No pudimos guardar la contraseña. Intenta de nuevo en unos momentos.',
+}
 
 function getStrength(pw: string): { level: 0 | 1 | 2 | 3 | 4; label: string; color: string } {
   if (pw.length === 0) return { level: 0, label: '', color: '' }
@@ -19,15 +27,20 @@ function getStrength(pw: string): { level: 0 | 1 | 2 | 3 | 4; label: string; col
   return levels[score]
 }
 
+// Deben coincidir con password_requirements de supabase/config.toml, que es
+// quien realmente las hace cumplir.
 const REQUIREMENTS = [
   { label: 'Mínimo 8 caracteres', test: (pw: string) => pw.length >= 8 },
+  { label: 'Al menos una minúscula', test: (pw: string) => /[a-z]/.test(pw) },
   { label: 'Al menos una mayúscula', test: (pw: string) => /[A-Z]/.test(pw) },
   { label: 'Al menos un número', test: (pw: string) => /[0-9]/.test(pw) },
   { label: 'Al menos un carácter especial', test: (pw: string) => /[^A-Za-z0-9]/.test(pw) },
 ]
 
 export default function CambioContrasena() {
-  const { dispatch, showToast } = useApp()
+  const { state, dispatch, showToast } = useApp()
+  // Los términos se aceptan en el primer acceso, no cada vez que se recupera la contraseña.
+  const esPrimerAcceso = state.loginReason !== 'recovery'
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
   const [showPass, setShowPass] = useState(false)
@@ -39,18 +52,23 @@ export default function CambioContrasena() {
   const strength = getStrength(password)
   const allReqs = REQUIREMENTS.every((r) => r.test(password))
   const matches = password === confirm && password.length > 0
-  const canSubmit = allReqs && matches && terms
+  const canSubmit = allReqs && matches && (terms || !esPrimerAcceso)
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!canSubmit) return
     setError('')
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      showToast('Contraseña actualizada exitosamente.', 'success')
-      dispatch({ type: 'SET_AUTH_SCREEN', screen: 'app' })
-    }, 900)
+
+    const resultado = await servicioAuth.cambiarContrasena(password)
+    setLoading(false)
+
+    if (!resultado.ok) {
+      setError(MENSAJES_ERROR[resultado.error])
+      return
+    }
+    showToast('Contraseña actualizada exitosamente.', 'success')
+    dispatch({ type: 'SET_AUTH_SCREEN', screen: 'app' })
   }
 
   return (
@@ -71,7 +89,11 @@ export default function CambioContrasena() {
             <Lock className="w-5 h-5 text-navy" />
             <h2 className="text-lg font-semibold text-fg">Cambio de contraseña</h2>
           </div>
-          <p className="text-sm text-fg/50 mb-6">Tu acceso usa una contraseña temporal. Establece una contraseña personal segura para continuar.</p>
+          <p className="text-sm text-fg/50 mb-6">
+            {esPrimerAcceso
+              ? 'Tu acceso usa una contraseña temporal. Establece una contraseña personal segura para continuar.'
+              : 'Elige una contraseña nueva para tu cuenta.'}
+          </p>
 
           {error && (
             <div className="flex gap-2 items-start bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700 mb-4">
@@ -167,6 +189,7 @@ export default function CambioContrasena() {
             </div>
 
             {/* Terms */}
+            {esPrimerAcceso && (
             <label className="flex items-start gap-2.5 cursor-pointer group">
               <input
                 type="checkbox"
@@ -182,6 +205,7 @@ export default function CambioContrasena() {
                 de PROCISO.
               </span>
             </label>
+            )}
 
             <button
               type="submit"
@@ -191,12 +215,9 @@ export default function CambioContrasena() {
               {loading ? 'Guardando...' : 'Establecer contraseña y continuar'}
             </button>
           </form>
-          <p className="mt-5 text-center text-[10px] font-medium text-amber-700">
-            DEMO · El cambio de contraseña requiere integración
-          </p>
         </div>
 
-        <p className="text-center text-xs text-fg/30 mt-6">© {new Date().getFullYear()} PROCISO · ISO 9001:2026 · Simulación de demostración</p>
+        <p className="text-center text-xs text-fg/30 mt-6">© {new Date().getFullYear()} PROCISO · ISO 9001:2026</p>
       </div>
     </div>
   )

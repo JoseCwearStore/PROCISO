@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
-import { servicioAuth } from '../lib/servicios'
+import { llegoDesdeEnlaceDeRecuperacion, servicioAuth } from '../lib/servicios'
 import type {
   Rol,
   PageId,
@@ -364,8 +364,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       .catch(() => null)
       .then((usuario) => {
         if (cancelado) return
-        if (usuario) dispatch({ type: 'LOGIN_SUCCESS', user: usuario })
-        else dispatch({ type: 'SET_AUTH_SCREEN', screen: 'login' })
+        if (!usuario) {
+          dispatch({ type: 'SET_AUTH_SCREEN', screen: 'login' })
+          return
+        }
+        dispatch({ type: 'LOGIN_SUCCESS', user: usuario })
+        // Viene del correo de recuperación: hay sesión, pero primero debe elegir contraseña nueva.
+        if (llegoDesdeEnlaceDeRecuperacion) {
+          dispatch({ type: 'SET_AUTH_SCREEN', screen: 'change-password', reason: 'recovery' })
+        }
       })
     return () => {
       cancelado = true

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { crearServicioAuth, mapearRol, type ClienteAuth, type PerfilBD } from './auth'
+import { crearServicioAuth, esEnlaceDeRecuperacion, mapearRol, type ClienteAuth, type PerfilBD } from './auth'
 
 const PERFIL_ANA: PerfilBD = {
   id: 'aaaaaaaa-0000-0000-0000-000000000002',
@@ -16,10 +16,20 @@ interface OpcionesDoble {
   errorLogin?: { code?: string; message: string }
   perfil?: PerfilBD | null
   sesionUsuarioId?: string | null
+  errorRecuperacion?: { code?: string; message: string }
+  errorCambio?: { code?: string; message: string }
+  errorRpc?: { message: string }
 }
 
 // Doble del cliente de Supabase: solo implementa lo que usa el servicio.
-function crearClienteDoble({ errorLogin, perfil = PERFIL_ANA, sesionUsuarioId = null }: OpcionesDoble = {}) {
+function crearClienteDoble({
+  errorLogin,
+  perfil = PERFIL_ANA,
+  sesionUsuarioId = null,
+  errorRecuperacion,
+  errorCambio,
+  errorRpc,
+}: OpcionesDoble = {}) {
   const consultasPerfil: string[] = []
 
   const cliente = {
@@ -33,7 +43,12 @@ function crearClienteDoble({ errorLogin, perfil = PERFIL_ANA, sesionUsuarioId = 
       getSession: vi.fn(async () => ({
         data: { session: sesionUsuarioId ? { user: { id: sesionUsuarioId } } : null },
       })),
+      resetPasswordForEmail: vi.fn(async (_email: string, _opciones: { redirectTo: string }) => ({
+        error: errorRecuperacion ?? null,
+      })),
+      updateUser: vi.fn(async (_datos: { password: string }) => ({ error: errorCambio ?? null })),
     },
+    rpc: vi.fn(async (_funcion: 'marcar_contrasena_cambiada') => ({ error: errorRpc ?? null })),
     from: vi.fn((_tabla: 'perfiles') => ({
       select: (_columnas: string) => ({
         eq: (_columna: 'id', valor: string) => ({
@@ -55,6 +70,18 @@ describe('mapearRol', () => {
     expect(mapearRol('admin_consultoria')).toBe('Admin Consultoría')
     expect(mapearRol('consultor')).toBe('Consultor')
     expect(mapearRol('usuario_cliente')).toBe('Usuario Cliente')
+  })
+})
+
+describe('esEnlaceDeRecuperacion', () => {
+  it('reconoce el regreso desde el correo de recuperación', () => {
+    expect(esEnlaceDeRecuperacion('#access_token=abc&expires_in=3600&refresh_token=def&type=recovery')).toBe(true)
+  })
+
+  it('no confunde otros enlaces de Supabase ni una URL sin hash', () => {
+    expect(esEnlaceDeRecuperacion('#access_token=abc&type=signup')).toBe(false)
+    expect(esEnlaceDeRecuperacion('#type=recoveryx')).toBe(false)
+    expect(esEnlaceDeRecuperacion('')).toBe(false)
   })
 })
 
@@ -166,6 +193,80 @@ describe('obtenerUsuarioActual', () => {
     const auth = crearServicioAuth(cliente)
 
     expect(await auth.obtenerUsuarioActual()).toBeNull()
+  })
+})
+
+describe('solicitarRecuperacion', () => {
+  const REDIRECCION = 'http://localhost:8443'
+
+  it('pide el correo de recuperación con el correo normalizado y la URL de regreso', async () => {
+    const { cliente } = crearClienteDoble()
+    const auth = crearServicioAuth(cliente)
+
+    const resultado = await auth.solicitarRecuperacion(' Ana@COWIN.test ', REDIRECCION)
+
+    expect(resultado).toEqual({ ok: true })
+    expect(cliente.auth.resetPasswordForEmail).toHaveBeenCalledWith('ana@cowin.test', { redirectTo: REDIRECCION })
+  })
+
+  it('informa cuando se superó el límite de correos', async () => {
+    const { cliente } = crearClienteDoble({
+      errorRecuperacion: { code: 'over_email_send_rate_limit', message: 'email rate limit exceeded' },
+    })
+    const auth = crearServicioAuth(cliente)
+
+    expect(await auth.solicitarRecuperacion('ana@cowin.test', REDIRECCION)).toEqual({ ok: false, error: 'limite' })
+  })
+
+  it('informa una falla del servicio', async () => {
+    const { cliente } = crearClienteDoble({ errorRecuperacion: { message: 'Failed to fetch' } })
+    const auth = crearServicioAuth(cliente)
+
+    expect(await auth.solicitarRecuperacion('ana@cowin.test', REDIRECCION)).toEqual({ ok: false, error: 'servicio' })
+  })
+})
+
+describe('cambiarContrasena', () => {
+  it('actualiza la contraseña y desmarca la contraseña temporal', async () => {
+    const { cliente } = crearClienteDoble()
+    const auth = crearServicioAuth(cliente)
+
+    const resultado = await auth.cambiarContrasena('Nueva#2026')
+
+    expect(resultado).toEqual({ ok: true })
+    expect(cliente.auth.updateUser).toHaveBeenCalledWith({ password: 'Nueva#2026' })
+    expect(cliente.rpc).toHaveBeenCalledWith('marcar_contrasena_cambiada')
+  })
+
+  it('rechaza una contraseña débil sin tocar la bandera', async () => {
+    const { cliente } = crearClienteDoble({ errorCambio: { code: 'weak_password', message: 'Password is weak' } })
+    const auth = crearServicioAuth(cliente)
+
+    expect(await auth.cambiarContrasena('debil')).toEqual({ ok: false, error: 'debil' })
+    expect(cliente.rpc).not.toHaveBeenCalled()
+  })
+
+  it('rechaza repetir la contraseña actual', async () => {
+    const { cliente } = crearClienteDoble({
+      errorCambio: { code: 'same_password', message: 'New password should be different' },
+    })
+    const auth = crearServicioAuth(cliente)
+
+    expect(await auth.cambiarContrasena('Prociso2026!')).toEqual({ ok: false, error: 'igual' })
+  })
+
+  it('informa una falla del servicio al cambiar la contraseña', async () => {
+    const { cliente } = crearClienteDoble({ errorCambio: { message: 'Failed to fetch' } })
+    const auth = crearServicioAuth(cliente)
+
+    expect(await auth.cambiarContrasena('Nueva#2026')).toEqual({ ok: false, error: 'servicio' })
+  })
+
+  it('da el cambio por bueno aunque falle desmarcar la bandera (la contraseña ya cambió)', async () => {
+    const { cliente } = crearClienteDoble({ errorRpc: { message: 'Failed to fetch' } })
+    const auth = crearServicioAuth(cliente)
+
+    expect(await auth.cambiarContrasena('Nueva#2026')).toEqual({ ok: true })
   })
 })
 

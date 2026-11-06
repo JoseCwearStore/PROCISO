@@ -27,6 +27,16 @@ export type ErrorLogin = 'credenciales' | 'servicio' | 'sin_perfil' | 'inactivo'
 
 export type ResultadoLogin = { ok: true; usuario: UsuarioSesion } | { ok: false; error: ErrorLogin }
 
+export type ErrorRecuperacion = 'limite' | 'servicio'
+export type ErrorCambioContrasena = 'debil' | 'igual' | 'servicio'
+
+type Resultado<E> = { ok: true } | { ok: false; error: E }
+
+interface ErrorAuth {
+  code?: string
+  message: string
+}
+
 // Puerto: lo mínimo que el servicio necesita del cliente de Supabase.
 // En la app se le pasa el cliente real; en los tests, un doble.
 export interface ClienteAuth {
@@ -37,7 +47,10 @@ export interface ClienteAuth {
     }>
     signOut(): PromiseLike<{ error: unknown }>
     getSession(): PromiseLike<{ data: { session: { user: { id: string } } | null } }>
+    resetPasswordForEmail(email: string, opciones: { redirectTo: string }): PromiseLike<{ error: ErrorAuth | null }>
+    updateUser(datos: { password: string }): PromiseLike<{ error: ErrorAuth | null }>
   }
+  rpc(funcion: 'marcar_contrasena_cambiada'): PromiseLike<{ error: { message: string } | null }>
   from(tabla: 'perfiles'): {
     select(columnas: string): {
       eq(columna: 'id', valor: string): {
@@ -56,6 +69,11 @@ const ROLES: Record<RolBD, Rol> = {
 
 export function mapearRol(rol: RolBD): Rol {
   return ROLES[rol]
+}
+
+// El enlace del correo de recuperación vuelve con "#...&type=recovery".
+export function esEnlaceDeRecuperacion(hash: string): boolean {
+  return new URLSearchParams(hash.replace(/^#/, '')).get('type') === 'recovery'
 }
 
 const COLUMNAS_PERFIL = 'id, nombre, email, rol, consultoria_id, empresa_id, activo, password_temporal'
@@ -105,6 +123,28 @@ export function crearServicioAuth(cliente: ClienteAuth) {
 
       const perfil = await leerPerfil(data.session.user.id)
       return perfil?.activo ? aUsuarioSesion(perfil) : null
+    },
+
+    // Supabase no revela si el correo existe, y nosotros tampoco: si no hay
+    // error, el mensaje para el usuario es siempre el mismo.
+    async solicitarRecuperacion(email: string, redirectTo: string): Promise<Resultado<ErrorRecuperacion>> {
+      const { error } = await cliente.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo })
+      if (!error) return { ok: true }
+      return { ok: false, error: error.code === 'over_email_send_rate_limit' ? 'limite' : 'servicio' }
+    },
+
+    async cambiarContrasena(password: string): Promise<Resultado<ErrorCambioContrasena>> {
+      const { error } = await cliente.auth.updateUser({ password })
+      if (error) {
+        if (error.code === 'weak_password') return { ok: false, error: 'debil' }
+        if (error.code === 'same_password') return { ok: false, error: 'igual' }
+        return { ok: false, error: 'servicio' }
+      }
+
+      // La contraseña ya cambió. Si falla desmarcar la bandera, el peor caso es
+      // que en el próximo login se pida cambiarla de nuevo: no bloqueamos al usuario.
+      await cliente.rpc('marcar_contrasena_cambiada')
+      return { ok: true }
     },
 
     async cerrarSesion(): Promise<void> {

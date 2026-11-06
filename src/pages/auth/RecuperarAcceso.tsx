@@ -1,20 +1,31 @@
 import { useState } from 'react'
-import { Mail, ArrowLeft, CheckCircle, Info } from 'lucide-react'
+import { Mail, ArrowLeft, CheckCircle, Info, AlertCircle } from 'lucide-react'
 import { useApp } from '../../context/AppContext'
+import { servicioAuth } from '../../lib/servicios'
+
+const MENSAJES_ERROR = {
+  limite: 'Se enviaron demasiados correos. Espera unos minutos e intenta de nuevo.',
+  servicio: 'No pudimos conectar con el servidor. Intenta de nuevo en unos momentos.',
+} as const
 
 export default function RecuperarAcceso() {
   const { dispatch } = useApp()
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState('')
 
-  function handleSubmit(e: React.FormEvent) {
+  async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     setLoading(true)
-    setTimeout(() => {
-      setLoading(false)
-      setSent(true)
-    }, 900)
+    setError('')
+
+    // El enlace del correo vuelve a esta misma app.
+    const resultado = await servicioAuth.solicitarRecuperacion(email, window.location.origin)
+    setLoading(false)
+
+    if (resultado.ok) setSent(true)
+    else setError(MENSAJES_ERROR[resultado.error])
   }
 
   return (
@@ -42,10 +53,18 @@ export default function RecuperarAcceso() {
                 <Info className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>Por seguridad, no confirmamos si el correo existe en el sistema. Revisa también tu carpeta de spam.</span>
               </div>
-              <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-700 text-left mb-6">
-                <p className="font-semibold mb-1">ENTORNO DEMO — Requiere integración</p>
-                <p>El envío real de correo requiere configuración de servidor SMTP. Esta es una simulación.</p>
-              </div>
+              {import.meta.env.DEV && (
+                <div className="bg-slate-50 border border-slate-200 rounded-lg p-3 text-xs text-slate-600 text-left mb-6">
+                  <p className="font-semibold mb-1">Entorno local</p>
+                  <p>
+                    El correo no sale a internet: llega a Mailpit, en{' '}
+                    <a href="http://127.0.0.1:54324" target="_blank" rel="noreferrer" className="text-navy font-medium hover:underline">
+                      127.0.0.1:54324
+                    </a>
+                    .
+                  </p>
+                </div>
+              )}
               <button
                 onClick={() => dispatch({ type: 'SET_AUTH_SCREEN', screen: 'login' })}
                 className="w-full py-2.5 bg-navy text-white text-sm font-semibold rounded-lg hover:bg-navy/90 transition"
@@ -66,6 +85,12 @@ export default function RecuperarAcceso() {
               <p className="text-sm text-fg/50 mb-6">Ingresa tu correo y te enviaremos instrucciones para restablecer tu contraseña.</p>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {error && (
+                  <div className="flex gap-2 items-start bg-red-50 border border-red-200 rounded-lg p-3 text-sm text-red-700">
+                    <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                    <span>{error}</span>
+                  </div>
+                )}
                 <div>
                   <label className="block text-sm font-medium text-fg mb-1.5">Correo electrónico</label>
                   <div className="relative">
