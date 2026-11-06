@@ -78,6 +78,10 @@ describe('esEnlaceDeRecuperacion', () => {
     expect(esEnlaceDeRecuperacion('#access_token=abc&expires_in=3600&refresh_token=def&type=recovery')).toBe(true)
   })
 
+  it('reconoce el regreso desde el correo de invitación (el invitado elige su contraseña)', () => {
+    expect(esEnlaceDeRecuperacion('#access_token=abc&expires_in=3600&refresh_token=def&type=invite')).toBe(true)
+  })
+
   it('no confunde otros enlaces de Supabase ni una URL sin hash', () => {
     expect(esEnlaceDeRecuperacion('#access_token=abc&type=signup')).toBe(false)
     expect(esEnlaceDeRecuperacion('#type=recoveryx')).toBe(false)

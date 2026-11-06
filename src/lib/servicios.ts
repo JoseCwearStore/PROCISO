@@ -54,6 +54,15 @@ function adaptarClienteEscritura(cliente: SupabaseClient): ClienteEscritura {
       }),
     }),
     rpc: (funcion, args) => cliente.rpc(funcion, args),
+    functions: {
+      // supabase-js entrega el Response en error.context: de ahí sale el status.
+      invoke: async (nombre, opciones) => {
+        const { data, error } = await cliente.functions.invoke(nombre, opciones)
+        if (!error) return { data, error: null }
+        const status = (error as { context?: { status?: number } }).context?.status
+        return { data: null, error: { message: error.message, status } }
+      },
+    },
     storage: {
       from: (bucket) => ({
         upload: (ruta, archivo, opciones) => cliente.storage.from(bucket).upload(ruta, archivo, opciones),

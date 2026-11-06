@@ -78,7 +78,9 @@ export function rolDeBD(rol: Rol): RolBD {
 
 // El enlace del correo de recuperación vuelve con "#...&type=recovery".
 export function esEnlaceDeRecuperacion(hash: string): boolean {
-  return new URLSearchParams(hash.replace(/^#/, '')).get('type') === 'recovery'
+  // "invite": el usuario invitado llega con sesión y también tiene que elegir su contraseña.
+  const tipo = new URLSearchParams(hash.replace(/^#/, '')).get('type')
+  return tipo === 'recovery' || tipo === 'invite'
 }
 
 const COLUMNAS_PERFIL = 'id, nombre, email, rol, consultoria_id, empresa_id, activo, password_temporal'

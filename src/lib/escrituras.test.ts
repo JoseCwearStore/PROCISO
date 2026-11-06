@@ -38,7 +38,7 @@ type Respuesta = { data: unknown; error: { code?: string; message: string } | nu
 
 interface Llamada {
   tabla: string
-  operacion: 'insert' | 'update' | 'rpc' | 'upload' | 'remove'
+  operacion: 'insert' | 'update' | 'rpc' | 'upload' | 'remove' | 'invoke'
   datos: Record<string, unknown>
   id?: string
 }
@@ -46,7 +46,11 @@ interface Llamada {
 type RespuestaStorage = { error: { message: string; statusCode?: string } | null }
 
 // Doble del cliente: registra cada escritura y responde según "tabla.operacion".
-function crearClienteDoble(respuestas: Record<string, Respuesta> = {}, subida: RespuestaStorage = { error: null }) {
+function crearClienteDoble(
+  respuestas: Record<string, Respuesta> = {},
+  subida: RespuestaStorage = { error: null },
+  funcion: { data: unknown; error: { message: string; status?: number } | null } = { data: {}, error: null },
+) {
   const llamadas: Llamada[] = []
   const responder = (clave: string): Respuesta => respuestas[clave] ?? { data: {}, error: null }
 
@@ -67,6 +71,12 @@ function crearClienteDoble(respuestas: Record<string, Respuesta> = {}, subida: R
       llamadas.push({ tabla: funcion, operacion: 'rpc', datos: args })
       const { data, error } = responder(`${funcion}.rpc`)
       return { data, error }
+    },
+    functions: {
+      invoke: async (nombre, opciones) => {
+        llamadas.push({ tabla: nombre, operacion: 'invoke', datos: opciones.body })
+        return funcion
+      },
     },
     storage: {
       from: (bucket) => ({
@@ -1076,5 +1086,41 @@ describe('administración de consultorías y usuarios', () => {
     const { cliente } = crearClienteDoble({ 'administrar_usuario.rpc': { data: null, error: ERROR_RLS } })
 
     expect(await crearServicioEscritura(cliente).administrarUsuario('u1', { activo: false })).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+describe('invitarUsuario', () => {
+  const INVITACION = {
+    nombre: 'Rosa Pérez', email: 'rosa@espiga.test', cargo: 'Dueña', rol: 'Usuario Cliente' as const,
+    consultoriaId: C1, empresaId: E_NUEVA,
+  }
+
+  it('llama a la Edge Function con el rol de la BD y la URL de regreso', async () => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error: null }, { data: { id: 'u-nuevo', email: 'rosa@espiga.test' }, error: null })
+
+    const resultado = await crearServicioEscritura(cliente).invitarUsuario(INVITACION, 'http://localhost:5173')
+
+    expect(llamadas).toEqual([{
+      tabla: 'invitar-usuario', operacion: 'invoke',
+      datos: { nombre: 'Rosa Pérez', email: 'rosa@espiga.test', cargo: 'Dueña', rol: 'usuario_cliente', consultoriaId: C1, empresaId: E_NUEVA, redirectTo: 'http://localhost:5173' },
+    }])
+    expect(resultado).toEqual({ ok: true, valor: { id: 'u-nuevo', email: 'rosa@espiga.test' } })
+  })
+
+  it('no invita a un Admin PROCISO (ni llama a la función)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).invitarUsuario({ ...INVITACION, rol: 'Admin PROCISO' }, 'http://localhost:5173'))
+      .toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toEqual([])
+  })
+
+  it('traduce el status HTTP de la función: 403 sin permiso, 400 datos inválidos, otro servicio', async () => {
+    const con = (status: number) => crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status } }).cliente
+    const invitar = (status: number) => crearServicioEscritura(con(status)).invitarUsuario(INVITACION, 'http://localhost:5173')
+
+    expect(await invitar(403)).toEqual({ ok: false, error: 'sin_permiso' })
+    expect(await invitar(400)).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(await invitar(500)).toEqual({ ok: false, error: 'servicio' })
   })
 })

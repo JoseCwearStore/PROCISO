@@ -483,6 +483,7 @@ export function traducirConsultoria(fila: FilaConsultoria): Consultoria {
 export function traducirEmpresa(fila: FilaEmpresa, proyectos: FilaProyecto[]): Empresa {
   return {
     id: fila.id,
+    consultoriaId: fila.consultoria_id,
     nombre: fila.nombre,
     nombreComercial: opcional(fila.nombre_comercial),
     rfc: fila.rfc ?? '',

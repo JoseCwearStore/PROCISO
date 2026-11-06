@@ -1,5 +1,11 @@
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA, ROLES_DEL_EQUIPO, type NuevaConsultoria } from '../lib/escrituras'
+import {
+  MENSAJES_ERROR_ESCRITURA,
+  ROLES_DEL_EQUIPO,
+  ROLES_INVITABLES,
+  type NuevaConsultoria,
+  type NuevaInvitacion,
+} from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { Consultoria, Rol, Usuario } from '../types'
 
@@ -25,6 +31,35 @@ export function useAccionesAdministracion() {
   }
 
   return {
+    // Invitación: el Admin PROCISO elige la consultoría; el admin de consultoría, la suya.
+    rolesInvitables: ROLES_INVITABLES,
+    consultoriasParaInvitar: esAdminProciso
+      ? state.consultorias.filter((c) => c.activa)
+      : state.consultorias.filter((c) => c.id === yo?.consultoriaId),
+    empresasDe: (consultoriaId: string) => state.empresas.filter((e) => e.consultoriaId === consultoriaId),
+
+    async invitarUsuario(datos: NuevaInvitacion): Promise<boolean> {
+      // El enlace del correo vuelve a esta misma app (tiene que estar en additional_redirect_urls).
+      const resultado = await servicioEscritura.invitarUsuario(datos, window.location.origin)
+      if (!resultado.ok) return fallo(resultado.error)
+      dispatch({
+        type: 'UPSERT_USUARIO',
+        usuario: {
+          id: resultado.valor.id,
+          nombre: datos.nombre.trim(),
+          email: resultado.valor.email,
+          cargo: datos.cargo.trim(),
+          rol: datos.rol,
+          consultoriaId: datos.consultoriaId ?? undefined,
+          empresaId: datos.empresaId ?? undefined,
+          proyectosAsignados: [],
+          activo: true,
+          passwordTemp: true,
+        },
+      })
+      return true
+    },
+
     puedeAdministrar,
     puedeCambiarRol: (usuario: Usuario) => puedeAdministrar(usuario) && ROLES_DEL_EQUIPO.includes(usuario.rol),
     rolesDelEquipo: ROLES_DEL_EQUIPO,

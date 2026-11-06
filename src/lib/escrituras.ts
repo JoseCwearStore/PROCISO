@@ -89,6 +89,13 @@ export interface ClienteEscritura {
       | 'administrar_usuario',
     args: Record<string, unknown>,
   ): PromiseLike<{ data?: unknown; error: ErrorBD | null }>
+  // Edge Functions. El error trae el status HTTP de la respuesta de la función.
+  functions: {
+    invoke(
+      nombre: 'invitar-usuario',
+      opciones: { body: Record<string, unknown> },
+    ): PromiseLike<{ data: unknown; error: { message: string; status?: number } | null }>
+  }
   storage: {
     from(bucket: 'evidencias'): {
       upload(ruta: string, archivo: File, opciones: { contentType: string }): PromiseLike<{ error: ErrorStorage | null }>
@@ -114,6 +121,17 @@ export interface NuevaConsultoria {
 
 // Los únicos roles que se cambian desde la app (consultor ↔ admin de consultoría).
 export const ROLES_DEL_EQUIPO: Rol[] = ['Consultor', 'Admin Consultoría']
+// Los que se invitan: el equipo y los clientes (nunca un Admin PROCISO).
+export const ROLES_INVITABLES: Rol[] = [...ROLES_DEL_EQUIPO, 'Usuario Cliente']
+
+export interface NuevaInvitacion {
+  nombre: string
+  email: string
+  cargo: string
+  rol: Rol
+  consultoriaId: string | null
+  empresaId: string | null
+}
 
 export interface NuevaEvidencia {
   id: string // UUID generado en el navegador: es también el nombre del archivo
@@ -301,6 +319,27 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     // Suspender bloquea a toda su gente; la RPC deja historial.
     cambiarEstadoConsultoria: (id: string, activa: boolean) =>
       llamar('cambiar_estado_consultoria', { p_id: id, p_activa: activa }),
+
+    // Invitación por correo (Edge Function invitar-usuario). Las reglas las
+    // decide la BD (autorizar_invitacion); acá solo se descarta lo imposible.
+    async invitarUsuario(datos: NuevaInvitacion, redirectTo: string): Promise<ResultadoEscritura<{ id: string; email: string }>> {
+      if (!ROLES_INVITABLES.includes(datos.rol)) return { ok: false, error: 'datos_invalidos' }
+      const { data, error } = await cliente.functions.invoke('invitar-usuario', {
+        body: {
+          nombre: datos.nombre,
+          email: datos.email,
+          cargo: datos.cargo,
+          rol: rolDeBD(datos.rol),
+          consultoriaId: datos.consultoriaId,
+          empresaId: datos.empresaId,
+          redirectTo,
+        },
+      })
+      if (error) {
+        return { ok: false, error: error.status === 403 ? 'sin_permiso' : error.status === 400 ? 'datos_invalidos' : 'servicio' }
+      }
+      return { ok: true, valor: data as { id: string; email: string } }
+    },
 
     // Rol (solo dentro del equipo) y/o acceso. null = no cambiar ese dato.
     async administrarUsuario(id: string, cambios: { rol?: Rol; activo?: boolean }): Promise<ResultadoEscritura<void>> {

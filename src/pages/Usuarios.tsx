@@ -15,43 +15,32 @@ const PERMISOS: Record<Rol, string[]> = {
   'Consultor': ['Empresas', 'Proyectos', 'Procesos', 'Evidencias', 'Documentación', 'Revisiones'],
   'Usuario Cliente': ['Proyectos', 'Procesos', 'Evidencias', 'Documentación'],
 }
+const FORM_VACIO = { nombre: '', email: '', cargo: '', rol: 'Consultor' as Rol, consultoriaId: '', empresaId: '' }
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 
 export default function Usuarios() {
-  const { state, dispatch, showToast } = useApp()
+  const { state, showToast } = useApp()
   const acciones = useAccionesAdministracion()
   const [tab, setTab] = useState<'usuarios' | 'matriz'>('usuarios')
   const [inviteOpen, setInviteOpen] = useState(false)
   const [suspender, setSuspender] = useState<Usuario | null>(null)
-  const [form, setForm] = useState({ nombre: '', email: '', cargo: '', rol: 'Consultor' as Rol })
+  const [form, setForm] = useState(FORM_VACIO)
+  // El admin de consultoría invita a la suya; el Admin PROCISO elige (por defecto, la primera activa).
+  const consultoriaElegida = form.consultoriaId || acciones.consultoriasParaInvitar[0]?.id || ''
+  const empresas = consultoriaElegida ? acciones.empresasDe(consultoriaElegida) : []
 
-  function invitar() {
-    if (!form.nombre.trim() || !form.email.trim()) return
-    const usuario: Usuario = {
-      id: `usr-${Date.now()}`,
-      nombre: form.nombre.trim(),
-      email: form.email.trim(),
-      cargo: form.cargo.trim(),
-      rol: form.rol,
-      proyectosAsignados: [],
-      activo: true,
-    }
-    dispatch({ type: 'UPSERT_USUARIO', usuario })
-    dispatch({
-      type: 'APPEND_AUDIT',
-      entrada: {
-        id: `hist-${Date.now()}`,
-        fecha: new Date().toLocaleString('es-MX'),
-        autorId: state.currentUser?.id || 'aaaaaaaa-0000-0000-0000-000000000002',
-        accion: 'Usuario invitado',
-        descripcion: `${usuario.email}; rol ${usuario.rol}. No se generó ni mostró una contraseña.`,
-        entidadId: usuario.id,
-        entidadTipo: 'empresa',
-      },
+  async function invitar() {
+    if (!form.nombre.trim() || !form.email.trim() || !consultoriaElegida) return
+    const esCliente = form.rol === 'Usuario Cliente'
+    if (esCliente && !form.empresaId) return
+    const ok = await acciones.invitarUsuario({
+      nombre: form.nombre, email: form.email, cargo: form.cargo, rol: form.rol,
+      consultoriaId: consultoriaElegida, empresaId: esCliente ? form.empresaId : null,
     })
+    if (!ok) return
     setInviteOpen(false)
-    setForm({ nombre: '', email: '', cargo: '', rol: 'Consultor' })
-    showToast('Invitación simulada. Requiere integración de correo.', 'success')
+    setForm(FORM_VACIO)
+    showToast(`Invitación enviada a ${form.email.trim().toLowerCase()}. Definirá su contraseña desde el correo.`, 'success')
   }
 
   async function cambiarAcceso(usuario: Usuario) {
@@ -72,8 +61,8 @@ export default function Usuarios() {
       <div className="mb-5 flex gap-1 border-b border-line"><button onClick={() => setTab('usuarios')} className={`border-b-2 px-4 py-3 text-sm font-medium ${tab === 'usuarios' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>Usuarios</button><button onClick={() => setTab('matriz')} className={`border-b-2 px-4 py-3 text-sm font-medium ${tab === 'matriz' ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-500'}`}>Matriz de permisos</button></div>
       {tab === 'usuarios' ? <div className="overflow-hidden rounded-xl border border-line bg-white">{state.usuarios.map((usuario) => <div key={usuario.id} className="flex flex-wrap items-center gap-4 border-b border-line p-4 last:border-0"><div className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 font-semibold text-slate-600">{usuario.nombre.split(' ').map((item) => item[0]).slice(0, 2).join('')}</div><div className="min-w-52 flex-1"><p className="text-sm font-semibold text-slate-800">{usuario.nombre}</p><p className="text-xs text-slate-400">{usuario.email} · {usuario.cargo}</p></div>{acciones.puedeCambiarRol(usuario) ? <select className={`${inputClass} max-w-52`} value={usuario.rol} onChange={(event) => void cambiarRol(usuario, event.target.value as Rol)}>{acciones.rolesDelEquipo.map((rol) => <option key={rol}>{rol}</option>)}</select> : <span className="min-w-52 text-sm text-slate-600">{usuario.rol}</span>}<span className={`rounded-full px-2 py-1 text-xs font-medium ${usuario.activo ? 'bg-emerald-50 text-emerald-600' : 'bg-red-50 text-red-600'}`}>{usuario.activo ? 'Activo' : 'Suspendido'}</span><Button variant="outline" size="sm" disabled={!acciones.puedeAdministrar(usuario)} onClick={() => usuario.activo ? setSuspender(usuario) : void cambiarAcceso(usuario)}>{usuario.activo ? 'Suspender' : 'Restablecer acceso'}</Button></div>)}</div> : <div className="overflow-x-auto rounded-xl border border-line bg-white"><table className="min-w-[900px] w-full text-sm"><thead><tr className="border-b border-line bg-slate-50"><th className="px-4 py-3 text-left">Módulo</th>{ROLES.map((rol) => <th key={rol} className="px-4 py-3 text-center text-xs">{rol}</th>)}</tr></thead><tbody>{MODULOS.map((modulo) => <tr key={modulo} className="border-b border-line last:border-0"><td className="px-4 py-3 font-medium text-slate-700">{modulo}</td>{ROLES.map((rol) => <td key={rol} className="px-4 py-3 text-center">{PERMISOS[rol].includes(modulo) ? <ShieldCheck className="mx-auto h-5 w-5 text-emerald-500" /> : <span className="text-slate-300">—</span>}</td>)}</tr>)}</tbody></table></div>}
 
-      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invitar usuario" footer={<><Button variant="outline" onClick={() => setInviteOpen(false)}>Cancelar</Button><Button onClick={invitar} disabled={!form.nombre.trim() || !form.email.trim()}>Enviar invitación</Button></>}>
-        <div className="space-y-4"><label className="block"><span className="mb-1.5 block text-sm font-medium">Nombre *</span><input className={inputClass} value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} /></label><label className="block"><span className="mb-1.5 block text-sm font-medium">Correo *</span><input type="email" className={inputClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label className="block"><span className="mb-1.5 block text-sm font-medium">Cargo</span><input className={inputClass} value={form.cargo} onChange={(event) => setForm({ ...form, cargo: event.target.value })} /></label><label className="block"><span className="mb-1.5 block text-sm font-medium">Rol</span><select className={inputClass} value={form.rol} onChange={(event) => setForm({ ...form, rol: event.target.value as Rol })}>{ROLES.map((rol) => <option key={rol}>{rol}</option>)}</select></label><p className="rounded-lg bg-amber-50 p-3 text-xs text-amber-800">DEMO · El envío de la invitación requiere integración de correo. No se generan contraseñas visibles.</p></div>
+      <Modal open={inviteOpen} onClose={() => setInviteOpen(false)} title="Invitar usuario" footer={<><Button variant="outline" onClick={() => setInviteOpen(false)}>Cancelar</Button><Button onClick={() => void invitar()} disabled={!form.nombre.trim() || !form.email.trim() || !consultoriaElegida || (form.rol === 'Usuario Cliente' && !form.empresaId)}>Enviar invitación</Button></>}>
+        <div className="space-y-4"><label className="block"><span className="mb-1.5 block text-sm font-medium">Nombre *</span><input className={inputClass} value={form.nombre} onChange={(event) => setForm({ ...form, nombre: event.target.value })} /></label><label className="block"><span className="mb-1.5 block text-sm font-medium">Correo *</span><input type="email" className={inputClass} value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} /></label><label className="block"><span className="mb-1.5 block text-sm font-medium">Cargo</span><input className={inputClass} value={form.cargo} onChange={(event) => setForm({ ...form, cargo: event.target.value })} /></label><label className="block"><span className="mb-1.5 block text-sm font-medium">Rol</span><select className={inputClass} value={form.rol} onChange={(event) => setForm({ ...form, rol: event.target.value as Rol, empresaId: '' })}>{acciones.rolesInvitables.map((rol) => <option key={rol}>{rol}</option>)}</select></label>{acciones.consultoriasParaInvitar.length > 1 && <label className="block"><span className="mb-1.5 block text-sm font-medium">Consultoría *</span><select className={inputClass} value={consultoriaElegida} onChange={(event) => setForm({ ...form, consultoriaId: event.target.value, empresaId: '' })}>{acciones.consultoriasParaInvitar.map((c) => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></label>}{form.rol === 'Usuario Cliente' && <label className="block"><span className="mb-1.5 block text-sm font-medium">Empresa *</span><select className={inputClass} value={form.empresaId} onChange={(event) => setForm({ ...form, empresaId: event.target.value })}><option value="">Selecciona la empresa</option>{empresas.map((e) => <option key={e.id} value={e.id}>{e.nombre}</option>)}</select></label>}<p className="rounded-lg bg-blue-50 p-3 text-xs text-blue-800">Se envía un correo con un enlace para que la persona defina su propia contraseña. Nadie ve ni genera contraseñas.</p></div>
       </Modal>
       <ConfirmDialog open={!!suspender} onClose={() => setSuspender(null)} onConfirm={() => suspender && cambiarAcceso(suspender)} title="Suspender acceso" message={`Se cerrará el acceso de ${suspender?.nombre || 'este usuario'} sin eliminar su historial. Esta acción queda registrada en la auditoría.`} confirmLabel="Suspender acceso" />
     </div>

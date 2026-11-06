@@ -112,6 +112,7 @@ export interface Usuario {
 
 export interface Empresa {
   id: string
+  consultoriaId?: string
   nombre: string
   nombreComercial?: string
   rfc: string
