@@ -1124,3 +1124,55 @@ describe('invitarUsuario', () => {
     expect(await invitar(500)).toEqual({ ok: false, error: 'servicio' })
   })
 })
+
+describe('analizarConIA', () => {
+  const PEDIDO = {
+    consultoriaId: C1, proyectoId: P_NUEVO, fuenteTipo: 'documento' as const, documentoId: 'doc-1', criterioIds: ['cr-521'],
+  }
+  const RESPUESTA = {
+    id: 'an-9', estado: 'Completado', resumen: 'Parcial.', error: null, proveedor: 'openai-compatible', modelo: 'gpt-oss:120b',
+    resultados: [{ criterio_id: 'cr-521', estado: 'Parcial', hallazgos: 'Falta mejora continua.', sugerencias: null }],
+  }
+
+  it('llama a la Edge Function y devuelve el análisis completo para mostrarlo sin recargar', async () => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error: null }, { data: RESPUESTA, error: null })
+
+    const resultado = await crearServicioEscritura(cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')
+
+    expect(llamadas).toEqual([{ tabla: 'analizar-ia', operacion: 'invoke', datos: PEDIDO }])
+    expect(resultado).toEqual({
+      ok: true,
+      valor: {
+        id: 'an-9', proyectoId: P_NUEVO, fuenteTipo: 'documento', documentoId: 'doc-1', evidenciaId: undefined,
+        criterioIds: ['cr-521'], solicitadoPorId: ROBERTO, estado: 'Completado', resumen: 'Parcial.', errorDetalle: undefined,
+        proveedor: 'openai-compatible', modelo: 'gpt-oss:120b', fecha: '06/11/2026',
+        resultados: [{ criterioId: 'cr-521', estado: 'Parcial', hallazgos: 'Falta mejora continua.', sugerencias: undefined }],
+      },
+    })
+  })
+
+  it('un análisis que falló vuelve como análisis en Error (con su motivo), no como falla de escritura', async () => {
+    const { cliente } = crearClienteDoble({}, { error: null }, {
+      data: { id: 'an-10', estado: 'Error', error: 'El modelo configurado no acepta imágenes.', proveedor: 'openai-compatible', modelo: 'x', resultados: [] },
+      error: null,
+    })
+
+    const resultado = await crearServicioEscritura(cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')
+
+    expect(resultado).toEqual({ ok: true, valor: expect.objectContaining({ estado: 'Error', errorDetalle: 'El modelo configurado no acepta imágenes.', resultados: [] }) })
+  })
+
+  it('sin criterios no llama a la función', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).analizarConIA({ ...PEDIDO, criterioIds: [] }, ROBERTO, '06/11/2026'))
+      .toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toEqual([])
+  })
+
+  it('si el pedido se rechaza (cliente, otro proyecto) es "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status: 403 } })
+
+    expect(await crearServicioEscritura(cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})

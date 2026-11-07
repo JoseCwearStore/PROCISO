@@ -22,6 +22,7 @@ import { formatearFecha } from "../lib/datos"
 import { Button } from "../components/ui/Button"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
+import { PanelAnalisisIA } from "../components/PanelAnalisisIA"
 import type { EstadoEvidencia, Evidencia, TipoEvidencia } from "../types"
 
 const ESTADOS: EstadoEvidencia[] = [
@@ -786,6 +787,10 @@ export default function Evidencias() {
                 </div>
               )}
             </div>
+            <PanelAnalisisIA
+              key={vistaPrevia.id}
+              fuente={{ tipo: "evidencia", id: vistaPrevia.id, proyectoId: vistaPrevia.proyectoId, nombre: vistaPrevia.nombre }}
+            />
           </div>
         )}
       </Modal>

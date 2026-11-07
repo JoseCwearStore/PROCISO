@@ -290,6 +290,49 @@ export interface EventoDocumento {
   detalle: string
 }
 
+// ─── Preevaluación con IA ─────────────────────────────────────────────────────
+// Un criterio del catálogo global (cargado desde el Excel del usuario).
+export interface CriterioEvaluacion {
+  id: string
+  clausula: string
+  titulo: string
+  intencion: string
+  evidenciaEsperada: string[]
+  preguntas: string[]
+  senalesDeHueco: string[]
+  puedeNoAplicar: boolean
+  condicionNoAplica?: string
+  orden: number
+}
+
+export type EstadoAnalisisIA = 'Pendiente' | 'Completado' | 'Error'
+export type EstadoResultadoIA = 'Cubierto' | 'Parcial' | 'Hueco' | 'No evaluable' | 'No aplica'
+
+export interface ResultadoAnalisisIA {
+  criterioId: string
+  estado: EstadoResultadoIA
+  hallazgos?: string
+  sugerencias?: string
+}
+
+// Una PREEVALUACIÓN: requiere revisión humana; no es un dictamen de conformidad.
+export interface AnalisisIA {
+  id: string
+  proyectoId: string
+  fuenteTipo: 'documento' | 'evidencia'
+  documentoId?: string
+  evidenciaId?: string
+  criterioIds: string[]
+  solicitadoPorId: string
+  estado: EstadoAnalisisIA
+  resumen?: string
+  errorDetalle?: string
+  proveedor?: string
+  modelo?: string
+  fecha: string
+  resultados: ResultadoAnalisisIA[]
+}
+
 export interface Documento {
   id: string
   nombre: string

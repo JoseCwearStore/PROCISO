@@ -1,6 +1,11 @@
 import type {
   ActividadProceso,
+  AnalisisIA,
   ComentarioGlobal,
+  CriterioEvaluacion,
+  EstadoAnalisisIA,
+  EstadoResultadoIA,
+  ResultadoAnalisisIA,
   ComentarioDocumento,
   ComentarioTarea,
   Consultoria,
@@ -321,6 +326,44 @@ export interface FilaNoConformidad {
   observaciones: string
 }
 
+export interface FilaCriterio {
+  id: string
+  clausula: string
+  titulo: string
+  intencion: string
+  evidencia_esperada: string[]
+  preguntas: string[]
+  senales_de_hueco: string[]
+  puede_no_aplicar: boolean
+  condicion_no_aplica: string | null
+  orden: number
+}
+
+export interface FilaAnalisis {
+  id: string
+  proyecto_id: string
+  fuente_tipo: 'documento' | 'evidencia'
+  documento_id: string | null
+  evidencia_id: string | null
+  criterio_ids: string[]
+  solicitado_por: string
+  estado: EstadoAnalisisIA
+  resumen: string | null
+  error_detalle: string | null
+  proveedor: string | null
+  modelo: string | null
+  creado_en: string
+}
+
+export interface FilaResultadoAnalisis {
+  analisis_id: string
+  criterio_id: string
+  estado: EstadoResultadoIA
+  hallazgos: string | null
+  sugerencias: string | null
+  orden: number
+}
+
 // Una fila de mis_notificaciones(): la BD ya decidió qué le toca a quién.
 export interface FilaNotificacion {
   clave: string
@@ -356,10 +399,15 @@ export interface FilasSesion {
   preguntas: FilaPregunta[]
   entregables: FilaEntregable[]
   indicadores: FilaIndicador[]
+  criterios: FilaCriterio[]
+  analisis: FilaAnalisis[]
+  analisisResultados: FilaResultadoAnalisis[]
   notificaciones: FilaNotificacion[]
 }
 
 export interface DatosSesion {
+  criterios: CriterioEvaluacion[]
+  analisisIA: AnalisisIA[]
   comentariosGlobales: ComentarioGlobal[]
   notificaciones: Notificacion[]
   historial: EntradaHistorial[]
@@ -414,6 +462,15 @@ const CONSULTAS = {
     'entregables',
     'id, proyecto_id, nombre, tipo, estado, fecha_entrega, fecha_aprobacion, aprobado_por, documento_id',
   ],
+  criterios: [
+    'criterios_evaluacion',
+    'id, clausula, titulo, intencion, evidencia_esperada, preguntas, senales_de_hueco, puede_no_aplicar, condicion_no_aplica, orden',
+  ],
+  analisis: [
+    'analisis_ia',
+    'id, proyecto_id, fuente_tipo, documento_id, evidencia_id, criterio_ids, solicitado_por, estado, resumen, error_detalle, proveedor, modelo, creado_en',
+  ],
+  analisisResultados: ['analisis_ia_resultados', 'analisis_id, criterio_id, estado, hallazgos, sugerencias, orden'],
   listas: ['listas_verificacion', 'id, proyecto_id, proceso_id, nombre, area, responsable_id, fecha, edicion_norma'],
   preguntas: [
     'lista_preguntas',
@@ -879,6 +936,47 @@ export function traducirNotificacion(fila: FilaNotificacion): Notificacion {
   }
 }
 
+export function traducirCriterio(fila: FilaCriterio): CriterioEvaluacion {
+  return {
+    id: fila.id,
+    clausula: fila.clausula,
+    titulo: fila.titulo,
+    intencion: fila.intencion,
+    evidenciaEsperada: fila.evidencia_esperada,
+    preguntas: fila.preguntas,
+    senalesDeHueco: fila.senales_de_hueco,
+    puedeNoAplicar: fila.puede_no_aplicar,
+    condicionNoAplica: opcional(fila.condicion_no_aplica),
+    orden: fila.orden,
+  }
+}
+
+export function traducirResultadoAnalisis(fila: Omit<FilaResultadoAnalisis, 'analisis_id' | 'orden'>): ResultadoAnalisisIA {
+  return { criterioId: fila.criterio_id, estado: fila.estado, hallazgos: opcional(fila.hallazgos), sugerencias: opcional(fila.sugerencias) }
+}
+
+export function traducirAnalisis(fila: FilaAnalisis, resultados: FilaResultadoAnalisis[]): AnalisisIA {
+  return {
+    id: fila.id,
+    proyectoId: fila.proyecto_id,
+    fuenteTipo: fila.fuente_tipo,
+    documentoId: opcional(fila.documento_id),
+    evidenciaId: opcional(fila.evidencia_id),
+    criterioIds: fila.criterio_ids,
+    solicitadoPorId: fila.solicitado_por,
+    estado: fila.estado,
+    resumen: opcional(fila.resumen),
+    errorDetalle: opcional(fila.error_detalle),
+    proveedor: opcional(fila.proveedor),
+    modelo: opcional(fila.modelo),
+    fecha: formatearFecha(fila.creado_en),
+    resultados: resultados
+      .filter((r) => r.analisis_id === fila.id)
+      .sort((a, b) => a.orden - b.orden)
+      .map(traducirResultadoAnalisis),
+  }
+}
+
 export function traducirComentarioGlobal(fila: FilaComentario): ComentarioGlobal {
   return {
     id: fila.id,
@@ -930,6 +1028,11 @@ export function combinarDatosSesion(filas: FilasSesion): DatosSesion {
     indicadores: filas.indicadores.map(traducirIndicador),
     noConformidades: filas.noConformidades.map((fila) => traducirNoConformidad(fila, filas.proyectos, filas.historial)),
     listasVerificacion: filas.listas.map((fila) => traducirLista(fila, filas.preguntas, filas.proyectos)),
+    criterios: [...filas.criterios].sort((a, b) => a.orden - b.orden).map(traducirCriterio),
+    // Del más nuevo al más viejo.
+    analisisIA: [...filas.analisis]
+      .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
+      .map((fila) => traducirAnalisis(fila, filas.analisisResultados)),
     comentariosGlobales: [...filas.comentarios]
       .sort((a, b) => b.creado_en.localeCompare(a.creado_en))
       .map(traducirComentarioGlobal),

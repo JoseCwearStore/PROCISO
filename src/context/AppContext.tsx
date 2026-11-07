@@ -21,6 +21,8 @@ import type {
   ListaVerificacion,
   IndicadorGestion,
   ComentarioGlobal,
+  CriterioEvaluacion,
+  AnalisisIA,
   Consultoria,
   AuthScreen,
   LoginReason,
@@ -52,6 +54,8 @@ const SIN_DATOS: SinDatos = {
   consultorias: [],
   notificaciones: [],
   comentariosGlobales: [],
+  criterios: [],
+  analisisIA: [],
 }
 
 interface CurrentUser {
@@ -90,6 +94,8 @@ interface AppState {
   listasVerificacion: ListaVerificacion[]
   indicadores: IndicadorGestion[]
   comentariosGlobales: ComentarioGlobal[]
+  criterios: CriterioEvaluacion[]
+  analisisIA: AnalisisIA[]
   auditoria: EntradaHistorial[]
   consultorias: Consultoria[]
   notificaciones: Notificacion[]
@@ -135,6 +141,8 @@ type Action =
   | { type: 'UPSERT_LISTA'; lista: ListaVerificacion }
   | { type: 'UPSERT_INDICADOR'; indicador: IndicadorGestion }
   | { type: 'ADD_COMENTARIO_GLOBAL'; comentario: ComentarioGlobal }
+  // Solo con lo que devolvió la Edge Function (useAccionesIA).
+  | { type: 'ADD_ANALISIS_IA'; analisis: AnalisisIA }
   | { type: 'APPEND_AUDIT'; entrada: EntradaHistorial }
   | { type: 'UPSERT_CONSULTORIA'; consultoria: Consultoria }
   // Solo después de que la BD las guardó (useAccionesNotificacion).
@@ -298,6 +306,8 @@ function reducer(state: AppState, action: Action): AppState {
           : [action.indicador, ...state.indicadores],
       }
     }
+    case 'ADD_ANALISIS_IA':
+      return { ...state, analisisIA: [action.analisis, ...state.analisisIA.filter((a) => a.id !== action.analisis.id)] }
     case 'ADD_COMENTARIO_GLOBAL':
       // La lista va del más nuevo al más viejo (como la carga la BD).
       return { ...state, comentariosGlobales: [action.comentario, ...state.comentariosGlobales] }
@@ -362,6 +372,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     intentoCarga: 0,
     ...SIN_DATOS,
     comentariosGlobales: [],
+    criterios: [],
+    analisisIA: [],
     toasts: [],
     modal: null,
   })

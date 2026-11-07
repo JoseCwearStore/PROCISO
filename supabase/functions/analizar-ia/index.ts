@@ -147,11 +147,12 @@ Deno.serve(async (req) => {
     // 4. Registrar.
     const { error: errorRegistro } = await registrar('Completado', { resumen, resultados })
     if (errorRegistro) throw new ErrorIA(`No se pudo guardar el resultado: ${errorRegistro.message}`)
-    return responder(200, { id: analisis.id, estado: 'Completado' })
+    // Se devuelve el análisis completo: la pantalla lo muestra sin otra consulta.
+    return responder(200, { id: analisis.id, estado: 'Completado', resumen, proveedor, modelo, resultados })
   } catch (e) {
     // Cualquier falla queda registrada con su motivo: así se puede actuar.
     const motivo = e instanceof ErrorIA ? e.message : `Error inesperado: ${e instanceof Error ? e.message : String(e)}`
     await registrar('Error', { error: motivo })
-    return responder(200, { id: analisis.id, estado: 'Error', error: motivo })
+    return responder(200, { id: analisis.id, estado: 'Error', error: motivo, proveedor, modelo, resultados: [] })
   }
 })

@@ -20,6 +20,7 @@ import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
+import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import type {
   CategoriaDocumento,
@@ -565,6 +566,13 @@ function EditorDocumento(props: EditorProps) {
 
       {bloqueado && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">La versión aprobada está bloqueada para edición directa. Crea una nueva versión para realizar cambios.</div>}
       {props.errores.length > 0 && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p className="font-semibold">No se puede enviar a revisión:</p><p>{props.errores.join(', ')}.</p></div>}
+      {/* La IA lee el documento desde la BD: analiza la última versión GUARDADA. */}
+      <details className="mb-5">
+        <summary className="cursor-pointer text-sm font-medium text-violet-700">Preevaluación con IA · analiza la última versión guardada</summary>
+        <div className="mt-3">
+          <PanelAnalisisIA key={documento.id} fuente={{ tipo: 'documento', id: documento.id, proyectoId: documento.proyectoId, nombre: documento.nombre }} tipoDocumento={documento.tipo} />
+        </div>
+      </details>
       <div className="mb-5 grid gap-4 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
         <label><span className={labelClass}>Código documental *</span><input disabled={bloqueado} className={inputClass} value={documento.codigo || ''} onChange={(event) => actualizar({ codigo: event.target.value })} /></label>
         <label><span className={labelClass}>Referencia normativa</span><input disabled className={inputClass} value={props.referenciaNormativa} /></label>

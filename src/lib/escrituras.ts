@@ -1,5 +1,7 @@
 import type {
+  AnalisisIA,
   ComentarioDocumento,
+  ResultadoAnalisisIA,
   Consultoria,
   Rol,
   ComentarioGlobal,
@@ -27,6 +29,7 @@ import {
   traducirComentarioGlobal,
   traducirComentarioTarea,
   traducirConsultoria,
+  traducirResultadoAnalisis,
   traducirEmpresa,
   traducirEntregable,
   traducirEvidencia,
@@ -92,7 +95,7 @@ export interface ClienteEscritura {
   // Edge Functions. El error trae el status HTTP de la respuesta de la función.
   functions: {
     invoke(
-      nombre: 'invitar-usuario',
+      nombre: 'invitar-usuario' | 'analizar-ia',
       opciones: { body: Record<string, unknown> },
     ): PromiseLike<{ data: unknown; error: { message: string; status?: number } | null }>
   }
@@ -123,6 +126,26 @@ export interface NuevaConsultoria {
 export const ROLES_DEL_EQUIPO: Rol[] = ['Consultor', 'Admin Consultoría']
 // Los que se invitan: el equipo y los clientes (nunca un Admin PROCISO).
 export const ROLES_INVITABLES: Rol[] = [...ROLES_DEL_EQUIPO, 'Usuario Cliente']
+
+export interface PedidoAnalisisIA {
+  consultoriaId: string | null
+  proyectoId: string
+  fuenteTipo: 'documento' | 'evidencia'
+  documentoId?: string
+  evidenciaId?: string
+  criterioIds: string[]
+}
+
+// Lo que devuelve la Edge Function analizar-ia.
+interface RespuestaAnalisisIA {
+  id: string
+  estado: AnalisisIA['estado']
+  resumen?: string | null
+  error?: string | null
+  proveedor?: string | null
+  modelo?: string | null
+  resultados?: { criterio_id: string; estado: ResultadoAnalisisIA['estado']; hallazgos: string | null; sugerencias: string | null }[]
+}
 
 export interface NuevaInvitacion {
   nombre: string
@@ -319,6 +342,37 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     // Suspender bloquea a toda su gente; la RPC deja historial.
     cambiarEstadoConsultoria: (id: string, activa: boolean) =>
       llamar('cambiar_estado_consultoria', { p_id: id, p_activa: activa }),
+
+    // Preevaluación con IA (Edge Function analizar-ia). Un análisis que FALLÓ
+    // (modelo sin visión, PDF escaneado, clave inválida…) vuelve como análisis en
+    // estado Error con su motivo: es un resultado para mostrar, no una falla de escritura.
+    async analizarConIA(pedido: PedidoAnalisisIA, solicitadoPorId: string, fecha: string): Promise<ResultadoEscritura<AnalisisIA>> {
+      if (!pedido.criterioIds.length) return { ok: false, error: 'datos_invalidos' }
+      const { data, error } = await cliente.functions.invoke('analizar-ia', { body: { ...pedido } })
+      if (error) {
+        return { ok: false, error: error.status === 403 ? 'sin_permiso' : error.status === 400 ? 'datos_invalidos' : 'servicio' }
+      }
+      const r = data as RespuestaAnalisisIA
+      return {
+        ok: true,
+        valor: {
+          id: r.id,
+          proyectoId: pedido.proyectoId,
+          fuenteTipo: pedido.fuenteTipo,
+          documentoId: pedido.documentoId ?? undefined,
+          evidenciaId: pedido.evidenciaId ?? undefined,
+          criterioIds: pedido.criterioIds,
+          solicitadoPorId,
+          estado: r.estado,
+          resumen: r.resumen ?? undefined,
+          errorDetalle: r.error ?? undefined,
+          proveedor: r.proveedor ?? undefined,
+          modelo: r.modelo ?? undefined,
+          fecha,
+          resultados: (r.resultados ?? []).map(traducirResultadoAnalisis),
+        },
+      }
+    },
 
     // Invitación por correo (Edge Function invitar-usuario). Las reglas las
     // decide la BD (autorizar_invitacion); acá solo se descarta lo imposible.

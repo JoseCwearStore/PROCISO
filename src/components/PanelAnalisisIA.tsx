@@ -1,0 +1,118 @@
+import { useState } from 'react'
+import { AlertTriangle, Loader2, Sparkles, X } from 'lucide-react'
+import { Button } from './ui/Button'
+import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
+import { criteriosSugeridos } from '../lib/ia'
+import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
+
+const COLOR: Record<EstadoResultadoIA, string> = {
+  'Cubierto': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'Parcial': 'bg-amber-50 text-amber-700 border-amber-200',
+  'Hueco': 'bg-red-50 text-red-700 border-red-200',
+  'No evaluable': 'bg-slate-50 text-slate-600 border-slate-200',
+  'No aplica': 'bg-slate-50 text-slate-600 border-slate-200',
+}
+
+// Aviso acordado con el usuario para el proyecto escolar (ver MEMORY.md): resalta
+// la 2026 y menciona, sin el número, que la base es una edición anterior (transparencia).
+export const AVISO_EDICION = 'ISO 9001:2026'
+export const AVISO_PREEVALUACION =
+  'con fines de demostración. Proyecto estudiantil con fines académicos: los criterios son propios y toman como base una edición anterior de la norma. ' +
+  'Esto es una preevaluación generada con IA: requiere revisión humana y no constituye un dictamen de conformidad ni una certificación.'
+
+export function PanelAnalisisIA({ fuente, tipoDocumento = null }: { fuente: FuenteAnalisis; tipoDocumento?: Documento['tipo'] | null }) {
+  const ia = useAccionesIA()
+  const [seleccion, setSeleccion] = useState<string[]>(() => criteriosSugeridos(tipoDocumento, ia.criterios))
+  const [analizando, setAnalizando] = useState(false)
+  const porId = new Map(ia.criterios.map((c) => [c.id, c]))
+  const historial = ia.analisisDe(fuente)
+
+  async function analizar() {
+    setAnalizando(true)
+    await ia.analizar(fuente, seleccion)
+    setAnalizando(false)
+  }
+
+  return (
+    <section className="rounded-xl border border-line bg-white p-4">
+      <div className="mb-3 flex items-center gap-2">
+        <Sparkles className="h-4 w-4 text-violet-600" />
+        <h3 className="text-sm font-semibold text-slate-800">Preevaluación con IA</h3>
+      </div>
+      <p className="mb-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
+        <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>Matriz presentada como <strong>{AVISO_EDICION}</strong> {AVISO_PREEVALUACION}</span>
+      </p>
+
+      {ia.puedePedir && (
+        <div className="mb-4 space-y-2">
+          <p className="text-xs font-medium text-slate-600">Cláusulas a evaluar {tipoDocumento ? '(sugeridas según el tipo; puedes cambiarlas)' : ''}</p>
+          <div className="flex flex-wrap gap-1.5">
+            {seleccion.map((id) => (
+              <span key={id} className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-xs text-violet-700">
+                {porId.get(id)?.clausula} · {porId.get(id)?.titulo}
+                <button aria-label={`Quitar ${porId.get(id)?.clausula}`} onClick={() => setSeleccion(seleccion.filter((x) => x !== id))}>
+                  <X className="h-3 w-3" />
+                </button>
+              </span>
+            ))}
+            {!seleccion.length && <span className="text-xs text-slate-400">Elige al menos una cláusula.</span>}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <select
+              aria-label="Agregar cláusula"
+              className="min-w-0 flex-1 rounded-lg border border-line bg-white px-3 py-2 text-sm"
+              value=""
+              onChange={(e) => e.target.value && setSeleccion([...seleccion, e.target.value])}
+            >
+              <option value="">Agregar cláusula…</option>
+              {ia.criterios.filter((c) => !seleccion.includes(c.id)).map((c) => (
+                <option key={c.id} value={c.id}>{c.clausula} · {c.titulo}</option>
+              ))}
+            </select>
+            <Button
+              onClick={() => void analizar()}
+              disabled={analizando || !seleccion.length}
+              icon={analizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+            >
+              {analizando ? 'Analizando…' : 'Analizar con IA'}
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {!historial.length ? (
+        <p className="text-sm text-slate-400">Todavía no hay preevaluaciones de esta fuente.</p>
+      ) : (
+        <div className="space-y-3">{historial.map((a) => <TarjetaAnalisis key={a.id} analisis={a} porId={porId} />)}</div>
+      )}
+    </section>
+  )
+}
+
+function TarjetaAnalisis({ analisis, porId }: { analisis: AnalisisIA; porId: Map<string, { clausula: string; titulo: string }> }) {
+  return (
+    <article className="rounded-lg border border-line p-3">
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
+        <span>{analisis.fecha}{analisis.modelo ? ` · ${analisis.modelo}` : ''}</span>
+        <span className={`rounded-full border px-2 py-0.5 font-medium ${analisis.estado === 'Error' ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-700'}`}>
+          {analisis.estado}
+        </span>
+      </div>
+      {analisis.estado === 'Error' && (
+        <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{analisis.errorDetalle}</p>
+      )}
+      {analisis.resumen && <p className="mb-2 text-sm text-slate-700">{analisis.resumen}</p>}
+      {analisis.resultados.map((r) => (
+        <div key={r.criterioId} className="border-t border-line py-2 first:border-t-0">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${COLOR[r.estado]}`}>{r.estado}</span>
+            <span className="text-sm font-medium text-slate-800">{porId.get(r.criterioId)?.clausula} · {porId.get(r.criterioId)?.titulo}</span>
+          </div>
+          {r.hallazgos && <p className="mt-1 text-sm text-slate-600">{r.hallazgos}</p>}
+          {r.sugerencias && <p className="mt-1 text-xs text-violet-700"><strong>Sugerencia:</strong> {r.sugerencias}</p>}
+        </div>
+      ))}
+    </article>
+  )
+}

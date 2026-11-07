@@ -145,6 +145,29 @@ function filasBase(): FilasSesion {
       { id: 'com-ev', proyecto_id: P1, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', seccion_id: null, autor_id: ROBERTO, texto: 'Otra entidad', creado_en: '2024-07-19T10:00:00+00:00' },
       { id: 'com-t1', proyecto_id: P1, entidad_tipo: 'tarea', entidad_id: 'tar-p1', seccion_id: null, autor_id: CARLOS, texto: 'Listo', creado_en: '2024-09-12T10:00:00+00:00' },
     ],
+    criterios: [
+      {
+        id: 'cr-522', clausula: '5.2.2', titulo: 'Comunicación de la política', intencion: 'Que se comunique.',
+        evidencia_esperada: ['Inducción'], preguntas: ['¿Cómo se comunica?'], senales_de_hueco: [],
+        puede_no_aplicar: false, condicion_no_aplica: null, orden: 8,
+      },
+      {
+        id: 'cr-521', clausula: '5.2.1', titulo: 'Política de calidad', intencion: 'Que sea apropiada.',
+        evidencia_esperada: ['Política aprobada'], preguntas: ['¿Incluye los compromisos?'], senales_de_hueco: ['Política genérica'],
+        puede_no_aplicar: false, condicion_no_aplica: null, orden: 7,
+      },
+    ],
+    analisis: [
+      {
+        id: 'an-1', proyecto_id: P1, fuente_tipo: 'documento', documento_id: 'doc-p1', evidencia_id: null,
+        criterio_ids: ['cr-521', 'cr-522'], solicitado_por: ROBERTO, estado: 'Completado', resumen: 'Parcial.',
+        error_detalle: null, proveedor: 'openai-compatible', modelo: 'gpt-oss:120b', creado_en: '2026-11-06T18:00:00+00:00',
+      },
+    ],
+    analisisResultados: [
+      { analisis_id: 'an-1', criterio_id: 'cr-522', estado: 'Cubierto', hallazgos: 'Se comunica.', sugerencias: null, orden: 2 },
+      { analisis_id: 'an-1', criterio_id: 'cr-521', estado: 'Parcial', hallazgos: 'Falta mejora continua.', sugerencias: 'Agregarla.', orden: 1 },
+    ],
     // Lo que devuelve mis_notificaciones(): ya calculado y filtrado por la BD.
     notificaciones: [
       {
@@ -467,6 +490,31 @@ describe('combinarDatosSesion', () => {
     expect(comentariosGlobales[0].seccionId).toBeUndefined()
   })
 
+  it('trae el catálogo de criterios en su orden', () => {
+    const { criterios } = combinarDatosSesion(filasBase())
+
+    expect(criterios.map((c) => c.clausula)).toEqual(['5.2.1', '5.2.2'])
+    expect(criterios[0]).toEqual({
+      id: 'cr-521', clausula: '5.2.1', titulo: 'Política de calidad', intencion: 'Que sea apropiada.',
+      evidenciaEsperada: ['Política aprobada'], preguntas: ['¿Incluye los compromisos?'], senalesDeHueco: ['Política genérica'],
+      puedeNoAplicar: false, condicionNoAplica: undefined, orden: 7,
+    })
+  })
+
+  it('trae los análisis con IA con sus resultados en orden', () => {
+    const { analisisIA } = combinarDatosSesion(filasBase())
+
+    expect(analisisIA).toEqual([{
+      id: 'an-1', proyectoId: P1, fuenteTipo: 'documento', documentoId: 'doc-p1', evidenciaId: undefined,
+      criterioIds: ['cr-521', 'cr-522'], solicitadoPorId: ROBERTO, estado: 'Completado', resumen: 'Parcial.',
+      errorDetalle: undefined, proveedor: 'openai-compatible', modelo: 'gpt-oss:120b', fecha: '06/11/2026',
+      resultados: [
+        { criterioId: 'cr-521', estado: 'Parcial', hallazgos: 'Falta mejora continua.', sugerencias: 'Agregarla.' },
+        { criterioId: 'cr-522', estado: 'Cubierto', hallazgos: 'Se comunica.', sugerencias: undefined },
+      ],
+    }])
+  })
+
   it('arma la actividad con el historial real, del más nuevo al más viejo', () => {
     const { historial } = combinarDatosSesion(filasBase())
 
@@ -504,6 +552,9 @@ describe('cargarFilasSesion', () => {
       lista_preguntas: filas.preguntas,
       entregables: filas.entregables,
       indicadores: filas.indicadores,
+      criterios_evaluacion: filas.criterios,
+      analisis_ia: filas.analisis,
+      analisis_ia_resultados: filas.analisisResultados,
     }
     const cliente = {
       from: vi.fn((tabla: string) => ({
@@ -518,14 +569,14 @@ describe('cargarFilasSesion', () => {
   }
   let errorRpc: { message: string } | null = null
 
-  it('lee las veinte tablas y las notificaciones calculadas', async () => {
+  it('lee las veintitrés tablas y las notificaciones calculadas', async () => {
     errorRpc = null
     const cliente = crearClienteDoble()
 
     const resultado = await cargarFilasSesion(cliente)
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
-    expect(cliente.from).toHaveBeenCalledTimes(20)
+    expect(cliente.from).toHaveBeenCalledTimes(23)
     expect(cliente.rpc).toHaveBeenCalledWith('mis_notificaciones')
   })
 
