@@ -20,6 +20,8 @@ import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
 import { documentoVisibleParaRol, estadosVisiblesParaRol } from '../lib/documentos'
 import { PENDIENTE, PLANTILLAS, crearSecciones, plantillaPorId } from '../lib/plantillas'
+import { aplicarTextos, armarPedidoIA, camposIA } from '../lib/generacion'
+import { useAccionesGeneracion } from '../hooks/useAccionesGeneracion'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
@@ -58,6 +60,7 @@ interface Generador {
   procesoId: string
   plantilla: string // id de la plantilla (src/lib/plantillas.ts); el tipo de documento sale de ella
   respuestas: Record<string, string> // cuestionario guiado, por id de pregunta
+  usarIA: boolean // redactar con IA las partes que no salen de los datos (si falla, se usan las respuestas)
   codigo: string
   titulo: string
   edicionNorma: NonNullable<Documento['referenciaNormativa']>
@@ -69,6 +72,7 @@ const GENERADOR_VACIO: Generador = {
   procesoId: '',
   plantilla: 'procedimiento',
   respuestas: {},
+  usarIA: true,
   codigo: '',
   titulo: '',
   edicionNorma: 'ISO 9001:2026',
@@ -85,6 +89,8 @@ export default function Documentacion() {
   const [documentoId, setDocumentoId] = useState<string | null>(null)
   const [generadorOpen, setGeneradorOpen] = useState(false)
   const [generador, setGenerador] = useState<Generador>(GENERADOR_VACIO)
+  const [generandoIA, setGenerandoIA] = useState(false)
+  const { redactar } = useAccionesGeneracion()
   const [compararOpen, setCompararOpen] = useState(false)
   const [versionA, setVersionA] = useState('')
   const [versionB, setVersionB] = useState('')
@@ -140,6 +146,44 @@ export default function Documentacion() {
     if (!plantilla || (plantilla.requiereProceso && !proceso)) return
     if (!generador.empresaId || !generador.proyectoId || !generador.titulo.trim() || !generador.codigo.trim()) return
     const empresa = state.empresas.find((item) => item.id === generador.empresaId)
+    const procesosDelProyecto = state.procesos.filter((item) => item.proyectoId === generador.proyectoId)
+    const organizacion = empresa?.nombreComercial || empresa?.nombre
+    // Primero el borrador con los datos y las respuestas: es el plan B si la IA falla.
+    let secciones = crearSecciones(plantilla, {
+      codigo: generador.codigo.trim(),
+      edicionNorma: generador.edicionNorma,
+      organizacion,
+      proceso,
+      procesos: procesosDelProyecto,
+      nombreUsuario: (id) => (id ? getUsuario(id)?.nombre ?? '' : ''),
+      respuestas: generador.respuestas,
+    })
+    let detalle = `Creado con la plantilla ${plantilla.nombre}.`
+    let aviso: { texto: string; tipo: 'success' | 'warning' } = { texto: 'Borrador generado con la información disponible.', tipo: 'success' }
+    const pedido = generador.usarIA
+      ? armarPedidoIA(plantilla, {
+          consultoriaId: state.currentUser?.consultoriaId ?? null,
+          proyectoId: generador.proyectoId,
+          organizacion,
+          respuestas: generador.respuestas,
+          procesos: procesosDelProyecto.map((item) => item.nombre),
+        })
+      : null
+    if (pedido) {
+      setGenerandoIA(true)
+      try {
+        const redaccion = await redactar(pedido)
+        if (redaccion.estado === 'Completado') {
+          secciones = aplicarTextos(plantilla, secciones, redaccion.textos)
+          detalle += ` Redactado con IA${redaccion.modelo ? ` (${redaccion.modelo})` : ''}: requiere revisión humana.`
+          aviso = { texto: 'Borrador redactado con IA. Revísalo antes de enviarlo.', tipo: 'success' }
+        } else {
+          aviso = { texto: `La IA no estuvo disponible (${redaccion.error}). Se generó el borrador con tus respuestas.`, tipo: 'warning' }
+        }
+      } finally {
+        setGenerandoIA(false)
+      }
+    }
     const ahora = formatearFecha(new Date().toISOString())
     const nuevo: Documento = {
       id: crypto.randomUUID(),
@@ -157,15 +201,7 @@ export default function Documentacion() {
       creadoPorId: state.currentUser?.id ?? '',
       plantilla: plantilla.nombre,
       referenciaNormativa: generador.edicionNorma,
-      secciones: crearSecciones(plantilla, {
-        codigo: generador.codigo.trim(),
-        edicionNorma: generador.edicionNorma,
-        organizacion: empresa?.nombreComercial || empresa?.nombre,
-        proceso,
-        procesos: state.procesos.filter((item) => item.proyectoId === generador.proyectoId),
-        nombreUsuario: (id) => (id ? getUsuario(id)?.nombre ?? '' : ''),
-        respuestas: generador.respuestas,
-      }),
+      secciones,
       evidenciasVinculadas: [],
       comentarios: [],
       historialVersiones: [],
@@ -173,12 +209,12 @@ export default function Documentacion() {
       contenidoPendiente: true,
       bloqueado: false,
     }
-    if (!(await persistir(nuevo, { evento: { accion: 'Borrador generado', detalle: `Creado con la plantilla ${plantilla.nombre}.` } }))) return
+    if (!(await persistir(nuevo, { evento: { accion: 'Borrador generado', detalle } }))) return
     setDocumentoId(nuevo.id)
     setVista('editor')
     setGeneradorOpen(false)
     setGenerador(GENERADOR_VACIO)
-    showToast('Borrador generado con la información disponible.', 'success')
+    showToast(aviso.texto, aviso.tipo)
   }
 
   // Ediciones en pantalla: se guardan en la BD al pulsar Guardar o Enviar.
@@ -402,7 +438,7 @@ export default function Documentacion() {
         </table>
       </div>
 
-      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={!generador.empresaId || !generador.proyectoId || (plantillaElegida?.requiereProceso && !generador.procesoId) || !generador.codigo.trim() || !generador.titulo.trim()}>Generar borrador</Button></>}>
+      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={generandoIA || !generador.empresaId || !generador.proyectoId || (plantillaElegida?.requiereProceso && !generador.procesoId) || !generador.codigo.trim() || !generador.titulo.trim()}>{generandoIA ? 'Redactando con IA…' : 'Generar borrador'}</Button></>}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className={labelClass}>Empresa *</span><select className={inputClass} value={generador.empresaId} onChange={(event) => setGenerador({ ...GENERADOR_VACIO, empresaId: event.target.value })}><option value="">Selecciona</option>{state.empresas.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
           <label><span className={labelClass}>Proyecto *</span><select className={inputClass} value={generador.proyectoId} disabled={!generador.empresaId} onChange={(event) => { const proyecto = state.proyectos.find((item) => item.id === event.target.value); setGenerador({ ...generador, proyectoId: event.target.value, procesoId: '', edicionNorma: proyecto?.edicionNorma || 'ISO 9001:2026' }) }}><option value="">Selecciona</option>{proyectosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
@@ -424,6 +460,15 @@ export default function Documentacion() {
                 </label>
               ))}
             </fieldset>
+          )}
+          {camposIA(plantillaElegida?.id ?? '').length > 0 && (
+            <label className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
+              <input type="checkbox" className="mt-0.5" checked={generador.usarIA} onChange={(event) => setGenerador({ ...generador, usarIA: event.target.checked })} />
+              <span>
+                <span className="font-medium">Redactar con IA</span> la declaración y las propuestas a partir de tus respuestas.{' '}
+                Es un borrador: requiere tu revisión. Si la IA no responde, el documento se genera igual con tus respuestas.
+              </span>
+            </label>
           )}
           <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">La plantilla se precargará exclusivamente con información existente. Los datos ausentes se marcarán como “{PENDIENTE}”.</div>
         </div>

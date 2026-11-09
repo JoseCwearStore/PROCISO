@@ -49,6 +49,7 @@ import {
 } from './datos'
 import { fechaISO } from './tareas'
 import { rolDeBD } from './auth'
+import type { PedidoGeneracionIA } from './generacion'
 
 // Escritura pesimista: primero se guarda en la BD y la pantalla se actualiza con
 // lo que la BD devolvió. Si el RLS lo rechaza, la pantalla no cambia.
@@ -95,7 +96,7 @@ export interface ClienteEscritura {
   // Edge Functions. El error trae el status HTTP de la respuesta de la función.
   functions: {
     invoke(
-      nombre: 'invitar-usuario' | 'analizar-ia',
+      nombre: 'invitar-usuario' | 'analizar-ia' | 'generar-documento',
       opciones: { body: Record<string, unknown> },
     ): PromiseLike<{ data: unknown; error: { message: string; status?: number } | null }>
   }
@@ -134,6 +135,22 @@ export interface PedidoAnalisisIA {
   documentoId?: string
   evidenciaId?: string
   criterioIds: string[]
+}
+
+// Resultado de pedirle a la IA que redacte partes de un borrador. Una IA que falla NO es una
+// falla de escritura: vuelve como "Error" con su motivo y la pantalla usa el plan B.
+export type ResultadoGeneracionIA =
+  | { estado: 'Completado'; textos: Record<string, string>; proveedor?: string; modelo?: string }
+  | { estado: 'Error'; error: string }
+
+// Lo que devuelve la Edge Function generar-documento.
+interface RespuestaGeneracionIA {
+  id: string
+  estado: 'Completado' | 'Error'
+  textos?: Record<string, string>
+  error?: string | null
+  proveedor?: string | null
+  modelo?: string | null
 }
 
 // Lo que devuelve la Edge Function analizar-ia.
@@ -342,6 +359,23 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     // Suspender bloquea a toda su gente; la RPC deja historial.
     cambiarEstadoConsultoria: (id: string, activa: boolean) =>
       llamar('cambiar_estado_consultoria', { p_id: id, p_activa: activa }),
+
+    // Redacción con IA (Edge Function generar-documento). Solo registra el pedido y devuelve
+    // textos: el documento lo guarda la pantalla con guardarDocumento, y el consultor lo revisa.
+    async generarTextosConIA(pedido: PedidoGeneracionIA): Promise<ResultadoEscritura<ResultadoGeneracionIA>> {
+      if (!pedido.campos.length) return { ok: false, error: 'datos_invalidos' }
+      const { data, error } = await cliente.functions.invoke('generar-documento', { body: { ...pedido } })
+      if (error) {
+        return { ok: false, error: error.status === 403 ? 'sin_permiso' : error.status === 400 ? 'datos_invalidos' : 'servicio' }
+      }
+      const r = data as RespuestaGeneracionIA
+      if (r.estado !== 'Completado') return { ok: true, valor: { estado: 'Error', error: r.error ?? 'La IA no pudo generar el borrador.' } }
+      if (!r.textos || !Object.keys(r.textos).length) return { ok: true, valor: { estado: 'Error', error: 'La IA no devolvió texto.' } }
+      return {
+        ok: true,
+        valor: { estado: 'Completado', textos: r.textos, ...(r.proveedor ? { proveedor: r.proveedor } : {}), ...(r.modelo ? { modelo: r.modelo } : {}) },
+      }
+    },
 
     // Preevaluación con IA (Edge Function analizar-ia). Un análisis que FALLÓ
     // (modelo sin visión, PDF escaneado, clave inválida…) vuelve como análisis en

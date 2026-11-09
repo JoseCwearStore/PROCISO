@@ -1125,6 +1125,63 @@ describe('invitarUsuario', () => {
   })
 })
 
+describe('generarTextosConIA', () => {
+  const PEDIDO = {
+    consultoriaId: C1, proyectoId: P_NUEVO, plantillaId: 'politica', plantilla: 'Política de calidad', organizacion: 'Marketino',
+    respuestas: [{ pregunta: '¿Qué ofrece?', respuesta: 'Campañas' }], procesos: ['Compras'],
+    campos: [{ id: 'declaracion', instruccion: 'Redacta la declaración.', ejemplo: 'En Muebles…' }],
+  }
+
+  it('llama a la Edge Function y devuelve los textos con el modelo que los redactó', async () => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error: null }, {
+      data: { id: 'g-1', estado: 'Completado', textos: { declaracion: 'En Marketino…' }, proveedor: 'openai-compatible', modelo: 'gpt-oss:120b' },
+      error: null,
+    })
+
+    const resultado = await crearServicioEscritura(cliente).generarTextosConIA(PEDIDO)
+
+    expect(llamadas).toEqual([{ tabla: 'generar-documento', operacion: 'invoke', datos: PEDIDO }])
+    expect(resultado).toEqual({ ok: true, valor: { estado: 'Completado', textos: { declaracion: 'En Marketino…' }, proveedor: 'openai-compatible', modelo: 'gpt-oss:120b' } })
+  })
+
+  it('una IA que falló vuelve como resultado en Error con su motivo, no como falla de escritura (hay plan B)', async () => {
+    const { cliente } = crearClienteDoble({}, { error: null }, {
+      data: { id: 'g-2', estado: 'Error', error: 'La clave de la IA es inválida.', proveedor: 'openai-compatible', modelo: 'x' },
+      error: null,
+    })
+
+    expect(await crearServicioEscritura(cliente).generarTextosConIA(PEDIDO)).toEqual({
+      ok: true,
+      valor: { estado: 'Error', error: 'La clave de la IA es inválida.' },
+    })
+  })
+
+  it('una respuesta Completado sin textos se trata como Error (no se confía a ciegas)', async () => {
+    const { cliente } = crearClienteDoble({}, { error: null }, { data: { id: 'g-3', estado: 'Completado' }, error: null })
+
+    expect(await crearServicioEscritura(cliente).generarTextosConIA(PEDIDO)).toEqual({
+      ok: true,
+      valor: { estado: 'Error', error: 'La IA no devolvió texto.' },
+    })
+  })
+
+  it('sin campos no llama a la función', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+
+    expect(await crearServicioEscritura(cliente).generarTextosConIA({ ...PEDIDO, campos: [] })).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toEqual([])
+  })
+
+  it('traduce el status HTTP: 403 sin permiso (cliente, otro proyecto), 400 datos inválidos, otro servicio', async () => {
+    const con = (status: number) => crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status } }).cliente
+    const generar = (status: number) => crearServicioEscritura(con(status)).generarTextosConIA(PEDIDO)
+
+    expect(await generar(403)).toEqual({ ok: false, error: 'sin_permiso' })
+    expect(await generar(400)).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(await generar(500)).toEqual({ ok: false, error: 'servicio' })
+  })
+})
+
 describe('analizarConIA', () => {
   const PEDIDO = {
     consultoriaId: C1, proyectoId: P_NUEVO, fuenteTipo: 'documento' as const, documentoId: 'doc-1', criterioIds: ['cr-521'],
