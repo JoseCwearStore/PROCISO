@@ -76,6 +76,28 @@ describe('armarModelo', () => {
     expect(armarModelo(d, CTX).bloques[0]).toEqual({ tipo: 'texto', titulo: 'Vacía', parrafos: [PENDIENTE] })
   })
 
+  it('no exporta la sección de encabezado: ya está en la tabla de metadatos del archivo', () => {
+    const d = documento({
+      secciones: [
+        { id: 'e1', titulo: 'Encabezado y control documental', tipo: 'texto', contenido: 'Código: SGC-POL-001' },
+        { id: 'e2', titulo: 'Encabezado y control', tipo: 'texto', contenido: 'Código: FO-001' },
+        { id: 's1', titulo: 'Declaración', tipo: 'texto', contenido: 'Texto.' },
+      ],
+    })
+    expect(armarModelo(d, CTX).bloques.map((b) => b.titulo)).toEqual(['Declaración'])
+  })
+
+  it('el aviso de pendientes solo cuenta lo que se exporta (no el encabezado omitido)', () => {
+    const d = documento({
+      estado: 'Aprobado',
+      secciones: [
+        { id: 'e', titulo: 'Encabezado y control documental', tipo: 'texto', contenido: `Código: ${PENDIENTE}` },
+        { id: 's', titulo: 'Declaración', tipo: 'texto', contenido: 'ok' },
+      ],
+    })
+    expect(armarModelo(d, CTX).avisos).toEqual([])
+  })
+
   it('un documento sin secciones no rompe', () => {
     expect(armarModelo(documento({ secciones: undefined }), CTX).bloques).toEqual([])
   })

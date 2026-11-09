@@ -10,22 +10,42 @@ const COLOR_ENCABEZADO = '#eef2f7'
 
 type Celda = { text: string; bold?: boolean; fillColor?: string }
 
-function tabla(columnas: string[], filas: string[][]): object {
+const ESTILO_TITULO = { fontSize: 13, bold: true }
+
+// Si la tabla tiene `titulo`, va como su PRIMERA fila (sin bordes) y cuenta como encabezado.
+// Así pdfmake lo mantiene con las filas siguientes (keepWithHeaderRows) y lo repite al cambiar
+// de página. Se probó renderizando: un título suelto antes de la tabla (con pageBreakBefore)
+// seguía quedando solo al pie de la página, porque pdfmake mide los nodos antes de partir la tabla.
+function tabla(columnas: string[], filas: string[][], titulo?: string): object {
   const ancho = Math.max(columnas.length, ...filas.map((f) => f.length), 1)
   const completa = (fila: string[]) => Array.from({ length: ancho }, (_, i) => fila[i] ?? '')
+  const filaTitulo: object[][] = titulo
+    ? [[{ text: titulo, colSpan: ancho, ...ESTILO_TITULO, border: [false, false, false, false], margin: [0, 14, 0, 4] }, ...Array.from({ length: ancho - 1 }, () => ({}))]]
+    : []
   const encabezado: Celda[][] = columnas.length
     ? [completa(columnas).map((c) => ({ text: c, bold: true, fillColor: COLOR_ENCABEZADO }))]
     : []
   return {
     table: {
-      headerRows: encabezado.length,
+      headerRows: filaTitulo.length + encabezado.length,
+      ...(titulo ? { keepWithHeaderRows: 1 } : {}),
       dontBreakRows: true,
       widths: Array<string>(ancho).fill('*'),
-      body: [...encabezado, ...filas.map((fila) => completa(fila).map((c): Celda => ({ text: c })))],
+      body: [...filaTitulo, ...encabezado, ...filas.map((fila) => completa(fila).map((c): Celda => ({ text: c })))],
     },
     fontSize: 9,
     margin: [0, 0, 0, 12],
   }
+}
+
+// El título de un texto va en un grupo indivisible con su primer párrafo: no puede quedar solo.
+function bloqueTexto(titulo: string, parrafos: string[]): object[] {
+  const [primero, ...resto] = parrafos
+  const encabezado = { text: titulo, ...ESTILO_TITULO, margin: [0, 14, 0, 6] }
+  return [
+    { unbreakable: true, stack: [encabezado, ...(primero ? [{ text: primero, margin: [0, 0, 0, 4] }] : [])] },
+    ...resto.map((parrafo) => ({ text: parrafo, margin: [0, 0, 0, 4] })),
+  ]
 }
 
 // La DEFINICIÓN del documento (lo que pdfmake dibuja) se arma aparte de la generación: así se
@@ -58,12 +78,9 @@ export function armarDefinicionPdf(modelo: ModeloDocumento): { pageSize: string;
       { text: modelo.titulo, fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
       tabla([], conDato.map(([campo, valor]) => [campo, valor])),
       ...modelo.avisos.map((aviso) => ({ text: aviso, italics: true, color: '#92400e', margin: [0, 0, 0, 6] })),
-      ...modelo.bloques.flatMap((bloque) => [
-        { text: bloque.titulo, fontSize: 13, bold: true, margin: [0, 14, 0, 6] },
-        ...(bloque.tipo === 'texto'
-          ? bloque.parrafos.map((parrafo) => ({ text: parrafo, margin: [0, 0, 0, 4] }))
-          : [tabla(bloque.columnas, bloque.filas)]),
-      ]),
+      ...modelo.bloques.flatMap((bloque) =>
+        bloque.tipo === 'texto' ? bloqueTexto(bloque.titulo, bloque.parrafos) : [tabla(bloque.columnas, bloque.filas, bloque.titulo)],
+      ),
     ],
   }
 }

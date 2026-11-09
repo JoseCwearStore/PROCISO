@@ -43,8 +43,17 @@ export interface ContextoExportacion {
 
 const AVISO_PRELIMINAR = 'Documento preliminar. Requiere revisión y aprobación de los responsables autorizados antes de su uso oficial.'
 
+// El archivo ya abre con una tabla de metadatos (código, versión, organización…), así que la
+// sección "Encabezado y control…" de las plantillas repetiría lo mismo. En la app sigue
+// existiendo: solo se omite al exportar.
+const esEncabezadoRepetido = (titulo: string) => /^encabezado y control/i.test(titulo.trim())
+
+function seccionesExportables(documento: Documento) {
+  return (documento.secciones ?? []).filter((seccion) => !esEncabezadoRepetido(seccion.titulo))
+}
+
 function bloquesDe(documento: Documento): Bloque[] {
-  return (documento.secciones ?? []).map((seccion): Bloque => {
+  return seccionesExportables(documento).map((seccion): Bloque => {
     if (seccion.tipo === 'tabla') {
       const [primera = [], ...resto] = seccion.filas ?? []
       const conEncabezado = primera.some((celda) => celda.trim())
@@ -57,7 +66,7 @@ function bloquesDe(documento: Documento): Bloque[] {
 
 export function armarModelo(documento: Documento, contexto: ContextoExportacion): ModeloDocumento {
   const bloques = bloquesDe(documento)
-  const pendientes = (documento.secciones ?? []).filter((s) => s.tipo === 'texto' && s.contenido.includes(PENDIENTE)).length
+  const pendientes = seccionesExportables(documento).filter((s) => s.tipo === 'texto' && s.contenido.includes(PENDIENTE)).length
 
   const avisos: string[] = []
   if (documento.estado !== 'Aprobado') avisos.push(AVISO_PRELIMINAR)

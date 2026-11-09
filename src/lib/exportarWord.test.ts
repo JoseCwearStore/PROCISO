@@ -72,6 +72,13 @@ describe('generarWord', () => {
     expect(pies).toMatch(/NUMPAGES/)
   })
 
+  it('cada título de sección se mantiene con lo que sigue (no queda huérfano al pie de una página)', async () => {
+    const { documento } = await abrir(MODELO)
+    const titulos = documento.match(/<w:p>(?:(?!<\/w:p>).)*?<w:pStyle w:val="Heading2"\/>.*?<\/w:p>/gs) ?? []
+    expect(titulos).toHaveLength(MODELO.bloques.length)
+    expect(titulos.every((p) => p.includes('<w:keepNext'))).toBe(true)
+  })
+
   it('escapa los caracteres especiales del XML', async () => {
     const { documento } = await abrir({ ...MODELO, titulo: 'A & B <c>' })
     expect(documento).toContain('A &amp; B &lt;c&gt;')

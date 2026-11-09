@@ -87,7 +87,8 @@ function construir(d: Docx, modelo: ModeloDocumento) {
           espacio(),
           ...modelo.avisos.map((aviso) => new d.Paragraph({ spacing: { after: 100 }, children: [new d.TextRun({ text: aviso, italics: true, color: COLOR_AVISO })] })),
           ...modelo.bloques.flatMap((bloque) => [
-            new d.Paragraph({ heading: d.HeadingLevel.HEADING_2, spacing: { before: 280, after: 120 }, children: [new d.TextRun({ text: bloque.titulo, bold: true, size: 26 })] }),
+            // keepNext: el título viaja con lo que sigue; sin esto puede quedar solo al pie de la página.
+            new d.Paragraph({ heading: d.HeadingLevel.HEADING_2, keepNext: true, spacing: { before: 280, after: 120 }, children: [new d.TextRun({ text: bloque.titulo, bold: true, size: 26 })] }),
             ...(bloque.tipo === 'texto'
               ? bloque.parrafos.map((parrafo) => new d.Paragraph({ spacing: { after: 80 }, children: [new d.TextRun({ text: parrafo })] }))
               : [tabla(bloque.columnas, bloque.filas), espacio()]),

@@ -20,9 +20,13 @@ const MODELO: ModeloDocumento = {
   ],
 }
 
-type Nodo = { text?: string; table?: { headerRows: number; widths: string[]; body: { text?: string; bold?: boolean }[][] }; [k: string]: unknown }
+type Celda = { text?: string; bold?: boolean; colSpan?: number }
+type Nodo = { text?: string; stack?: Nodo[]; unbreakable?: boolean; table?: { headerRows: number; keepWithHeaderRows?: number; widths: string[]; body: Celda[][] }; [k: string]: unknown }
 const contenido = () => armarDefinicionPdf(MODELO).content as Nodo[]
 const tablas = () => contenido().filter((n) => n.table)
+// Las tablas del documento llevan su título como PRIMERA fila (para que no se separe de ellas);
+// la de metadatos no tiene título.
+const tablaDe = (titulo: string) => tablas().find((t) => t.table!.body[0][0].text === titulo)!
 
 describe('armarDefinicionPdf', () => {
   it('es una página carta con la fuente Roboto', () => {
@@ -47,22 +51,34 @@ describe('armarDefinicionPdf', () => {
     expect(texto).toContain('• Meta ≥ 95 %')
   })
 
-  it('una tabla con encabezado lo marca como tal, en negrita, y repite el encabezado al cambiar de página', () => {
-    const preguntas = tablas().find((t) => JSON.stringify(t).includes('Preguntas') || t.table!.body[0][0].text === 'Pregunta')!
-    expect(preguntas.table!.headerRows).toBe(1)
-    expect(preguntas.table!.body[0].map((c) => [c.text, c.bold])).toEqual([['Pregunta', true], ['Respuesta', true]])
-    expect(preguntas.table!.body[1].map((c) => c.text)).toEqual(['¿Qué ofrece?', 'Campañas'])
+  it('una tabla abre con su título y su encabezado, ambos repetidos al cambiar de página', () => {
+    const t = tablaDe('Preguntas').table!
+    expect(t.headerRows).toBe(2)
+    expect(t.body[0][0]).toMatchObject({ text: 'Preguntas', bold: true, colSpan: 2 })
+    expect(t.body[1].map((c) => [c.text, c.bold])).toEqual([['Pregunta', true], ['Respuesta', true]])
+    expect(t.body[2].map((c) => c.text)).toEqual(['¿Qué ofrece?', 'Campañas'])
+  })
+
+  it('el título de una tabla nunca queda solo: la tabla exige al menos una fila junto a sus encabezados', () => {
+    for (const nombre of ['Preguntas', 'Libre']) expect(tablaDe(nombre).table!.keepWithHeaderRows, nombre).toBe(1)
   })
 
   it('las celdas vacías no rompen la tabla', () => {
-    const preguntas = tablas().find((t) => t.table!.body[0][0].text === 'Pregunta')!
-    expect(preguntas.table!.body[2].map((c) => c.text)).toEqual(['¿A quién?', ''])
+    expect(tablaDe('Preguntas').table!.body[3].map((c) => c.text)).toEqual(['¿A quién?', ''])
   })
 
-  it('una tabla sin encabezado no marca encabezado y reparte el ancho entre sus columnas', () => {
-    const libre = tablas().find((t) => t.table!.body[0][0].text === 'a')!
-    expect(libre.table!.headerRows).toBe(0)
-    expect(libre.table!.widths).toEqual(['*', '*', '*'])
+  it('una tabla sin encabezado solo repite su título y reparte el ancho entre sus columnas', () => {
+    const libre = tablaDe('Libre').table!
+    expect(libre.headerRows).toBe(1)
+    expect(libre.widths).toEqual(['*', '*', '*'])
+    expect(libre.body[1].map((c) => c.text)).toEqual(['a', 'b', 'c'])
+  })
+
+  it('en un bloque de texto el título va pegado a su primer párrafo (no puede quedar solo al pie)', () => {
+    const grupo = contenido().find((n) => n.unbreakable)!
+    expect(grupo.stack!.map((n) => n.text)).toEqual(['Declaración', 'Primer párrafo.'])
+    // El resto de los párrafos sigue como texto normal, después del grupo.
+    expect(contenido().some((n) => n.text === '• Meta ≥ 95 %')).toBe(true)
   })
 
   it('el pie lleva el código y "Página X de Y"', () => {
