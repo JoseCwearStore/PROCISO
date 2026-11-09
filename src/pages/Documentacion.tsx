@@ -18,7 +18,7 @@ import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
-import { documentoVisibleParaRol } from '../lib/documentos'
+import { documentoVisibleParaRol, estadosVisiblesParaRol } from '../lib/documentos'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
@@ -458,7 +458,7 @@ export default function Documentacion() {
         <select className={inputClass} value={filtros.empresa} onChange={(event) => setFiltros({ ...filtros, empresa: event.target.value, proyecto: '' })}><option value="">Empresa</option>{empresasDisponibles.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select>
         <select className={inputClass} value={filtros.proyecto} onChange={(event) => setFiltros({ ...filtros, proyecto: event.target.value })}><option value="">Proyecto</option>{proyectosDisponibles.filter((item) => !filtros.empresa || item.empresaId === filtros.empresa).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select>
         <select className={inputClass} value={filtros.tipo} onChange={(event) => setFiltros({ ...filtros, tipo: event.target.value })}><option value="">Tipo</option>{[...new Set(documentosDisponibles.map((item) => item.tipo))].map((item) => <option key={item}>{item}</option>)}</select>
-        <select className={inputClass} value={filtros.estado} onChange={(event) => setFiltros({ ...filtros, estado: event.target.value })}><option value="">Estado</option>{['Borrador', 'En elaboración', 'Pendiente de revisión', 'En corrección', 'Aprobado', 'Rechazado', 'Obsoleto'].map((item) => <option key={item}>{item}</option>)}</select>
+        <select className={inputClass} value={filtros.estado} onChange={(event) => setFiltros({ ...filtros, estado: event.target.value })}><option value="">Estado</option>{estadosVisiblesParaRol(state.currentRole).map((item) => <option key={item}>{item}</option>)}</select>
         <select className={inputClass} value={filtros.responsable} onChange={(event) => setFiltros({ ...filtros, responsable: event.target.value })}><option value="">Responsable</option>{[...new Set(documentosDisponibles.map((item) => item.creadoPorId))].map((id) => <option key={id} value={id}>{getUsuario(id)?.nombre || id}</option>)}</select>
         <input type="date" className={inputClass} value={filtros.desde} onChange={(event) => setFiltros({ ...filtros, desde: event.target.value })} aria-label="Fecha inicial" />
         <input type="date" className={inputClass} value={filtros.hasta} onChange={(event) => setFiltros({ ...filtros, hasta: event.target.value })} aria-label="Fecha final" />
