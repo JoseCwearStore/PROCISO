@@ -18,6 +18,7 @@ import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
+import { documentoVisibleParaRol } from '../lib/documentos'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
@@ -199,12 +200,7 @@ export default function Documentacion() {
   const proyectosDisponibles = state.proyectos.filter((item) => !empresaClienteId || item.empresaId === empresaClienteId)
   const proyectoIdsDisponibles = new Set(proyectosDisponibles.map((item) => item.id))
   const documentosDisponibles = state.documentos.filter(
-    (item) =>
-      proyectoIdsDisponibles.has(item.proyectoId) &&
-      (
-        state.currentRole !== 'Usuario Cliente' ||
-        ['Aprobado', 'En corrección', 'Rechazado'].includes(item.estado)
-      ),
+    (item) => proyectoIdsDisponibles.has(item.proyectoId) && documentoVisibleParaRol(item, state.currentRole),
   )
   const documento = state.documentos.find((item) => item.id === documentoId)
   const proyectosGenerador = proyectosDisponibles.filter((item) => !generador.empresaId || item.empresaId === generador.empresaId)

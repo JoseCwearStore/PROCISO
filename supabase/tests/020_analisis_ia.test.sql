@@ -28,9 +28,10 @@ insert into public.proyectos (id, consultoria_id, empresa_id, nombre) values
   ('09090909-0000-0000-0003-000000000002', '09090909-0000-0000-0001-000000000001', '09090909-0000-0000-0002-000000000002', 'P2 IA');
 insert into public.proyecto_miembros (proyecto_id, usuario_id, consultoria_id) values
   ('09090909-0000-0000-0003-000000000001', '09090909-0000-0000-0000-000000000001', '09090909-0000-0000-0001-000000000001');
-insert into public.documentos (id, consultoria_id, proyecto_id, nombre, tipo) values
-  ('09090909-0000-0000-0004-000000000001', '09090909-0000-0000-0001-000000000001', '09090909-0000-0000-0003-000000000001', 'Política IA', 'Política'),
-  ('09090909-0000-0000-0004-000000000002', '09090909-0000-0000-0001-000000000001', '09090909-0000-0000-0003-000000000002', 'Política ajena', 'Política');
+-- Entregados a revisión: un Borrador no lo ve el cliente (ver 021).
+insert into public.documentos (id, consultoria_id, proyecto_id, nombre, tipo, estado) values
+  ('09090909-0000-0000-0004-000000000001', '09090909-0000-0000-0001-000000000001', '09090909-0000-0000-0003-000000000001', 'Política IA', 'Política', 'Pendiente de revisión'),
+  ('09090909-0000-0000-0004-000000000002', '09090909-0000-0000-0001-000000000001', '09090909-0000-0000-0003-000000000002', 'Política ajena', 'Política', 'Pendiente de revisión');
 insert into public.evidencias (id, consultoria_id, proyecto_id, nombre, tipo) values
   ('09090909-0000-0000-0005-000000000001', '09090909-0000-0000-0001-000000000001', '09090909-0000-0000-0003-000000000001', 'Foto tablero', 'Foto');
 

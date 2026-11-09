@@ -1,0 +1,32 @@
+import { describe, expect, it } from 'vitest'
+import type { EstadoDocumento } from '../types'
+import { documentoVisibleParaRol, ESTADOS_INTERNOS } from './documentos'
+
+const TODOS: EstadoDocumento[] = [
+  'Borrador',
+  'En elaboración',
+  'Pendiente de revisión',
+  'En corrección',
+  'Aprobado',
+  'Rechazado',
+  'Obsoleto',
+]
+
+describe('documentoVisibleParaRol', () => {
+  it('el cliente ve todo menos los estados internos', () => {
+    const visibles = TODOS.filter((estado) => documentoVisibleParaRol({ estado }, 'Usuario Cliente'))
+    expect(visibles).toEqual(['Pendiente de revisión', 'En corrección', 'Aprobado', 'Rechazado', 'Obsoleto'])
+  })
+
+  it('el cliente ve lo que tiene que aprobar', () => {
+    expect(documentoVisibleParaRol({ estado: 'Pendiente de revisión' }, 'Usuario Cliente')).toBe(true)
+  })
+
+  it.each(['Admin PROCISO', 'Admin Consultoría', 'Consultor'] as const)('%s ve los 7 estados', (rol) => {
+    expect(TODOS.every((estado) => documentoVisibleParaRol({ estado }, rol))).toBe(true)
+  })
+
+  it('los estados internos son Borrador y En elaboración', () => {
+    expect([...ESTADOS_INTERNOS]).toEqual(['Borrador', 'En elaboración'])
+  })
+})
