@@ -13,6 +13,9 @@ const SUGERENCIAS: Record<Documento['tipo'], string[]> = {
   'Matriz': ['4.2', '6.1'],
   'Plan': ['6.2.2', '6.3'],
   'Registro': ['7.5.3'],
+  'Alcance': ['4.3'],
+  'Objetivos': ['6.2.1', '6.2.2'],
+  'Mapa de procesos': ['4.4'],
 }
 
 export function clausulasSugeridas(tipo: Documento['tipo'] | null): string[] {

@@ -347,6 +347,9 @@ export interface Documento {
     | 'Plan'
     | 'Registro'
     | 'Política'
+    | 'Alcance'
+    | 'Objetivos'
+    | 'Mapa de procesos'
   proyectoId: string
   procesoId?: string
   estado: EstadoDocumento

@@ -19,6 +19,7 @@ import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
 import { documentoVisibleParaRol, estadosVisiblesParaRol } from '../lib/documentos'
+import { PENDIENTE, PLANTILLAS, crearSecciones, plantillaPorId } from '../lib/plantillas'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
@@ -30,7 +31,6 @@ import type {
   VersionDocumento,
 } from '../types'
 
-const PENDIENTE = 'Información pendiente de confirmar'
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 const labelClass = 'mb-1.5 block text-sm font-medium text-slate-700'
 
@@ -52,61 +52,11 @@ const CATEGORIAS: Array<{ id: CategoriaDocumento; titulo: string; elementos: str
   },
 ]
 
-const PLANTILLAS: Record<string, string[]> = {
-  'Procedimiento': [
-    'Encabezado y control documental',
-    'Objetivo',
-    'Alcance',
-    'Responsabilidades',
-    'Definiciones',
-    'Recursos',
-    'Desarrollo',
-    'Registros',
-    'Indicadores',
-    'Riesgos',
-    'Referencias',
-    'Historial',
-    'Revisión y aprobación',
-  ],
-  'Instrucción de trabajo': [
-    'Encabezado y control documental',
-    'Objetivo',
-    'Alcance',
-    'Responsable',
-    'Materiales y equipo',
-    'Instrucciones',
-    'Criterios de aceptación',
-    'Registros',
-    'Revisión y aprobación',
-  ],
-  'Ficha de proceso': [
-    'Identificación',
-    'Objetivo',
-    'Alcance',
-    'Entradas',
-    'Actividades',
-    'Salidas',
-    'Recursos',
-    'Controles',
-    'Indicadores',
-    'Riesgos',
-  ],
-  'Formato / lista de verificación': [
-    'Encabezado y control',
-    'Instrucciones de uso',
-    'Datos de identificación',
-    'Criterios de verificación',
-    'Resultado',
-    'Firmas y aprobación',
-  ],
-}
-
 interface Generador {
   empresaId: string
   proyectoId: string
   procesoId: string
-  tipo: Documento['tipo']
-  plantilla: string
+  plantilla: string // id de la plantilla (src/lib/plantillas.ts); el tipo de documento sale de ella
   codigo: string
   titulo: string
   edicionNorma: NonNullable<Documento['referenciaNormativa']>
@@ -116,54 +66,10 @@ const GENERADOR_VACIO: Generador = {
   empresaId: '',
   proyectoId: '',
   procesoId: '',
-  tipo: 'Procedimiento',
-  plantilla: 'Procedimiento',
+  plantilla: 'procedimiento',
   codigo: '',
   titulo: '',
   edicionNorma: 'ISO 9001:2026',
-}
-
-function textoLista(datos?: string[]) {
-  return datos?.length ? datos.join('\n') : PENDIENTE
-}
-
-function crearSecciones(
-  plantilla: string,
-  proceso: ReturnType<typeof useApp>['state']['procesos'][number],
-  codigo: string,
-  edicionNorma: NonNullable<Documento['referenciaNormativa']>,
-): SeccionDocumento[] {
-  const encabezado = `Código: ${codigo || PENDIENTE}\nReferencia normativa: ${edicionNorma}`
-  const contenido: Record<string, string> = {
-    'Encabezado y control documental': encabezado,
-    'Encabezado y control': encabezado,
-    'Identificación': proceso.nombre || PENDIENTE,
-    'Objetivo': proceso.objetivo || proceso.descripcion || PENDIENTE,
-    'Alcance': proceso.alcance || PENDIENTE,
-    'Responsabilidades': proceso.puestoResponsable || PENDIENTE,
-    'Responsable': proceso.puestoResponsable || PENDIENTE,
-    'Recursos': [...(proceso.recursosMateriales || []), ...(proceso.equipos || []), ...(proceso.sistemas || [])].join('\n') || PENDIENTE,
-    'Materiales y equipo': [...(proceso.recursosMateriales || []), ...(proceso.equipos || [])].join('\n') || PENDIENTE,
-    'Desarrollo': proceso.actividades?.map((actividad) => `${actividad.orden}. ${actividad.descripcion}`).join('\n') || PENDIENTE,
-    'Instrucciones': proceso.actividades?.map((actividad) => `${actividad.orden}. ${actividad.descripcion}`).join('\n') || PENDIENTE,
-    'Actividades': proceso.actividades?.map((actividad) => `${actividad.orden}. ${actividad.descripcion}`).join('\n') || PENDIENTE,
-    'Entradas': textoLista(proceso.entradas),
-    'Salidas': textoLista(proceso.salidas),
-    'Registros': textoLista(proceso.registros),
-    'Controles': textoLista(proceso.controles),
-    'Indicadores': textoLista(proceso.indicadores),
-    'Riesgos': textoLista(proceso.riesgos),
-  }
-  return (PLANTILLAS[plantilla] || []).map((titulo, index) => {
-    const esTabla = titulo.includes('Criterios') || titulo.includes('Datos de identificación')
-    return {
-      id: `sec-${Date.now()}-${index}`,
-      titulo,
-      contenido: esTabla ? '' : contenido[titulo] || PENDIENTE,
-      tipo: esTabla ? 'tabla' : 'texto',
-      filas: esTabla ? [['', '']] : undefined,
-    }
-  })
 }
 
 function versionSiguiente(version: string) {
@@ -205,6 +111,13 @@ export default function Documentacion() {
   const documento = state.documentos.find((item) => item.id === documentoId)
   const proyectosGenerador = proyectosDisponibles.filter((item) => !generador.empresaId || item.empresaId === generador.empresaId)
   const procesosGenerador = state.procesos.filter((item) => !generador.proyectoId || item.proyectoId === generador.proyectoId)
+  const plantillaElegida = plantillaPorId(generador.plantilla)
+  // Al cambiar de plantilla se sugiere su código, salvo que el usuario ya haya escrito uno propio.
+  function elegirPlantilla(id: string) {
+    const nueva = plantillaPorId(id)
+    const codigoSugerido = !generador.codigo || generador.codigo === plantillaElegida?.codigoBase
+    setGenerador({ ...generador, plantilla: id, procesoId: '', codigo: codigoSugerido ? nueva?.codigoBase ?? '' : generador.codigo })
+  }
 
   const documentos = useMemo(() => documentosDisponibles.filter((item) => {
     const proyecto = getProyecto(item.proyectoId)
@@ -220,26 +133,36 @@ export default function Documentacion() {
   }), [documentosDisponibles, filtros, getProyecto])
 
   async function generar() {
-    const proceso = state.procesos.find((item) => item.id === generador.procesoId)
-    if (!proceso || !generador.empresaId || !generador.proyectoId || !generador.titulo.trim() || !generador.codigo.trim()) return
+    const plantilla = plantillaPorId(generador.plantilla)
+    const proceso = plantilla?.requiereProceso ? state.procesos.find((item) => item.id === generador.procesoId) : undefined
+    if (!plantilla || (plantilla.requiereProceso && !proceso)) return
+    if (!generador.empresaId || !generador.proyectoId || !generador.titulo.trim() || !generador.codigo.trim()) return
+    const empresa = state.empresas.find((item) => item.id === generador.empresaId)
     const ahora = formatearFecha(new Date().toISOString())
     const nuevo: Documento = {
       id: crypto.randomUUID(),
       codigo: generador.codigo.trim(),
       nombre: generador.titulo.trim(),
-      tipo: generador.tipo,
+      tipo: plantilla.tipoDocumento,
       categoria: 'B',
       empresaId: generador.empresaId,
       proyectoId: generador.proyectoId,
-      procesoId: generador.procesoId,
+      procesoId: proceso?.id,
       estado: 'Borrador',
       version: '0.1',
       fechaCreacion: ahora,
       fechaModificacion: ahora,
       creadoPorId: state.currentUser?.id ?? '',
-      plantilla: generador.plantilla,
+      plantilla: plantilla.nombre,
       referenciaNormativa: generador.edicionNorma,
-      secciones: crearSecciones(generador.plantilla, proceso, generador.codigo, generador.edicionNorma),
+      secciones: crearSecciones(plantilla, {
+        codigo: generador.codigo.trim(),
+        edicionNorma: generador.edicionNorma,
+        organizacion: empresa?.nombreComercial || empresa?.nombre,
+        proceso,
+        procesos: state.procesos.filter((item) => item.proyectoId === generador.proyectoId),
+        nombreUsuario: (id) => (id ? getUsuario(id)?.nombre ?? '' : ''),
+      }),
       evidenciasVinculadas: [],
       comentarios: [],
       historialVersiones: [],
@@ -247,12 +170,12 @@ export default function Documentacion() {
       contenidoPendiente: true,
       bloqueado: false,
     }
-    if (!(await persistir(nuevo, { evento: { accion: 'Borrador generado', detalle: `Creado con la plantilla ${generador.plantilla}.` } }))) return
+    if (!(await persistir(nuevo, { evento: { accion: 'Borrador generado', detalle: `Creado con la plantilla ${plantilla.nombre}.` } }))) return
     setDocumentoId(nuevo.id)
     setVista('editor')
     setGeneradorOpen(false)
     setGenerador(GENERADOR_VACIO)
-    showToast('Borrador generado con la información disponible del proceso.', 'success')
+    showToast('Borrador generado con la información disponible.', 'success')
   }
 
   // Ediciones en pantalla: se guardan en la BD al pulsar Guardar o Enviar.
@@ -476,15 +399,15 @@ export default function Documentacion() {
         </table>
       </div>
 
-      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={!generador.empresaId || !generador.proyectoId || !generador.procesoId || !generador.codigo.trim() || !generador.titulo.trim()}>Generar borrador</Button></>}>
+      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={!generador.empresaId || !generador.proyectoId || (plantillaElegida?.requiereProceso && !generador.procesoId) || !generador.codigo.trim() || !generador.titulo.trim()}>Generar borrador</Button></>}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className={labelClass}>Empresa *</span><select className={inputClass} value={generador.empresaId} onChange={(event) => setGenerador({ ...GENERADOR_VACIO, empresaId: event.target.value })}><option value="">Selecciona</option>{state.empresas.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
           <label><span className={labelClass}>Proyecto *</span><select className={inputClass} value={generador.proyectoId} disabled={!generador.empresaId} onChange={(event) => { const proyecto = state.proyectos.find((item) => item.id === event.target.value); setGenerador({ ...generador, proyectoId: event.target.value, procesoId: '', edicionNorma: proyecto?.edicionNorma || 'ISO 9001:2026' }) }}><option value="">Selecciona</option>{proyectosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
           <label><span className={labelClass}>Referencia normativa *</span><select className={inputClass} value={generador.edicionNorma} disabled={Boolean(generador.proyectoId)} onChange={(event) => setGenerador({ ...generador, edicionNorma: event.target.value as Generador['edicionNorma'] })}><option value="ISO 9001:2026">ISO 9001:2026 (vigente)</option><option value="ISO 9001:2015">ISO 9001:2015 (en transición)</option></select></label>
-          <label><span className={labelClass}>Proceso *</span><select className={inputClass} value={generador.procesoId} disabled={!generador.proyectoId} onChange={(event) => setGenerador({ ...generador, procesoId: event.target.value })}><option value="">Selecciona</option>{procesosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
-          <label><span className={labelClass}>Tipo *</span><select className={inputClass} value={generador.tipo} onChange={(event) => setGenerador({ ...generador, tipo: event.target.value as Documento['tipo'] })}>{['Procedimiento', 'Instrucción de trabajo', 'Ficha de proceso', 'Formato', 'Lista de verificación', 'Manual', 'Política'].map((item) => <option key={item}>{item}</option>)}</select></label>
-          <label><span className={labelClass}>Plantilla *</span><select className={inputClass} value={generador.plantilla} onChange={(event) => setGenerador({ ...generador, plantilla: event.target.value })}>{Object.keys(PLANTILLAS).map((item) => <option key={item}>{item}</option>)}</select></label>
-          <label><span className={labelClass}>Código *</span><input className={inputClass} value={generador.codigo} onChange={(event) => setGenerador({ ...generador, codigo: event.target.value })} placeholder="Ej. PR-COM-01" /></label>
+          <label><span className={labelClass}>Plantilla *</span><select className={inputClass} value={generador.plantilla} onChange={(event) => elegirPlantilla(event.target.value)}>{PLANTILLAS.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+          <label><span className={labelClass}>Tipo de documento</span><input className={inputClass} value={plantillaElegida?.tipoDocumento ?? ''} disabled readOnly /></label>
+          {plantillaElegida?.requiereProceso && <label><span className={labelClass}>Proceso *</span><select className={inputClass} value={generador.procesoId} disabled={!generador.proyectoId} onChange={(event) => setGenerador({ ...generador, procesoId: event.target.value })}><option value="">Selecciona</option>{procesosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>}
+          <label><span className={labelClass}>Código *</span><input className={inputClass} value={generador.codigo} onChange={(event) => setGenerador({ ...generador, codigo: event.target.value })} placeholder={`Ej. ${plantillaElegida?.codigoBase ?? 'PR-COM-01'}`} /></label>
           <label className="sm:col-span-2"><span className={labelClass}>Título *</span><input className={inputClass} value={generador.titulo} onChange={(event) => setGenerador({ ...generador, titulo: event.target.value })} /></label>
           {generador.edicionNorma === 'ISO 9001:2015' && <p className="sm:col-span-2 text-xs text-amber-700">Este proyecto usa la edición ISO 9001:2015 (en transición).</p>}
           <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">La plantilla se precargará exclusivamente con información existente. Los datos ausentes se marcarán como “{PENDIENTE}”.</div>
