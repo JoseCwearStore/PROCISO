@@ -22,6 +22,10 @@ import { documentoVisibleParaRol, estadosVisiblesParaRol } from '../lib/document
 import { PENDIENTE, PLANTILLAS, crearSecciones, plantillaPorId } from '../lib/plantillas'
 import { aplicarTextos, armarPedidoIA, camposIA } from '../lib/generacion'
 import { useAccionesGeneracion } from '../hooks/useAccionesGeneracion'
+import { descargar } from '../lib/descarga'
+import { armarModelo, nombreArchivo } from '../lib/exportacion'
+import { generarPdf } from '../lib/exportarPdf'
+import { generarWord } from '../lib/exportarWord'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
@@ -90,6 +94,7 @@ export default function Documentacion() {
   const [generadorOpen, setGeneradorOpen] = useState(false)
   const [generador, setGenerador] = useState<Generador>(GENERADOR_VACIO)
   const [generandoIA, setGenerandoIA] = useState(false)
+  const [exportando, setExportando] = useState<'pdf' | 'word' | null>(null)
   const { redactar } = useAccionesGeneracion()
   const [compararOpen, setCompararOpen] = useState(false)
   const [versionA, setVersionA] = useState('')
@@ -358,6 +363,23 @@ export default function Documentacion() {
     setVista('editor')
   }
 
+  async function exportar(formato: 'pdf' | 'word') {
+    if (!documento) return
+    const proyecto = getProyecto(documento.proyectoId)
+    const empresa = getEmpresa(documento.empresaId || proyecto?.empresaId || '')
+    const modelo = armarModelo(documento, { organizacion: empresa?.nombreComercial || empresa?.nombre, proyecto: proyecto?.nombre })
+    const nombre = nombreArchivo(modelo, formato === 'pdf' ? 'pdf' : 'docx')
+    setExportando(formato)
+    try {
+      descargar(formato === 'pdf' ? await generarPdf(modelo) : await generarWord(modelo), nombre)
+      showToast(`Se descargó ${nombre}.`, 'success')
+    } catch {
+      showToast('No se pudo generar el archivo. Intenta de nuevo.', 'error')
+    } finally {
+      setExportando(null)
+    }
+  }
+
   if (vista === 'editor' && documento) {
     return (
       <EditorDocumento
@@ -376,6 +398,8 @@ export default function Documentacion() {
         comentarioTexto={comentarioTexto}
         setComentarioTexto={setComentarioTexto}
         comentar={comentar}
+        exportar={exportar}
+        exportando={exportando}
         abrirComparacion={() => {
           const versiones = documento.historialVersiones
           setVersionA(versiones[0]?.version || '')
@@ -495,6 +519,9 @@ interface EditorProps {
   // Guarda el comentario en la BD; devuelve true si se guardó.
   comentar: (seccionId: string, texto: string) => Promise<boolean>
   abrirComparacion: () => void
+  // Exporta lo que se ve en pantalla (incluye ediciones sin guardar).
+  exportar: (formato: 'pdf' | 'word') => Promise<void>
+  exportando: 'pdf' | 'word' | null
   children: React.ReactNode
 }
 
@@ -537,8 +564,8 @@ function EditorDocumento(props: EditorProps) {
         </div>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={props.abrirComparacion} disabled={documento.historialVersiones.length < 1} icon={<Columns2 className="h-4 w-4" />}>Comparar versiones</Button>
-          <Button variant="outline" disabled>Exportar PDF · Requiere integración</Button>
-          <Button variant="outline" disabled>Exportar Word · Requiere integración</Button>
+          <Button variant="outline" onClick={() => props.exportar('pdf')} disabled={props.exportando !== null}>{props.exportando === 'pdf' ? 'Generando PDF…' : 'Exportar PDF'}</Button>
+          <Button variant="outline" onClick={() => props.exportar('word')} disabled={props.exportando !== null}>{props.exportando === 'word' ? 'Generando Word…' : 'Exportar Word'}</Button>
           {bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
         </div>
       </div>
