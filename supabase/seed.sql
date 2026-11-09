@@ -156,6 +156,10 @@ insert into public.procesos (id, consultoria_id, proyecto_id, responsable_id, no
   ('55555555-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000006', 'Recepción y almacenamiento de mercancía', 'Recepción, inspección y almacenamiento de productos.', 'En levantamiento', '2024-09-10', null, null, null, null, array['Guía de remisión']::text[], array['Producto almacenado']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb),
   ('55555555-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000006', 'Despacho y entrega a clientes', 'Preparación de pedidos y entrega de mercancía a clientes.', 'Pendiente', null, null, null, null, null, array['Pedido confirmado']::text[], array['Entrega confirmada']::text[], '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', '{}', null, null, '{}'::jsonb);
 
+-- Tipo de proceso (clasifica el Mapa de procesos), con el criterio del expediente de ejemplo:
+-- compras, producción, atención, almacén y despacho son operativos; recursos humanos es de apoyo.
+update public.procesos set tipo = case nombre when 'Gestión de recursos humanos' then 'Apoyo' else 'Operativo' end;
+
 -- ─── Evidencias (las mismas 5 de src/data/demo.ts; los archivos llegan con Storage) ─
 
 -- Generado desde src/data/demo.ts (EVIDENCIAS). evid-00N → 4444…00N.

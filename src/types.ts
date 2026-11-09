@@ -177,9 +177,13 @@ export interface Entregable {
   documentoId?: string
 }
 
+// Clasifica el proceso en el Mapa de procesos. Opcional: los levantados antes no lo tienen.
+export type TipoProceso = 'Estratégico' | 'Operativo' | 'Apoyo'
+
 export interface Proceso {
   id: string
   nombre: string
+  tipo?: TipoProceso
   proyectoId: string
   responsableId: string
   estado: EstadoProceso

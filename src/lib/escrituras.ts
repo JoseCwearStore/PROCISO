@@ -537,6 +537,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
           nombre: proceso.nombre,
           descripcion: proceso.descripcion,
           estado: proceso.estado,
+          tipo: proceso.tipo ?? null,
           objetivo: proceso.objetivo,
           alcance: proceso.alcance,
           puesto_responsable: proceso.puestoResponsable,

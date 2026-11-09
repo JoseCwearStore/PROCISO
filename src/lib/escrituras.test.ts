@@ -209,13 +209,22 @@ describe('crearProyecto', () => {
 describe('guardarProceso', () => {
   const PROCESO: Proceso = {
     id: '55555555-0000-0000-0000-0000000000aa', nombre: 'Compras', proyectoId: P_NUEVO, responsableId: ROBERTO,
-    estado: 'En levantamiento', descripcion: 'Comprar bien', fechaLevantamiento: '05/11/2026',
+    estado: 'En levantamiento', tipo: 'Operativo', descripcion: 'Comprar bien', fechaLevantamiento: '05/11/2026',
     evidenciasIds: ['ev-1'], documentosIds: [], entradas: ['Requisición'], salidas: [], objetivo: 'Comprar bien',
     proveedores: ['Papelería'], noAplica: { equipos: 'No aplica' },
     actividades: [
       { id: 'a1', tipo: 'Inicio', responsableId: ROBERTO, descripcion: 'Recibir', entradas: '', recursos: '', controles: '', resultado: '', orden: 1 },
     ],
   }
+
+  it('un proceso sin tipo manda tipo null (el tipo es opcional)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const { tipo: _tipo, ...sinTipo } = PROCESO
+
+    await crearServicioEscritura(cliente).guardarProceso(sinTipo)
+
+    expect(llamadas[0].datos).toEqual(expect.objectContaining({ p_proceso: expect.objectContaining({ tipo: null }) }))
+  })
 
   it('guarda el proceso y sus actividades en una sola llamada, en snake_case', async () => {
     const { cliente, llamadas } = crearClienteDoble()
@@ -232,6 +241,7 @@ describe('guardarProceso', () => {
             proyecto_id: P_NUEVO,
             responsable_id: ROBERTO,
             estado: 'En levantamiento',
+            tipo: 'Operativo',
             entradas: ['Requisición'],
             proveedores: ['Papelería'],
             // Las listas que el formulario no completó van vacías, no undefined.

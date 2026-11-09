@@ -1,4 +1,4 @@
-import type { Documento, Proceso, SeccionDocumento } from '../types'
+import type { Documento, Proceso, SeccionDocumento, TipoProceso } from '../types'
 
 // Plantillas documentales del usuario (Seis_plantillas_documentales_PROCISO.docx y
 // el expediente de ejemplo). Son SOLO la estructura y el relleno desde el
@@ -205,11 +205,15 @@ const MAPA: Plantilla = {
   requiereProcesosDelProyecto: true,
   secciones: [
     encabezado(),
-    tabla('Clasificación de procesos', ['Tipo', 'Descripción', 'Procesos de la organización'], () => [
-      ['Estratégicos', 'Definen dirección, políticas, objetivos y seguimiento.', ''],
-      ['Operativos / clave', 'Transforman requisitos y materiales en productos y servicios para el cliente.', ''],
-      ['Apoyo', 'Proporcionan recursos y soporte a los demás procesos.', ''],
-    ]),
+    tabla('Clasificación de procesos', ['Tipo', 'Descripción', 'Procesos de la organización'], (c) => {
+      // Los procesos sin tipo (levantados antes de que existiera) no se clasifican solos.
+      const de = (tipo: TipoProceso) => (c.procesos ?? []).filter((p) => p.tipo === tipo).map((p) => p.nombre).join('; ')
+      return [
+        ['Estratégicos', 'Definen dirección, políticas, objetivos y seguimiento.', de('Estratégico')],
+        ['Operativos / clave', 'Transforman requisitos y materiales en productos y servicios para el cliente.', de('Operativo')],
+        ['Apoyo', 'Proporcionan recursos y soporte a los demás procesos.', de('Apoyo')],
+      ]
+    }),
     texto('Diagrama general del mapa de procesos'),
     tabla('Matriz de interacción', ['Proceso', 'Entradas', 'Salidas', 'Cliente interno / externo', 'Procesos relacionados'], (c) =>
       (c.procesos ?? []).map((p) => [p.nombre, unir(p.entradas), unir(p.salidas), unir(p.clientes), '']),
@@ -231,7 +235,7 @@ const FICHA: Plantilla = {
     tabla('Identificación del proceso', ['Campo', 'Información'], ({ proceso: p }) => [
       ['Nombre del proceso', p?.nombre ?? ''],
       ['Código', ''],
-      ['Tipo', ''],
+      ['Tipo', p?.tipo ?? ''],
       ['Responsable / propietario', p?.puestoResponsable ?? ''],
       ['Objetivo', p?.objetivo || p?.descripcion || ''],
       ['Alcance', p?.alcance ?? ''],

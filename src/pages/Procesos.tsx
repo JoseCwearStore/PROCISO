@@ -353,6 +353,7 @@ function FichaGeneral({
     ["Objetivo", proceso.objetivo || proceso.descripcion],
     ["Alcance", proceso.alcance],
     ["Responsable", responsable],
+    ["Tipo", proceso.tipo],
     ["Puesto", proceso.puestoResponsable],
     ["Personal involucrado", proceso.personalInvolucrado],
     ["Fecha de levantamiento", proceso.fechaLevantamiento],

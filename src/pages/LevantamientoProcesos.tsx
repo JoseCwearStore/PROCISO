@@ -20,7 +20,7 @@ import { Button } from "../components/ui/Button"
 import { ConfirmDialog } from "../components/ui/ConfirmDialog"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
-import type { ActividadProceso, Proceso, TipoActividad } from "../types"
+import type { ActividadProceso, Proceso, TipoActividad, TipoProceso } from "../types"
 
 const PASOS = [
   "Identificación",
@@ -39,6 +39,7 @@ interface Borrador {
   empresaId: string
   proyectoId: string
   nombre: string
+  tipo: "" | TipoProceso // opcional: clasifica el proceso en el Mapa de procesos
   objetivo: string
   alcance: string
   responsableId: string
@@ -69,6 +70,7 @@ const VACIO: Borrador = {
   empresaId: "",
   proyectoId: "",
   nombre: "",
+  tipo: "",
   objetivo: "",
   alcance: "",
   responsableId: "",
@@ -308,6 +310,7 @@ export default function LevantamientoProcesos() {
       proyectoId: borrador.proyectoId,
       responsableId: borrador.responsableId,
       estado: esFinal ? "Documentado" : "En levantamiento",
+      tipo: borrador.tipo || undefined,
       descripcion: borrador.objetivo,
       // Igual que la BD (current_date, en UTC) y con el formato del resto de la app.
       fechaLevantamiento: formatearFecha(new Date().toISOString()),
@@ -613,6 +616,20 @@ export default function LevantamientoProcesos() {
                     help="Indica dónde inicia, dónde termina y qué áreas comprende."
                   />
                 </div>
+                <label>
+                  <span className={labelClass}>Tipo de proceso</span>
+                  <select
+                    className={inputClass}
+                    value={borrador.tipo}
+                    onChange={(event) => set("tipo", event.target.value as Borrador["tipo"])}
+                  >
+                    <option value="">Sin definir</option>
+                    <option value="Estratégico">Estratégico</option>
+                    <option value="Operativo">Operativo</option>
+                    <option value="Apoyo">Apoyo</option>
+                  </select>
+                  <span className="mt-1 block text-xs text-slate-500">Opcional. Sirve para clasificarlo en el Mapa de procesos.</span>
+                </label>
                 <Campo
                   label="Puesto del responsable"
                   value={borrador.puestoResponsable}

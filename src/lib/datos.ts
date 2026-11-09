@@ -122,6 +122,7 @@ export interface FilaProceso {
   nombre: string
   descripcion: string | null
   estado: Proceso['estado']
+  tipo: Proceso['tipo'] | null
   fecha_levantamiento: string | null
   objetivo: string | null
   alcance: string | null
@@ -621,6 +622,7 @@ export function traducirProceso(
     responsableId: fila.responsable_id ?? '',
     estado: fila.estado,
     descripcion: fila.descripcion ?? '',
+    tipo: fila.tipo ?? undefined,
     fechaLevantamiento: fila.fecha_levantamiento ? formatearFecha(fila.fecha_levantamiento) : undefined,
     evidenciasIds: evidencias.filter((e) => e.procesoId === fila.id).map((e) => e.id),
     documentosIds: documentos.filter((d) => d.procesoId === fila.id).map((d) => d.id),

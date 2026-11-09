@@ -58,7 +58,7 @@ function filasBase(): FilasSesion {
     ],
     procesos: [
       {
-        id: PROC1, proyecto_id: P1, responsable_id: CARLOS, nombre: 'Compras', descripcion: null, estado: 'Documentado',
+        id: PROC1, proyecto_id: P1, responsable_id: CARLOS, nombre: 'Compras', descripcion: null, estado: 'Documentado', tipo: 'Operativo',
         fecha_levantamiento: '2024-03-20', objetivo: 'Comprar bien', alcance: null, puesto_responsable: null,
         personal_involucrado: null, entradas: ['Requisición'], salidas: ['Orden'], proveedores: [], clientes: [],
         recursos_materiales: [], equipos: [], sistemas: [], controles: [], registros: [], indicadores: [], riesgos: [],
@@ -380,6 +380,12 @@ describe('combinarDatosSesion', () => {
     ])
   })
 
+  it('un proceso levantado antes del tipo (NULL en la BD) queda sin tipo', () => {
+    const filas = filasBase()
+    filas.procesos[0].tipo = null
+    expect(combinarDatosSesion(filas).procesos[0].tipo).toBeUndefined()
+  })
+
   it('traduce los procesos de la BD con sus actividades ordenadas y sus vínculos', () => {
     const { procesos } = combinarDatosSesion(filasBase())
 
@@ -389,6 +395,7 @@ describe('combinarDatosSesion', () => {
       proyectoId: P1,
       responsableId: CARLOS,
       descripcion: '',
+      tipo: 'Operativo',
       fechaLevantamiento: '20/03/2024',
       entradas: ['Requisición'],
       salidas: ['Orden'],

@@ -9,6 +9,7 @@ function proceso(extra: Partial<Proceso> = {}): Proceso {
     proyectoId: 'py1',
     responsableId: 'u1',
     estado: 'Aprobado',
+    tipo: 'Operativo',
     descripcion: 'Descripción',
     evidenciasIds: [],
     documentosIds: [],
@@ -198,6 +199,12 @@ describe('crearSecciones', () => {
       expect(filas).toContainEqual(['Responsable / propietario', 'Jefatura de Producción'])
     })
 
+    it('muestra el tipo del proceso, y lo deja vacío si no lo tiene', () => {
+      expect(seccion(secciones(), 'Identificación del proceso').filas).toContainEqual(['Tipo', 'Operativo'])
+      const sin = crearSecciones(plantillaPorId('ficha')!, contexto({ proceso: proceso({ tipo: undefined }) }))
+      expect(seccion(sin, 'Identificación del proceso').filas).toContainEqual(['Tipo', ''])
+    })
+
     it('arma entradas, actividades y salidas con una fila por actividad, en orden', () => {
       const filas = seccion(secciones(), 'Entradas, actividades y salidas').filas!
       expect(filas).toHaveLength(3)
@@ -255,6 +262,29 @@ describe('crearSecciones', () => {
     it('sin procesos deja una fila vacía', () => {
       const s = crearSecciones(plantillaPorId('mapa')!, contexto({ procesos: [] }))
       expect(seccion(s, 'Matriz de interacción').filas).toHaveLength(2)
+    })
+
+    it('clasifica los procesos por tipo en estratégicos, operativos y de apoyo', () => {
+      const procesos = [
+        proceso({ id: 'a', nombre: 'Dirección y planeación', tipo: 'Estratégico' }),
+        proceso({ id: 'b', nombre: 'Fabricación', tipo: 'Operativo' }),
+        proceso({ id: 'c', nombre: 'Ventas', tipo: 'Operativo' }),
+        proceso({ id: 'd', nombre: 'Mantenimiento', tipo: 'Apoyo' }),
+      ]
+      const filas = seccion(crearSecciones(plantillaPorId('mapa')!, contexto({ procesos })), 'Clasificación de procesos').filas!
+      expect(filas[0]).toEqual(['Tipo', 'Descripción', 'Procesos de la organización'])
+      expect(filas.map((f) => [f[0], f[2]])).toEqual([
+        ['Tipo', 'Procesos de la organización'],
+        ['Estratégicos', 'Dirección y planeación'],
+        ['Operativos / clave', 'Fabricación; Ventas'],
+        ['Apoyo', 'Mantenimiento'],
+      ])
+    })
+
+    it('un proceso sin tipo no se clasifica (pero sí está en la matriz de interacción)', () => {
+      const s = crearSecciones(plantillaPorId('mapa')!, contexto({ procesos: [proceso({ nombre: 'Compras', tipo: undefined })] }))
+      expect(seccion(s, 'Clasificación de procesos').filas!.slice(1).map((f) => f[2])).toEqual(['', '', ''])
+      expect(seccion(s, 'Matriz de interacción').filas![1][0]).toBe('Compras')
     })
   })
 })
