@@ -1,16 +1,15 @@
 import type { ModeloDocumento } from './exportacion'
+import { PALETA, hex } from './paletaExportacion'
 
 // PDF con pdfmake. La fuente es Roboto (la que trae la librería): cubre los símbolos que
 // aparecen en los documentos (≥ ÷ × • —), que las fuentes estándar de PDF no tienen.
-// La librería pesa, así que se carga SOLO al exportar (import dinámico).
+// La librería pesa, así que se carga SOLO al exportar (import dinámico). Misma paleta que Word.
 
 const COLOR_TEXTO = '#1e293b'
-const COLOR_SUAVE = '#64748b'
-const COLOR_ENCABEZADO = '#eef2f7'
 
-type Celda = { text: string; bold?: boolean; fillColor?: string }
+type Celda = { text: string; bold?: boolean; fillColor?: string; color?: string }
 
-const ESTILO_TITULO = { fontSize: 13, bold: true }
+const ESTILO_TITULO = { fontSize: 13, bold: true, color: hex(PALETA.seccion) }
 
 // Si la tabla tiene `titulo`, va como su PRIMERA fila (sin bordes) y cuenta como encabezado.
 // Así pdfmake lo mantiene con las filas siguientes (keepWithHeaderRows) y lo repite al cambiar
@@ -22,8 +21,9 @@ function tabla(columnas: string[], filas: string[][], titulo?: string): object {
   const filaTitulo: object[][] = titulo
     ? [[{ text: titulo, colSpan: ancho, ...ESTILO_TITULO, border: [false, false, false, false], margin: [0, 14, 0, 4] }, ...Array.from({ length: ancho - 1 }, () => ({}))]]
     : []
+  // Encabezado: azul marino con texto blanco. Filas de datos: la 2.ª, 4.ª… en gris azulado claro.
   const encabezado: Celda[][] = columnas.length
-    ? [completa(columnas).map((c) => ({ text: c, bold: true, fillColor: COLOR_ENCABEZADO }))]
+    ? [completa(columnas).map((c) => ({ text: c, bold: true, fillColor: hex(PALETA.titulo), color: hex(PALETA.textoEncabezado) }))]
     : []
   return {
     table: {
@@ -31,7 +31,11 @@ function tabla(columnas: string[], filas: string[][], titulo?: string): object {
       ...(titulo ? { keepWithHeaderRows: 1 } : {}),
       dontBreakRows: true,
       widths: Array<string>(ancho).fill('*'),
-      body: [...filaTitulo, ...encabezado, ...filas.map((fila) => completa(fila).map((c): Celda => ({ text: c })))],
+      body: [
+        ...filaTitulo,
+        ...encabezado,
+        ...filas.map((fila, j) => completa(fila).map((c): Celda => ({ text: c, ...(j % 2 === 1 ? { fillColor: hex(PALETA.cebra) } : {}) }))),
+      ],
     },
     fontSize: 9,
     margin: [0, 0, 0, 12],
@@ -71,13 +75,13 @@ export function armarDefinicionPdf(modelo: ModeloDocumento): { pageSize: string;
       text: `${[modelo.codigo, `v${modelo.version}`].filter(Boolean).join(' · ')} · Página ${pagina} de ${total}`,
       alignment: 'center',
       fontSize: 8,
-      color: COLOR_SUAVE,
+      color: hex(PALETA.suave),
       margin: [0, 18, 0, 0],
     }),
     content: [
-      { text: modelo.titulo, fontSize: 18, bold: true, margin: [0, 0, 0, 10] },
-      tabla([], conDato.map(([campo, valor]) => [campo, valor])),
-      ...modelo.avisos.map((aviso) => ({ text: aviso, italics: true, color: '#92400e', margin: [0, 0, 0, 6] })),
+      { text: modelo.titulo, fontSize: 18, bold: true, color: hex(PALETA.titulo), margin: [0, 0, 0, 10] },
+      tabla(['Campo', 'Información'], conDato.map(([campo, valor]) => [campo, valor])),
+      ...modelo.avisos.map((aviso) => ({ text: aviso, italics: true, color: hex(PALETA.aviso), margin: [0, 0, 0, 6] })),
       ...modelo.bloques.flatMap((bloque) =>
         bloque.tipo === 'texto' ? bloqueTexto(bloque.titulo, bloque.parrafos) : [tabla(bloque.columnas, bloque.filas, bloque.titulo)],
       ),

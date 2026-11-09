@@ -121,6 +121,15 @@ describe('crearSecciones', () => {
     expect(tabla.filas?.[1]).toEqual(['¿Qué productos o servicios ofrece la empresa?', ''])
   })
 
+  it('alcance, política y objetivos cierran con una tabla de firmas (Elaboró, Revisó, Aprobó)', () => {
+    for (const [id, titulo] of [['alcance', 'Aprobación'], ['politica', 'Aprobación'], ['objetivos', 'Revisión y aprobación']] as const) {
+      const firmas = seccion(crearSecciones(plantillaPorId(id)!, contexto()), titulo)
+      expect(firmas.tipo, id).toBe('tabla')
+      expect(firmas.filas?.[0], id).toEqual(['Elaboró', 'Revisó', 'Aprobó'])
+      expect(firmas.filas, id).toHaveLength(2)
+    }
+  })
+
   it('sin datos, los textos quedan como pendientes y no se inventa nada', () => {
     const secciones = crearSecciones(plantillaPorId('alcance')!, contexto())
     expect(seccion(secciones, 'Declaración del alcance').contenido).toBe(PENDIENTE)

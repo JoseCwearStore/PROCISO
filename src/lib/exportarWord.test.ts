@@ -25,7 +25,7 @@ async function abrir(modelo: ModeloDocumento) {
   const blob = await generarWord(modelo)
   const zip = unzipSync(new Uint8Array(await blob.arrayBuffer()))
   const archivo = (patron: RegExp) => Object.entries(zip).filter(([nombre]) => patron.test(nombre)).map(([, datos]) => strFromU8(datos)).join('\n')
-  return { blob, zip, documento: archivo(/^word\/document\.xml$/), pies: archivo(/^word\/footer\d*\.xml$/) }
+  return { blob, zip, documento: archivo(/^word\/document\.xml$/), pies: archivo(/^word\/footer\d*\.xml$/), estilos: archivo(/^word\/styles\.xml$/) }
 }
 
 describe('generarWord', () => {
@@ -77,6 +77,42 @@ describe('generarWord', () => {
     const titulos = documento.match(/<w:p>(?:(?!<\/w:p>).)*?<w:pStyle w:val="Heading2"\/>.*?<\/w:p>/gs) ?? []
     expect(titulos).toHaveLength(MODELO.bloques.length)
     expect(titulos.every((p) => p.includes('<w:keepNext'))).toBe(true)
+  })
+
+  describe('estilo (paleta azul marino del ejemplo del usuario)', () => {
+    it('los encabezados de tabla van en azul marino con texto blanco', async () => {
+      const { documento } = await abrir(MODELO)
+      expect(documento).toContain('w:fill="1F3864"')
+      expect(documento).toContain('<w:color w:val="FFFFFF"/>')
+    })
+
+    it('la tabla de metadatos tiene su propio encabezado "Campo | Información"', async () => {
+      const { documento } = await abrir(MODELO)
+      const primeraTabla = documento.match(/<w:tbl>.*?<\/w:tbl>/s)![0]
+      expect(primeraTabla).toContain('>Campo<')
+      expect(primeraTabla).toContain('>Información<')
+      expect(primeraTabla).toContain('w:fill="1F3864"')
+    })
+
+    it('las filas se alternan en gris azulado claro (la 2.ª fila de datos va rellena y la 1.ª no)', async () => {
+      const { documento } = await abrir(MODELO)
+      const tabla = (documento.match(/<w:tbl>.*?<\/w:tbl>/gs) ?? []).find((t) => t.includes('¿Qué ofrece?'))!
+      const filas = tabla.match(/<w:tr>.*?<\/w:tr>/gs)!
+      // filas[0] = encabezado, filas[1] = 1.ª de datos, filas[2] = 2.ª de datos
+      expect(filas[1]).not.toContain('F2F5FA')
+      expect(filas[2]).toContain('F2F5FA')
+    })
+
+    it('el título del documento va en azul marino y los de sección en azul', async () => {
+      const { documento } = await abrir(MODELO)
+      expect(documento).toContain('<w:color w:val="1F3864"/>')
+      expect(documento).toContain('<w:color w:val="1F4E79"/>')
+    })
+
+    it('la fuente es Arial, que cualquier Word tiene', async () => {
+      const { estilos } = await abrir(MODELO)
+      expect(estilos).toContain('Arial')
+    })
   })
 
   it('escapa los caracteres especiales del XML', async () => {

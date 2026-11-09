@@ -162,7 +162,7 @@ const POLITICA: Plantilla = {
       camposVacios(['Medio de comunicación interno', 'Responsable de comunicarla', 'Disponibilidad externa, cuando aplique', 'Condición de revisión']),
     ),
     tabla('Historial de cambios', ['Versión', 'Fecha', 'Descripción del cambio', 'Responsable'], () => [['00', '', 'Emisión inicial', '']]),
-    texto('Aprobación'),
+    aprobacion(),
   ],
 }
 
@@ -191,7 +191,7 @@ const OBJETIVOS: Plantilla = {
     tabla('Seguimiento de resultados', ['Periodo', 'Objetivo', 'Resultado', 'Cumplimiento', 'Análisis / desviación', 'Acción definida'], (c) =>
       resp(c, 'linea_base') ? [['', 'OC-01', resp(c, 'linea_base'), '', '', '']] : [],
     ),
-    texto('Revisión y aprobación'),
+    tabla('Revisión y aprobación', ['Elaboró', 'Revisó', 'Aprobó']),
   ],
 }
 

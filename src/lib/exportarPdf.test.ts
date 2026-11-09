@@ -20,7 +20,7 @@ const MODELO: ModeloDocumento = {
   ],
 }
 
-type Celda = { text?: string; bold?: boolean; colSpan?: number }
+type Celda = { text?: string; bold?: boolean; colSpan?: number; fillColor?: string; color?: string }
 type Nodo = { text?: string; stack?: Nodo[]; unbreakable?: boolean; table?: { headerRows: number; keepWithHeaderRows?: number; widths: string[]; body: Celda[][] }; [k: string]: unknown }
 const contenido = () => armarDefinicionPdf(MODELO).content as Nodo[]
 const tablas = () => contenido().filter((n) => n.table)
@@ -57,6 +57,31 @@ describe('armarDefinicionPdf', () => {
     expect(t.body[0][0]).toMatchObject({ text: 'Preguntas', bold: true, colSpan: 2 })
     expect(t.body[1].map((c) => [c.text, c.bold])).toEqual([['Pregunta', true], ['Respuesta', true]])
     expect(t.body[2].map((c) => c.text)).toEqual(['¿Qué ofrece?', 'Campañas'])
+  })
+
+  describe('estilo (paleta azul marino del ejemplo del usuario)', () => {
+    it('los encabezados de tabla van en azul marino con texto blanco y negrita', () => {
+      for (const c of tablaDe('Preguntas').table!.body[1]) expect(c).toMatchObject({ bold: true, fillColor: '#1F3864', color: '#FFFFFF' })
+    })
+
+    it('la tabla de metadatos tiene su propio encabezado "Campo | Información"', () => {
+      const meta = tablas().find((t) => t.table!.body[0][0].text === 'Campo')!.table!
+      expect(meta.headerRows).toBe(1)
+      expect(meta.body[0].map((c) => [c.text, c.fillColor])).toEqual([['Campo', '#1F3864'], ['Información', '#1F3864']])
+      expect(meta.body[1].map((c) => c.text)).toEqual(['Código', 'SGC-POL-001'])
+    })
+
+    it('las filas de datos se alternan: la 1.ª sin relleno y la 2.ª en gris azulado claro', () => {
+      const t = tablaDe('Preguntas').table!
+      expect(t.body[2][0].fillColor).toBeUndefined()
+      expect(t.body[3][0].fillColor).toBe('#F2F5FA')
+    })
+
+    it('el título del documento va en azul marino y los de sección en azul', () => {
+      expect(contenido()[0].color).toBe('#1F3864')
+      expect(contenido().find((n) => n.unbreakable)!.stack![0].color).toBe('#1F4E79')
+      expect(tablaDe('Preguntas').table!.body[0][0].color).toBe('#1F4E79')
+    })
   })
 
   it('el título de una tabla nunca queda solo: la tabla exige al menos una fila junto a sus encabezados', () => {
