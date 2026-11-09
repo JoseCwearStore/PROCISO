@@ -125,6 +125,68 @@ describe('crearSecciones', () => {
     expect(seccion(secciones, 'Declaración del alcance').contenido).toBe(PENDIENTE)
   })
 
+  describe('respuestas del cuestionario guiado', () => {
+    it('toda pregunta guiada se usa en alguna celda o texto de su plantilla (no hay preguntas muertas)', () => {
+      for (const p of PLANTILLAS.filter((x) => x.preguntas)) {
+        const respuestas = Object.fromEntries(p.preguntas!.map((q) => [q.id, `RESP-${q.id}`]))
+        const volcado = JSON.stringify(crearSecciones(p, contexto({ respuestas })))
+        for (const q of p.preguntas!) expect(volcado, `${p.id} · ${q.id}`).toContain(`RESP-${q.id}`)
+      }
+    })
+
+    it('las plantillas sin cuestionario no declaran preguntas', () => {
+      expect(PLANTILLAS.filter((p) => p.preguntas).map((p) => p.id)).toEqual(['alcance', 'politica', 'objetivos'])
+    })
+
+    it('la política pone cada respuesta junto a su pregunta y deja vacías las que no se contestaron', () => {
+      const s = crearSecciones(plantillaPorId('politica')!, contexto({ respuestas: { clientes: 'Empresas y particulares', mejora: '   ' } }))
+      const filas = seccion(s, 'Preguntas guiadas').filas!
+      expect(filas[2]).toEqual(['¿Quiénes son sus principales clientes o usuarios?', 'Empresas y particulares'])
+      expect(filas[6]).toEqual(['¿Cómo mejorará continuamente el SGC?', ''])
+    })
+
+    it('el alcance reparte las respuestas en la identificación, los límites y los requisitos no aplicables', () => {
+      const s = crearSecciones(
+        plantillaPorId('alcance')!,
+        contexto({
+          organizacion: 'Marketino',
+          respuestas: { actividad: 'Fabricación de muebles', ubicaciones: 'León, Gto.', externas: 'Transporte', exclusiones: 'Diseño y desarrollo no aplica.' },
+        }),
+      )
+      const id = seccion(s, 'Identificación de la organización').filas!
+      expect(id).toContainEqual(['Razón social', 'Marketino'])
+      expect(id).toContainEqual(['Actividad económica', 'Fabricación de muebles'])
+      expect(id).toContainEqual(['Domicilio y ubicaciones', 'León, Gto.'])
+      const limites = seccion(s, 'Límites y cobertura').filas!
+      expect(limites).toContainEqual(['Ubicaciones incluidas', 'León, Gto.'])
+      expect(limites).toContainEqual(['Actividades externas pertinentes', 'Transporte'])
+      expect(seccion(s, 'Requisitos no aplicables, cuando corresponda').contenido).toBe('Diseño y desarrollo no aplica.')
+    })
+
+    it('el alcance prefiere los procesos que el usuario escribió y, si no, usa los del proyecto', () => {
+      const conProcesos = crearSecciones(plantillaPorId('alcance')!, contexto({ procesos: [proceso()], respuestas: { procesos: 'Ventas y producción' } }))
+      expect(seccion(conProcesos, 'Límites y cobertura').filas).toContainEqual(['Procesos incluidos', 'Ventas y producción'])
+      const sinRespuesta = crearSecciones(plantillaPorId('alcance')!, contexto({ procesos: [proceso()] }))
+      expect(seccion(sinRespuesta, 'Límites y cobertura').filas).toContainEqual(['Procesos incluidos', 'Fabricación de mobiliario'])
+    })
+
+    it('los objetivos llenan la matriz, el plan y el seguimiento con lo contestado', () => {
+      const s = crearSecciones(
+        plantillaPorId('objetivos')!,
+        contexto({ respuestas: { resultados: 'Entregar a tiempo', responsables: 'Logística, mensual', acciones: 'Revisar el programa cada semana', linea_base: '82 % hoy' } }),
+      )
+      expect(seccion(s, 'Matriz de objetivos').filas![1]).toEqual(['OC-01', 'Entregar a tiempo', '', '', 'Logística, mensual', ''])
+      expect(seccion(s, 'Plan para alcanzar los objetivos').filas![1]).toEqual(['OC-01', 'Revisar el programa cada semana', '', '', '', ''])
+      expect(seccion(s, 'Seguimiento de resultados').filas![1]).toEqual(['', 'OC-01', '82 % hoy', '', '', ''])
+    })
+
+    it('sin respuestas los objetivos quedan como antes', () => {
+      const s = crearSecciones(plantillaPorId('objetivos')!, contexto())
+      expect(seccion(s, 'Matriz de objetivos').filas![1]).toEqual(['OC-01', '', '', '', '', ''])
+      expect(seccion(s, 'Seguimiento de resultados').filas).toHaveLength(2)
+    })
+  })
+
   describe('ficha de caracterización', () => {
     const secciones = () => crearSecciones(plantillaPorId('ficha')!, contexto({ proceso: proceso(), nombreUsuario: (id) => (id === 'u1' ? 'Roberto' : 'Lucía') }))
 

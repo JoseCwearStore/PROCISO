@@ -57,6 +57,7 @@ interface Generador {
   proyectoId: string
   procesoId: string
   plantilla: string // id de la plantilla (src/lib/plantillas.ts); el tipo de documento sale de ella
+  respuestas: Record<string, string> // cuestionario guiado, por id de pregunta
   codigo: string
   titulo: string
   edicionNorma: NonNullable<Documento['referenciaNormativa']>
@@ -67,6 +68,7 @@ const GENERADOR_VACIO: Generador = {
   proyectoId: '',
   procesoId: '',
   plantilla: 'procedimiento',
+  respuestas: {},
   codigo: '',
   titulo: '',
   edicionNorma: 'ISO 9001:2026',
@@ -116,7 +118,7 @@ export default function Documentacion() {
   function elegirPlantilla(id: string) {
     const nueva = plantillaPorId(id)
     const codigoSugerido = !generador.codigo || generador.codigo === plantillaElegida?.codigoBase
-    setGenerador({ ...generador, plantilla: id, procesoId: '', codigo: codigoSugerido ? nueva?.codigoBase ?? '' : generador.codigo })
+    setGenerador({ ...generador, plantilla: id, procesoId: '', respuestas: {}, codigo: codigoSugerido ? nueva?.codigoBase ?? '' : generador.codigo })
   }
 
   const documentos = useMemo(() => documentosDisponibles.filter((item) => {
@@ -162,6 +164,7 @@ export default function Documentacion() {
         proceso,
         procesos: state.procesos.filter((item) => item.proyectoId === generador.proyectoId),
         nombreUsuario: (id) => (id ? getUsuario(id)?.nombre ?? '' : ''),
+        respuestas: generador.respuestas,
       }),
       evidenciasVinculadas: [],
       comentarios: [],
@@ -410,6 +413,18 @@ export default function Documentacion() {
           <label><span className={labelClass}>Código *</span><input className={inputClass} value={generador.codigo} onChange={(event) => setGenerador({ ...generador, codigo: event.target.value })} placeholder={`Ej. ${plantillaElegida?.codigoBase ?? 'PR-COM-01'}`} /></label>
           <label className="sm:col-span-2"><span className={labelClass}>Título *</span><input className={inputClass} value={generador.titulo} onChange={(event) => setGenerador({ ...generador, titulo: event.target.value })} /></label>
           {generador.edicionNorma === 'ISO 9001:2015' && <p className="sm:col-span-2 text-xs text-amber-700">Este proyecto usa la edición ISO 9001:2015 (en transición).</p>}
+          {plantillaElegida?.preguntas && (
+            <fieldset className="sm:col-span-2 space-y-3 rounded-lg border border-line p-4">
+              <legend className="px-1 text-sm font-semibold text-slate-700">Cuestionario guiado (opcional)</legend>
+              <p className="text-xs text-slate-500">Lo que contestes se vuelca en el borrador. Lo que dejes en blanco queda como “{PENDIENTE}”.</p>
+              {plantillaElegida.preguntas.map((pregunta) => (
+                <label key={pregunta.id} className="block">
+                  <span className={labelClass}>{pregunta.texto}</span>
+                  <textarea rows={2} className={inputClass} value={generador.respuestas[pregunta.id] ?? ''} onChange={(event) => setGenerador({ ...generador, respuestas: { ...generador.respuestas, [pregunta.id]: event.target.value } })} />
+                </label>
+              ))}
+            </fieldset>
+          )}
           <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">La plantilla se precargará exclusivamente con información existente. Los datos ausentes se marcarán como “{PENDIENTE}”.</div>
         </div>
       </Modal>

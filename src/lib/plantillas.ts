@@ -23,6 +23,8 @@ export interface ContextoPlantilla {
   procesos?: Proceso[]
   nombreUsuario?: (id?: string) => string
   nuevoId?: () => string
+  // Respuestas del cuestionario guiado, por id de pregunta (solo Alcance, Política y Objetivos).
+  respuestas?: Record<string, string>
 }
 
 export interface SeccionPlantilla {
@@ -63,6 +65,8 @@ const tabla = (titulo: string, columnas: string[], llenar?: (c: ContextoPlantill
 })
 
 const unir = (lista?: string[]) => (lista?.length ? lista.join('; ') : '')
+// La respuesta a una pregunta guiada, sin espacios sobrantes ('' si no se contestó).
+const resp = (c: ContextoPlantilla, id: string) => c.respuestas?.[id]?.trim() ?? ''
 const filaVacia = (ancho: number) => Array<string>(ancho).fill('')
 const camposVacios = (campos: string[]): string[][] => campos.map((campo) => [campo, ''])
 const porOrden = (proceso?: Proceso) => [...(proceso?.actividades ?? [])].sort((a, b) => a.orden - b.orden)
@@ -117,19 +121,26 @@ const ALCANCE: Plantilla = {
     encabezado(),
     tabla('Identificación de la organización', ['Campo', 'Información'], (c) => [
       ['Razón social', c.organizacion ?? ''],
-      ...camposVacios(['Nombre comercial', 'Domicilio y ubicaciones', 'Actividad económica', 'Productos', 'Servicios', 'Personal aproximado', 'Responsable del SGC']),
+      ['Nombre comercial', ''],
+      ['Domicilio y ubicaciones', resp(c, 'ubicaciones')],
+      ['Actividad económica', resp(c, 'actividad')],
+      ['Productos', resp(c, 'productos')],
+      ...camposVacios(['Servicios', 'Personal aproximado', 'Responsable del SGC']),
     ]),
     texto('Declaración del alcance'),
     tabla('Límites y cobertura', ['Elemento', 'Descripción'], (c) => [
-      ['Ubicaciones incluidas', ''],
-      ['Procesos incluidos', (c.procesos ?? []).map((p) => p.nombre).join('; ')],
-      ...camposVacios(['Productos y servicios incluidos', 'Áreas incluidas', 'Actividades externas pertinentes']),
+      ['Ubicaciones incluidas', resp(c, 'ubicaciones')],
+      // Lo que escribió el usuario manda; si no, los procesos levantados en el proyecto.
+      ['Procesos incluidos', resp(c, 'procesos') || (c.procesos ?? []).map((p) => p.nombre).join('; ')],
+      ['Productos y servicios incluidos', resp(c, 'productos')],
+      ['Áreas incluidas', ''],
+      ['Actividades externas pertinentes', resp(c, 'externas')],
     ]),
     tabla('Cuestiones internas y externas', ['Tipo', 'Cuestión identificada', 'Efecto posible en el SGC'], () => [
       ['Interna', '', ''],
       ['Externa', '', ''],
     ]),
-    texto('Requisitos no aplicables, cuando corresponda'),
+    texto('Requisitos no aplicables, cuando corresponda', (c) => resp(c, 'exclusiones') || undefined),
     aprobacion(),
   ],
 }
@@ -145,7 +156,7 @@ const POLITICA: Plantilla = {
   preguntas: PREGUNTAS_POLITICA,
   secciones: [
     encabezado(),
-    tabla('Preguntas guiadas', ['Pregunta', 'Respuesta de la organización'], () => PREGUNTAS_POLITICA.map((p) => [p.texto, ''])),
+    tabla('Preguntas guiadas', ['Pregunta', 'Respuesta de la organización'], (c) => PREGUNTAS_POLITICA.map((p) => [p.texto, resp(c, p.id)])),
     texto('Declaración de la política de calidad'),
     tabla('Comunicación y disponibilidad', ['Aspecto', 'Definición'], () =>
       camposVacios(['Medio de comunicación interno', 'Responsable de comunicarla', 'Disponibilidad externa, cuando aplique', 'Condición de revisión']),
@@ -171,9 +182,15 @@ const OBJETIVOS: Plantilla = {
       () =>
         'Los objetivos se alinean con la política de calidad, se expresan de forma medible, consideran requisitos aplicables, cuentan con responsables y recursos, y se revisan con una frecuencia definida.',
     ),
-    tabla('Matriz de objetivos', ['ID', 'Objetivo', 'Indicador / fórmula', 'Meta', 'Responsable', 'Frecuencia'], () => [['OC-01', '', '', '', '', '']]),
-    tabla('Plan para alcanzar los objetivos', ['ID', 'Actividad / acción', 'Recursos', 'Responsable', 'Fecha compromiso', 'Evidencia'], () => [['OC-01', '', '', '', '', '']]),
-    tabla('Seguimiento de resultados', ['Periodo', 'Objetivo', 'Resultado', 'Cumplimiento', 'Análisis / desviación', 'Acción definida']),
+    tabla('Matriz de objetivos', ['ID', 'Objetivo', 'Indicador / fórmula', 'Meta', 'Responsable', 'Frecuencia'], (c) => [
+      ['OC-01', resp(c, 'resultados'), '', '', resp(c, 'responsables'), ''],
+    ]),
+    tabla('Plan para alcanzar los objetivos', ['ID', 'Actividad / acción', 'Recursos', 'Responsable', 'Fecha compromiso', 'Evidencia'], (c) => [
+      ['OC-01', resp(c, 'acciones'), '', '', '', ''],
+    ]),
+    tabla('Seguimiento de resultados', ['Periodo', 'Objetivo', 'Resultado', 'Cumplimiento', 'Análisis / desviación', 'Acción definida'], (c) =>
+      resp(c, 'linea_base') ? [['', 'OC-01', resp(c, 'linea_base'), '', '', '']] : [],
+    ),
     texto('Revisión y aprobación'),
   ],
 }
