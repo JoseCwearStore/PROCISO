@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import type { EstadoDocumento } from '../types'
-import { documentoVisibleParaRol, estadosVisiblesParaRol, ESTADOS_INTERNOS } from './documentos'
+import { documentoVisibleParaRol, estadosVisiblesParaRol, ESTADOS_INTERNOS, puedeRedactarDocumentos } from './documentos'
 
 const TODOS: EstadoDocumento[] = [
   'Borrador',
@@ -35,6 +35,13 @@ describe('documentoVisibleParaRol', () => {
       'Obsoleto',
     ])
     expect(estadosVisiblesParaRol('Consultor')).toEqual(TODOS)
+  })
+
+  it('redactan el equipo y el admin de la plataforma; el cliente solo lee, comenta y decide en Revisiones', () => {
+    expect(puedeRedactarDocumentos('Consultor')).toBe(true)
+    expect(puedeRedactarDocumentos('Admin Consultoría')).toBe(true)
+    expect(puedeRedactarDocumentos('Admin PROCISO')).toBe(true)
+    expect(puedeRedactarDocumentos('Usuario Cliente')).toBe(false)
   })
 
   it('los estados internos son Borrador y En elaboración', () => {

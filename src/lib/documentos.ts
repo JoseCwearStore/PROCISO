@@ -22,6 +22,13 @@ export function estadosVisiblesParaRol(rol: Rol): EstadoDocumento[] {
   return TODOS_LOS_ESTADOS.filter((estado) => documentoVisibleParaRol({ estado }, rol))
 }
 
+// Quién redacta (edita, versiona, envía a revisión). Espejo de la BD: las políticas de
+// `documentos` y `guardar_documento` solo dejan escribir al equipo del proyecto. El cliente
+// lee, comenta y decide (aprueba o pide corrección) en Revisiones.
+export function puedeRedactarDocumentos(rol: Rol): boolean {
+  return rol !== 'Usuario Cliente'
+}
+
 export function documentoVisibleParaRol(documento: Pick<Documento, 'estado'>, rol: Rol): boolean {
   return rol !== 'Usuario Cliente' || !ESTADOS_INTERNOS.includes(documento.estado)
 }

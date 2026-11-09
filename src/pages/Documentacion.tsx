@@ -18,7 +18,7 @@ import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
-import { documentoVisibleParaRol, estadosVisiblesParaRol } from '../lib/documentos'
+import { documentoVisibleParaRol, estadosVisiblesParaRol, puedeRedactarDocumentos } from '../lib/documentos'
 import { PENDIENTE, PLANTILLAS, crearSecciones, plantillaPorId } from '../lib/plantillas'
 import { aplicarTextos, armarPedidoIA, camposIA } from '../lib/generacion'
 import { useAccionesGeneracion } from '../hooks/useAccionesGeneracion'
@@ -224,7 +224,8 @@ export default function Documentacion() {
 
   // Ediciones en pantalla: se guardan en la BD al pulsar Guardar o Enviar.
   function actualizar(updates: Partial<Documento>) {
-    if (!documento || documento.bloqueado || documento.estado === 'Aprobado' || documento.estado === 'Obsoleto') return
+    // Defensa en profundidad: la pantalla ya no ofrece editar al cliente, y la BD lo rechazaría igual.
+    if (!documento || !puedeRedactarDocumentos(state.currentRole) || documento.bloqueado || documento.estado === 'Aprobado' || documento.estado === 'Obsoleto') return
     dispatch({
       type: 'UPSERT_DOCUMENTO',
       documento: { ...documento, ...updates, fechaModificacion: formatearFecha(new Date().toISOString()) },
@@ -400,6 +401,7 @@ export default function Documentacion() {
         comentar={comentar}
         exportar={exportar}
         exportando={exportando}
+        soloLectura={!puedeRedactarDocumentos(state.currentRole)}
         abrirComparacion={() => {
           const versiones = documento.historialVersiones
           setVersionA(versiones[0]?.version || '')
@@ -522,12 +524,17 @@ interface EditorProps {
   // Exporta lo que se ve en pantalla (incluye ediciones sin guardar).
   exportar: (formato: 'pdf' | 'word') => Promise<void>
   exportando: 'pdf' | 'word' | null
+  // El cliente ve el documento pero no lo redacta (ver puedeRedactarDocumentos).
+  soloLectura: boolean
   children: React.ReactNode
 }
 
 function EditorDocumento(props: EditorProps) {
   const { documento, actualizar } = props
   const bloqueado = documento.bloqueado || documento.estado === 'Aprobado'
+  // Contenido: no se edita si el documento está bloqueado o si quien lo ve no redacta (cliente).
+  // Los comentarios siguen su propia regla (`bloqueado`): el cliente sí puede comentar.
+  const edicionBloqueada = bloqueado || props.soloLectura
 
   function actualizarSeccion(id: string, updates: Partial<SeccionDocumento>) {
     actualizar({ secciones: documento.secciones?.map((item) => item.id === id ? { ...item, ...updates } : item) })
@@ -566,11 +573,12 @@ function EditorDocumento(props: EditorProps) {
           <Button variant="outline" onClick={props.abrirComparacion} disabled={documento.historialVersiones.length < 1} icon={<Columns2 className="h-4 w-4" />}>Comparar versiones</Button>
           <Button variant="outline" onClick={() => props.exportar('pdf')} disabled={props.exportando !== null}>{props.exportando === 'pdf' ? 'Generando PDF…' : 'Exportar PDF'}</Button>
           <Button variant="outline" onClick={() => props.exportar('word')} disabled={props.exportando !== null}>{props.exportando === 'word' ? 'Generando Word…' : 'Exportar Word'}</Button>
-          {bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
+          {props.soloLectura ? null : bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
         </div>
       </div>
 
-      {bloqueado && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">La versión aprobada está bloqueada para edición directa. Crea una nueva versión para realizar cambios.</div>}
+      {props.soloLectura && <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Estás viendo este documento en modo lectura. Puedes comentarlo y exportarlo; para aprobarlo o pedir correcciones usa «Revisiones y aprobaciones».</div>}
+      {bloqueado && !props.soloLectura && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">La versión aprobada está bloqueada para edición directa. Crea una nueva versión para realizar cambios.</div>}
       {props.errores.length > 0 && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p className="font-semibold">No se puede enviar a revisión:</p><p>{props.errores.join(', ')}.</p></div>}
       {/* La IA lee el documento desde la BD: analiza la última versión GUARDADA. */}
       <details className="mb-5">
@@ -580,11 +588,11 @@ function EditorDocumento(props: EditorProps) {
         </div>
       </details>
       <div className="mb-5 grid gap-4 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">
-        <label><span className={labelClass}>Código documental *</span><input disabled={bloqueado} className={inputClass} value={documento.codigo || ''} onChange={(event) => actualizar({ codigo: event.target.value })} /></label>
+        <label><span className={labelClass}>Código documental *</span><input disabled={edicionBloqueada} className={inputClass} value={documento.codigo || ''} onChange={(event) => actualizar({ codigo: event.target.value })} /></label>
         <label><span className={labelClass}>Referencia normativa</span><input disabled className={inputClass} value={props.referenciaNormativa} /></label>
-        <label><span className={labelClass}>Título *</span><input disabled={bloqueado} className={inputClass} value={documento.nombre} onChange={(event) => actualizar({ nombre: event.target.value })} /></label>
+        <label><span className={labelClass}>Título *</span><input disabled={edicionBloqueada} className={inputClass} value={documento.nombre} onChange={(event) => actualizar({ nombre: event.target.value })} /></label>
         {props.referenciaNormativa === 'ISO 9001:2015' && <p className="sm:col-span-2 lg:col-span-3 text-xs text-amber-700">Este proyecto usa la edición ISO 9001:2015 (en transición).</p>}
-        <label className="sm:col-span-2 lg:col-span-3"><span className={labelClass}>Motivo de creación o cambio</span><input disabled={bloqueado} className={inputClass} value={documento.motivoCambio || ''} onChange={(event) => actualizar({ motivoCambio: event.target.value })} placeholder="Describe brevemente el motivo de esta versión." /></label>
+        <label className="sm:col-span-2 lg:col-span-3"><span className={labelClass}>Motivo de creación o cambio</span><input disabled={edicionBloqueada} className={inputClass} value={documento.motivoCambio || ''} onChange={(event) => actualizar({ motivoCambio: event.target.value })} placeholder="Describe brevemente el motivo de esta versión." /></label>
       </div>
 
       <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
@@ -593,18 +601,18 @@ function EditorDocumento(props: EditorProps) {
             <section key={seccion.id} className="rounded-xl border border-line bg-white p-5 shadow-sm">
               <div className="mb-3 flex items-center gap-3">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-600">{index + 1}</span>
-                <input disabled={bloqueado} value={seccion.titulo} onChange={(event) => actualizarSeccion(seccion.id, { titulo: event.target.value })} className="flex-1 border-0 bg-transparent text-base font-semibold text-slate-800 outline-none" placeholder="Título de la sección" />
-                {!bloqueado && <Button variant="ghost" size="sm" onClick={() => actualizar({ secciones: documento.secciones?.filter((item) => item.id !== seccion.id) })} aria-label="Eliminar sección" icon={<Trash2 className="h-4 w-4 text-red-500" />} />}
+                <input disabled={edicionBloqueada} value={seccion.titulo} onChange={(event) => actualizarSeccion(seccion.id, { titulo: event.target.value })} className="flex-1 border-0 bg-transparent text-base font-semibold text-slate-800 outline-none" placeholder="Título de la sección" />
+                {!edicionBloqueada && <Button variant="ghost" size="sm" onClick={() => actualizar({ secciones: documento.secciones?.filter((item) => item.id !== seccion.id) })} aria-label="Eliminar sección" icon={<Trash2 className="h-4 w-4 text-red-500" />} />}
               </div>
-              {seccion.tipo === 'texto' ? <textarea disabled={bloqueado} rows={5} value={seccion.contenido} onChange={(event) => actualizarSeccion(seccion.id, { contenido: event.target.value })} className={`${inputClass} leading-relaxed ${seccion.contenido.includes(PENDIENTE) ? 'border-amber-300 bg-amber-50' : ''}`} /> : <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>{(seccion.filas || []).map((fila, filaIndex) => <tr key={filaIndex}>{fila.map((celda, columnaIndex) => <td key={columnaIndex} className="border border-line p-1"><input disabled={bloqueado} value={celda} onChange={(event) => { const filas = seccion.filas?.map((item) => [...item]) || []; filas[filaIndex][columnaIndex] = event.target.value; actualizarSeccion(seccion.id, { filas }) }} className="w-full px-2 py-1 outline-none" placeholder={PENDIENTE} /></td>)}</tr>)}</tbody></table>{!bloqueado && <Button variant="ghost" size="sm" className="mt-2" onClick={() => actualizarSeccion(seccion.id, { filas: [...(seccion.filas || []), Array(seccion.filas?.[0]?.length || 2).fill('')] })} icon={<Plus className="h-4 w-4" />}>Agregar fila</Button>}</div>}
+              {seccion.tipo === 'texto' ? <textarea disabled={edicionBloqueada} rows={5} value={seccion.contenido} onChange={(event) => actualizarSeccion(seccion.id, { contenido: event.target.value })} className={`${inputClass} leading-relaxed ${seccion.contenido.includes(PENDIENTE) ? 'border-amber-300 bg-amber-50' : ''}`} /> : <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>{(seccion.filas || []).map((fila, filaIndex) => <tr key={filaIndex}>{fila.map((celda, columnaIndex) => <td key={columnaIndex} className="border border-line p-1"><input disabled={edicionBloqueada} value={celda} onChange={(event) => { const filas = seccion.filas?.map((item) => [...item]) || []; filas[filaIndex][columnaIndex] = event.target.value; actualizarSeccion(seccion.id, { filas }) }} className="w-full px-2 py-1 outline-none" placeholder={PENDIENTE} /></td>)}</tr>)}</tbody></table>{!edicionBloqueada && <Button variant="ghost" size="sm" className="mt-2" onClick={() => actualizarSeccion(seccion.id, { filas: [...(seccion.filas || []), Array(seccion.filas?.[0]?.length || 2).fill('')] })} icon={<Plus className="h-4 w-4" />}>Agregar fila</Button>}</div>}
               {(documento.comentarios || []).filter((item) => item.seccionId === seccion.id).map((item) => <div key={item.id} className="mt-3 flex gap-2 rounded-lg bg-violet-50 p-3 text-xs text-violet-800"><MessageSquare className="h-4 w-4 shrink-0" /><span>{item.texto}</span></div>)}
             </section>
           ))}
-          {!bloqueado && <div className="flex gap-2"><Button variant="outline" onClick={() => agregarSeccion('texto')} icon={<Plus className="h-4 w-4" />}>Agregar sección</Button><Button variant="outline" onClick={() => agregarSeccion('tabla')} icon={<Table2 className="h-4 w-4" />}>Agregar tabla</Button></div>}
+          {!edicionBloqueada && <div className="flex gap-2"><Button variant="outline" onClick={() => agregarSeccion('texto')} icon={<Plus className="h-4 w-4" />}>Agregar sección</Button><Button variant="outline" onClick={() => agregarSeccion('tabla')} icon={<Table2 className="h-4 w-4" />}>Agregar tabla</Button></div>}
         </main>
 
         <aside className="space-y-4">
-          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><Link2 className="h-4 w-4" />Evidencias vinculadas</p><div className="max-h-56 space-y-2 overflow-y-auto">{props.evidencias.length === 0 ? <p className="text-xs text-slate-400">No hay evidencias del proyecto.</p> : props.evidencias.map((item) => <label key={item.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-xs"><input disabled={bloqueado} type="checkbox" checked={documento.evidenciasVinculadas?.includes(item.id)} onChange={(event) => actualizar({ evidenciasVinculadas: event.target.checked ? [...(documento.evidenciasVinculadas || []), item.id] : documento.evidenciasVinculadas?.filter((id) => id !== item.id) })} /><span>{item.nombre}</span></label>)}</div></div>
+          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><Link2 className="h-4 w-4" />Evidencias vinculadas</p><div className="max-h-56 space-y-2 overflow-y-auto">{props.evidencias.length === 0 ? <p className="text-xs text-slate-400">No hay evidencias del proyecto.</p> : props.evidencias.map((item) => <label key={item.id} className="flex items-start gap-2 rounded-lg border border-line p-2 text-xs"><input disabled={edicionBloqueada} type="checkbox" checked={documento.evidenciasVinculadas?.includes(item.id)} onChange={(event) => actualizar({ evidenciasVinculadas: event.target.checked ? [...(documento.evidenciasVinculadas || []), item.id] : documento.evidenciasVinculadas?.filter((id) => id !== item.id) })} /><span>{item.nombre}</span></label>)}</div></div>
           <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><MessageSquare className="h-4 w-4" />Agregar comentario</p><select disabled={bloqueado} className={inputClass} value={props.comentarioSeccion} onChange={(event) => props.setComentarioSeccion(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea disabled={bloqueado} rows={3} className={`${inputClass} mt-2`} value={props.comentarioTexto} onChange={(event) => props.setComentarioTexto(event.target.value)} placeholder="Escribe un comentario anclado..." /><Button disabled={bloqueado || !props.comentarioSeccion || !props.comentarioTexto.trim()} className="mt-2 w-full" size="sm" onClick={agregarComentario}>Agregar comentario</Button></div>
           <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 flex items-center gap-2 text-sm font-semibold text-slate-700"><History className="h-4 w-4" />Historial completo</p><div className="space-y-3">{(documento.historial || []).length === 0 ? <p className="text-xs text-slate-400">Sin eventos registrados.</p> : documento.historial?.slice().reverse().map((item) => <div key={item.id} className="border-l-2 border-blue-200 pl-3"><p className="text-xs font-medium text-slate-700">{item.accion}</p><p className="mt-0.5 text-[10px] text-slate-400">{item.fecha}</p><p className="mt-1 text-xs text-slate-500">{item.detalle}</p></div>)}</div></div>
         </aside>
