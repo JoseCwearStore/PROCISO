@@ -20,7 +20,7 @@ const MODELO: ModeloDocumento = {
   ],
 }
 
-type Celda = { text?: string; bold?: boolean; colSpan?: number; fillColor?: string; color?: string }
+type Celda = { text?: string; bold?: boolean; colSpan?: number; fillColor?: string; color?: string; border?: boolean[]; margin?: number[] }
 type Nodo = { text?: string; stack?: Nodo[]; unbreakable?: boolean; table?: { headerRows: number; keepWithHeaderRows?: number; widths: string[]; body: Celda[][] }; [k: string]: unknown }
 const contenido = () => armarDefinicionPdf(MODELO).content as Nodo[]
 const tablas = () => contenido().filter((n) => n.table)
@@ -86,6 +86,26 @@ describe('armarDefinicionPdf', () => {
 
   it('el título de una tabla nunca queda solo: la tabla exige al menos una fila junto a sus encabezados', () => {
     for (const nombre of ['Preguntas', 'Libre']) expect(tablaDe(nombre).table!.keepWithHeaderRows, nombre).toBe(1)
+  })
+
+  // Visto en un PDF real: la celda del título no dibujaba su borde superior pero las que ocupa su
+  // colSpan sí, y quedaba una raya suelta encima del título. Por eso la línea de arriba de una
+  // tabla con título se anula en el LAYOUT de la tabla (no celda por celda).
+  it('una tabla con título no dibuja la línea superior (índice 0) y sí todas las demás', () => {
+    for (const nombre of ['Preguntas', 'Libre']) {
+      const layout = (tablaDe(nombre) as unknown as { layout: { hLineWidth: (i: number) => number } }).layout
+      expect(layout.hLineWidth(0), nombre).toBe(0)
+      for (const i of [1, 2, 3]) expect(layout.hLineWidth(i), `${nombre} línea ${i}`).toBeGreaterThan(0)
+    }
+  })
+
+  it('el título de una tabla se alinea con los títulos de texto: compensa el relleno de la celda (4 pt) y la línea (1 pt)', () => {
+    for (const nombre of ['Preguntas', 'Libre']) expect(tablaDe(nombre).table!.body[0][0].margin?.[0], nombre).toBe(-5)
+  })
+
+  it('la tabla de metadatos (sin título) conserva el layout normal, con su borde superior', () => {
+    const meta = tablas().find((t) => t.table!.body[0][0].text === 'Campo') as unknown as { layout?: unknown }
+    expect(meta.layout).toBeUndefined()
   })
 
   it('las celdas vacías no rompen la tabla', () => {

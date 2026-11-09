@@ -19,13 +19,18 @@ function tabla(columnas: string[], filas: string[][], titulo?: string): object {
   const ancho = Math.max(columnas.length, ...filas.map((f) => f.length), 1)
   const completa = (fila: string[]) => Array.from({ length: ancho }, (_, i) => fila[i] ?? '')
   const filaTitulo: object[][] = titulo
-    ? [[{ text: titulo, colSpan: ancho, ...ESTILO_TITULO, border: [false, false, false, false], margin: [0, 14, 0, 4] }, ...Array.from({ length: ancho - 1 }, () => ({}))]]
+    ? [[{ text: titulo, colSpan: ancho, ...ESTILO_TITULO, border: [false, false, false, false], margin: [-5, 14, 0, 4] }, ...Array.from({ length: ancho - 1 }, () => ({}))]]
     : []
   // Encabezado: azul marino con texto blanco. Filas de datos: la 2.ª, 4.ª… en gris azulado claro.
   const encabezado: Celda[][] = columnas.length
     ? [completa(columnas).map((c) => ({ text: c, bold: true, fillColor: hex(PALETA.titulo), color: hex(PALETA.textoEncabezado) }))]
     : []
   return {
+    // Con título, la línea de ARRIBA de la tabla no se dibuja (índice 0): el título no es parte
+    // de la grilla. Se anula acá y no por celda porque pdfmake sí dibujaba el borde superior de
+    // las celdas que ocupa el colSpan (raya suelta sobre el título, vista en un PDF real).
+    // El layout parcial se completa con los valores por defecto (1 pt, negro).
+    ...(titulo ? { layout: { hLineWidth: (i: number) => (i === 0 ? 0 : 1) } } : {}),
     table: {
       headerRows: filaTitulo.length + encabezado.length,
       ...(titulo ? { keepWithHeaderRows: 1 } : {}),
