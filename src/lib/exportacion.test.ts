@@ -131,6 +131,12 @@ describe('armarModelo', () => {
     })
   })
 
+  it('un código marcado como pendiente (documento sin código) no se exporta como código', () => {
+    const m = armarModelo(documento({ codigo: PENDIENTE }), CTX)
+    expect(m.codigo).toBe('')
+    expect(nombreArchivo(m, 'pdf')).toBe('v0.1_politica-de-calidad-marketino.pdf')
+  })
+
   it('sin organización ni proyecto en el contexto, queda en blanco y no rompe', () => {
     const m = armarModelo(documento({ codigo: undefined }), {})
     expect(m.organizacion).toBe('')

@@ -76,7 +76,8 @@ export function armarModelo(documento: Documento, contexto: ContextoExportacion)
 
   return {
     titulo: documento.nombre,
-    codigo: documento.codigo ?? '',
+    // La pantalla marca un código ausente como "pendiente"; eso no es un código y no va al archivo.
+    codigo: documento.codigo && !documento.codigo.includes(PENDIENTE) ? documento.codigo : '',
     version: documento.version,
     estado: documento.estado,
     tipo: documento.tipo,
