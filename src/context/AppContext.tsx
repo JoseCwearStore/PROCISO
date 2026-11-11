@@ -148,7 +148,7 @@ type Action =
   // Solo después de que la BD las guardó (useAccionesNotificacion).
   | { type: 'MARCAR_LEIDAS'; ids: string[] }
 
-function reducer(state: AppState, action: Action): AppState {
+export function reducer(state: AppState, action: Action): AppState {
   switch (action.type) {
     case 'SET_AUTH_SCREEN':
       return { ...state, authScreen: action.screen, loginReason: action.reason }
@@ -355,8 +355,9 @@ interface AppContextType {
 
 const AppContext = createContext<AppContextType | null>(null)
 
-export function AppProvider({ children }: { children: React.ReactNode }) {
-  const [state, dispatch] = useReducer(reducer, {
+// Estado de arranque (antes de saber quién es el usuario). Exportado para los tests.
+export function estadoInicial(): AppState {
+  return {
     authScreen: 'checking',
     loginReason: undefined,
     loginAttempts: 0,
@@ -376,7 +377,11 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     analisisIA: [],
     toasts: [],
     modal: null,
-  })
+  }
+}
+
+export function AppProvider({ children }: { children: React.ReactNode }) {
+  const [state, dispatch] = useReducer(reducer, undefined, estadoInicial)
 
   // Al cargar la app: si hay una sesión de Supabase guardada, se restaura sin pedir login.
   useEffect(() => {

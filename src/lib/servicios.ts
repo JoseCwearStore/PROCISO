@@ -30,7 +30,7 @@ function adaptarClienteAuth(cliente: SupabaseClient): ClienteAuth {
   }
 }
 
-function adaptarClienteDatos(cliente: SupabaseClient): ClienteDatos {
+export function adaptarClienteDatos(cliente: SupabaseClient): ClienteDatos {
   return {
     from: (tabla) => ({
       select: (columnas) => cliente.from(tabla).select(columnas),
@@ -39,7 +39,7 @@ function adaptarClienteDatos(cliente: SupabaseClient): ClienteDatos {
   }
 }
 
-function adaptarClienteEscritura(cliente: SupabaseClient): ClienteEscritura {
+export function adaptarClienteEscritura(cliente: SupabaseClient): ClienteEscritura {
   return {
     from: (tabla) => ({
       insert: (fila) => ({
