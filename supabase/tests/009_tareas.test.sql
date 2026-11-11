@@ -104,7 +104,7 @@ select throws_ok(
 );
 select is(
   (select count(*)::int from public.tareas where proyecto_id = 'b4b4b4b4-0000-0000-0000-000000000001'),
-  2, 'El cliente ve las tareas de su proyecto'
+  1, 'El cliente ve solo las tareas asignadas a su empresa (D1: no las del equipo, aunque sean de su proyecto)'
 );
 select lives_ok(
   $$ select public.cambiar_estado_tarea('b5b5b5b5-0000-0000-0000-000000000001', 'En proceso', null) $$,
