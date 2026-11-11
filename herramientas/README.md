@@ -32,7 +32,7 @@ Ejemplos, desde la raíz del repo:
 
 ```bash
 # Un bloque del seed (el SQL sale por pantalla; redirigilo si lo querés en un archivo)
-npx -y tsx@4.20.6 herramientas/generar_seed_procesos.mts src/data/demo.ts
+npx -y tsx@4.20.6 herramientas/generar_seed_procesos.mts herramientas/demo.ts
 
 # La migración de criterios (el Excel vive fuera del repo)
 node herramientas/generar_migracion_criterios.mjs <ruta>/matriz_criterios_iso_9001_2015_revisada.xlsx \
@@ -45,9 +45,10 @@ node herramientas/generar_migracion_criterios.mjs <ruta>/matriz_criterios_iso_90
   `INSERT` que se pegaron ahí; el seed tiene además partes escritas a mano (por ejemplo, el
   `update` que asigna el tipo a los procesos). Si regenerás un bloque, compará con el seed y
   pegá a mano: no lo sobrescribas entero.
-- **Los generadores `generar_seed_*` leen `src/data/demo.ts`.** Hoy ninguna pantalla de la app
-  lo usa, pero es la fuente de esos datos de demo. **Si se elimina `demo.ts` por ser código
-  muerto, estos generadores dejan de funcionar.** Decidirlo a conciencia en la auditoría.
+- **Los generadores `generar_seed_*` leen `herramientas/demo.ts`.** Vivía en `src/data/`, pero
+  ninguna pantalla lo usa: se movió acá (AUD08-B2) para que `src/` no lo importe por error
+  (`src/higiene.test.ts` lo vigila). **Si se elimina `demo.ts`, estos generadores dejan de
+  funcionar.** Importa los tipos de `../src/types`.
 - **`puente_ids.mjs` reescribe archivos.** Se corrió una sola vez y ya está aplicado: es
   idempotente (sobre el `demo.ts` actual no cambia nada). No lo corras sobre el repo sin tener
   el árbol limpio en git.

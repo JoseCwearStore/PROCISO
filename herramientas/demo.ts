@@ -1,7 +1,7 @@
 import type {
   Consultoria, Usuario, Empresa, Proyecto, Proceso, Evidencia,
   Documento, Tarea, NoConformidad, Entregable,
-} from '../types'
+} from '../src/types'
 
 export const CONSULTORIA: Consultoria = {
   id: '11111111-0000-0000-0000-000000000001',
