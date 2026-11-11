@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { AlertTriangle, Loader2, Sparkles, X } from 'lucide-react'
 import { Button } from './ui/Button'
+import { IndicadorUsoIA } from './IndicadorUsoIA'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { criteriosSugeridos } from '../lib/ia'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
@@ -46,6 +47,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null }: { fuente: Fuen
 
       {ia.puedePedir && (
         <div className="mb-4 space-y-2">
+          <IndicadorUsoIA uso={ia.usoIA} estado={ia.estadoUsoIA} />
           <p className="text-xs font-medium text-slate-600">Cláusulas a evaluar {tipoDocumento ? '(sugeridas según el tipo; puedes cambiarlas)' : ''}</p>
           <div className="flex flex-wrap gap-1.5">
             {seleccion.map((id) => (
@@ -72,7 +74,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null }: { fuente: Fuen
             </select>
             <Button
               onClick={() => void analizar()}
-              disabled={analizando || !seleccion.length}
+              disabled={analizando || !seleccion.length || !!ia.estadoUsoIA?.agotado}
+              title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : undefined}
               icon={analizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             >
               {analizando ? 'Analizando…' : 'Analizar con IA'}

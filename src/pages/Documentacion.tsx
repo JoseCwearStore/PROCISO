@@ -37,6 +37,7 @@ import { generarWord } from '../lib/exportarWord'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { PanelAnalisisIA } from '../components/PanelAnalisisIA'
+import { IndicadorUsoIA } from '../components/IndicadorUsoIA'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import type {
   CategoriaDocumento,
@@ -98,7 +99,7 @@ export default function Documentacion() {
   const [generador, setGenerador] = useState<Generador>(GENERADOR_VACIO)
   const [generandoIA, setGenerandoIA] = useState(false)
   const [exportando, setExportando] = useState<'pdf' | 'word' | null>(null)
-  const { redactar } = useAccionesGeneracion()
+  const { redactar, usoIA, estadoUsoIA } = useAccionesGeneracion()
   const [compararOpen, setCompararOpen] = useState(false)
   const [versionA, setVersionA] = useState('')
   const [versionB, setVersionB] = useState('')
@@ -168,7 +169,8 @@ export default function Documentacion() {
     })
     let detalle = `Creado con la plantilla ${plantilla.nombre}.`
     let aviso: { texto: string; tipo: 'success' | 'warning' } = { texto: 'Borrador generado con la información disponible.', tipo: 'success' }
-    const pedido = generador.usarIA
+    // Con el tope diario agotado el borrador se genera igual, sin IA (el mismo plan B de siempre).
+    const pedido = generador.usarIA && !estadoUsoIA?.agotado
       ? armarPedidoIA(plantilla, {
           consultoriaId: state.currentUser?.consultoriaId ?? null,
           proyectoId: generador.proyectoId,
@@ -527,12 +529,24 @@ export default function Documentacion() {
           )}
           {camposIA(plantillaElegida?.id ?? '').length > 0 && (
             <label className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
-              <input type="checkbox" className="mt-0.5" checked={generador.usarIA} onChange={(event) => setGenerador({ ...generador, usarIA: event.target.checked })} />
+              <input
+                type="checkbox"
+                className="mt-0.5"
+                checked={generador.usarIA && !estadoUsoIA?.agotado}
+                disabled={!!estadoUsoIA?.agotado}
+                onChange={(event) => setGenerador({ ...generador, usarIA: event.target.checked })}
+              />
               <span>
                 <span className="font-medium">Redactar con IA</span> la declaración y las propuestas a partir de tus respuestas.{' '}
                 Es un borrador: requiere tu revisión. Si la IA no responde, el documento se genera igual con tus respuestas.
               </span>
             </label>
+          )}
+          {camposIA(plantillaElegida?.id ?? '').length > 0 && (
+            <div className="sm:col-span-2">
+              <IndicadorUsoIA uso={usoIA} estado={estadoUsoIA} />
+              {estadoUsoIA?.agotado && <p className="mt-1 text-xs text-slate-500">El documento se generará igual, con tus respuestas y sin IA.</p>}
+            </div>
           )}
           <div className="sm:col-span-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">La plantilla se precargará exclusivamente con información existente. Los datos ausentes se marcarán como “{PENDIENTE}”.</div>
         </div>

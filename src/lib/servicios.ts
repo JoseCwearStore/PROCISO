@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { crearServicioAuth, type ClienteAuth, type PerfilBD } from './auth'
 import { cargarFilasSesion, type ClienteDatos } from './datos'
 import { crearServicioEscritura, type ClienteEscritura } from './escrituras'
+import { crearServicioUsoIA, type ClienteUsoIA } from './usoIA'
 import { crearServicioArchivos, type ClienteArchivos } from './archivos'
 import { supabase } from './supabase'
 import type { Rol } from '../types'
@@ -73,6 +74,10 @@ export function adaptarClienteEscritura(cliente: SupabaseClient): ClienteEscritu
   }
 }
 
+export function adaptarClienteUsoIA(cliente: SupabaseClient): ClienteUsoIA {
+  return { rpc: (funcion) => cliente.rpc(funcion) }
+}
+
 function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
   return {
     storage: {
@@ -85,6 +90,7 @@ function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
 
 // Punto de composición: acá los servicios reciben el cliente real de Supabase.
 export const servicioEscritura = crearServicioEscritura(adaptarClienteEscritura(supabase))
-export const servicioArchivos = crearServicioArchivos(adaptarClienteArchivos(supabase))
+export const servicioUsoIA = crearServicioUsoIA(adaptarClienteUsoIA(supabase))
+export const servicioArchivos =crearServicioArchivos(adaptarClienteArchivos(supabase))
 export const servicioAuth = crearServicioAuth(adaptarClienteAuth(supabase))
 export const cargarFilasDeSesion = (rol: Rol) => cargarFilasSesion(adaptarClienteDatos(supabase), rol)

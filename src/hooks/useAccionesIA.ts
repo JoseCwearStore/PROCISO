@@ -3,6 +3,7 @@ import { formatearFecha } from '../lib/datos'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { AnalisisIA } from '../types'
+import { refrescarUsoIA, useUsoIA } from './useUsoIA'
 
 export interface FuenteAnalisis {
   tipo: 'documento' | 'evidencia'
@@ -16,9 +17,12 @@ export interface FuenteAnalisis {
 export function useAccionesIA() {
   const { state, dispatch, showToast } = useApp()
   const puedePedir = state.currentRole === 'Admin Consultoría' || state.currentRole === 'Consultor'
+  const { uso: usoIA, estado: estadoUsoIA } = useUsoIA(state.currentUser?.id, puedePedir)
 
   return {
     puedePedir,
+    usoIA,
+    estadoUsoIA,
     criterios: state.criterios,
     analisisDe: (fuente: FuenteAnalisis): AnalisisIA[] =>
       state.analisisIA.filter((a) => (fuente.tipo === 'documento' ? a.documentoId : a.evidenciaId) === fuente.id),
@@ -37,6 +41,8 @@ export function useAccionesIA() {
         state.currentUser.id,
         formatearFecha(new Date().toISOString()),
       )
+      // Pida lo que pida (también si lo rechazó el tope), el contador se vuelve a leer de la BD.
+      void refrescarUsoIA(state.currentUser.id)
       if (!resultado.ok) {
         showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
         return null
