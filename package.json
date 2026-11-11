@@ -9,7 +9,10 @@
     "preview": "vite preview",
     "format": "oxfmt",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "typecheck": "tsc --noEmit",
+    "test:db": "npx -y supabase@2.122.1 test db",
+    "verify": "pnpm typecheck && pnpm test"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.119.0",
