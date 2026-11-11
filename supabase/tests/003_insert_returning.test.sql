@@ -28,12 +28,19 @@ select lives_ok(
   'El admin puede crear una empresa y recibirla de vuelta (RETURNING)'
 );
 
+-- Sin `id`, como hace la app: desde L1 el INSERT de proyectos tiene permisos por columna
+-- y el id sale del default.
 select lives_ok(
-  $$ insert into public.proyectos (id, consultoria_id, empresa_id, consultor_id, nombre)
-     values ('f8f8f8f8-0000-0000-0000-000000000001', 'f6f6f6f6-0000-0000-0000-000000000001',
+  $$ insert into public.proyectos (consultoria_id, empresa_id, consultor_id, nombre)
+     values ('f6f6f6f6-0000-0000-0000-000000000001',
              'f7f7f7f7-0000-0000-0000-000000000001', 'fcfcfcfc-0000-0000-0000-000000000002', 'Nuevo proyecto') returning id $$,
   'El admin puede crear un proyecto y recibirlo de vuelta (RETURNING)'
 );
+-- Se fija un id conocido (como postgres) para los chequeos que siguen.
+reset role;
+update public.proyectos set id = 'f8f8f8f8-0000-0000-0000-000000000001' where nombre = 'Nuevo proyecto';
+select set_config('request.jwt.claims', '{"sub":"fcfcfcfc-0000-0000-0000-000000000001","role":"authenticated"}', true);
+set local role authenticated;
 
 select lives_ok(
   $$ insert into public.proyecto_miembros (proyecto_id, usuario_id, consultoria_id)

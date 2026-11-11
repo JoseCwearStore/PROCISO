@@ -1,6 +1,7 @@
 -- Tipos de documento de las plantillas del usuario (2026-11-09): Alcance, Objetivos
 -- y Mapa de procesos se suman a los que ya había. Un tipo inventado sigue
--- rechazado por el CHECK, y crear con INSERT ... RETURNING funciona para el equipo.
+-- rechazado por el CHECK. Desde L1 el equipo crea documentos por guardar_documento
+-- (la tabla no admite INSERT directo), así que el CHECK se ejerce por ese camino.
 
 begin;
 create extension if not exists pgtap with schema extensions;
@@ -23,28 +24,33 @@ select set_config('request.jwt.claims', '{"sub":"22222222-0000-0000-0000-0000000
 set local role authenticated;
 
 select lives_ok(
-  $$ insert into public.documentos (consultoria_id, proyecto_id, nombre, tipo)
-     values ('22222222-0000-0000-0001-000000000001', '22222222-0000-0000-0003-000000000001', 'Alcance', 'Alcance') returning id $$,
+  $$ select public.guardar_documento(
+       '{"id":"22222222-0000-0000-0004-000000000001","proyecto_id":"22222222-0000-0000-0003-000000000001","nombre":"Alcance","tipo":"Alcance","estado":"Borrador","version":"1.0"}'::jsonb,
+       null, null) $$,
   'El equipo crea un documento de tipo Alcance'
 );
 select lives_ok(
-  $$ insert into public.documentos (consultoria_id, proyecto_id, nombre, tipo)
-     values ('22222222-0000-0000-0001-000000000001', '22222222-0000-0000-0003-000000000001', 'Objetivos', 'Objetivos') returning id $$,
+  $$ select public.guardar_documento(
+       '{"id":"22222222-0000-0000-0004-000000000002","proyecto_id":"22222222-0000-0000-0003-000000000001","nombre":"Objetivos","tipo":"Objetivos","estado":"Borrador","version":"1.0"}'::jsonb,
+       null, null) $$,
   'El equipo crea un documento de tipo Objetivos'
 );
 select lives_ok(
-  $$ insert into public.documentos (consultoria_id, proyecto_id, nombre, tipo)
-     values ('22222222-0000-0000-0001-000000000001', '22222222-0000-0000-0003-000000000001', 'Mapa', 'Mapa de procesos') returning id $$,
+  $$ select public.guardar_documento(
+       '{"id":"22222222-0000-0000-0004-000000000003","proyecto_id":"22222222-0000-0000-0003-000000000001","nombre":"Mapa","tipo":"Mapa de procesos","estado":"Borrador","version":"1.0"}'::jsonb,
+       null, null) $$,
   'El equipo crea un documento de tipo Mapa de procesos'
 );
 select lives_ok(
-  $$ insert into public.documentos (consultoria_id, proyecto_id, nombre, tipo)
-     values ('22222222-0000-0000-0001-000000000001', '22222222-0000-0000-0003-000000000001', 'Política', 'Política') returning id $$,
+  $$ select public.guardar_documento(
+       '{"id":"22222222-0000-0000-0004-000000000004","proyecto_id":"22222222-0000-0000-0003-000000000001","nombre":"Política","tipo":"Política","estado":"Borrador","version":"1.0"}'::jsonb,
+       null, null) $$,
   'Los tipos que ya existían siguen valiendo'
 );
 select throws_ok(
-  $$ insert into public.documentos (consultoria_id, proyecto_id, nombre, tipo)
-     values ('22222222-0000-0000-0001-000000000001', '22222222-0000-0000-0003-000000000001', 'X', 'Inventado') $$,
+  $$ select public.guardar_documento(
+       '{"id":"22222222-0000-0000-0004-000000000005","proyecto_id":"22222222-0000-0000-0003-000000000001","nombre":"X","tipo":"Inventado","estado":"Borrador","version":"1.0"}'::jsonb,
+       null, null) $$,
   '23514', null, 'Un tipo inventado sigue rechazado'
 );
 select is((select count(*)::int from public.documentos), 4, 'Se crearon los 4 documentos válidos');
