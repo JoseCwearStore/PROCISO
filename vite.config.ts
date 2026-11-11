@@ -33,7 +33,8 @@ react(),
       },
     },
     server: {
-      host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
+      // Abrir a la red es opt-in (AUD08-M1): por defecto solo esta máquina.
+      host: process.env.FIGMA_DEV_SERVER_HOST || 'localhost',
       port: parseInt(process.env.PORT || '8443'),
       strictPort: true,
       watch: {
@@ -43,7 +44,7 @@ react(),
       },
     },
     preview: {
-      host: process.env.FIGMA_DEV_SERVER_HOST || '0.0.0.0',
+      host: process.env.FIGMA_DEV_SERVER_HOST || 'localhost',
       port: parseInt(process.env.PORT || '8443'),
     },
   }
