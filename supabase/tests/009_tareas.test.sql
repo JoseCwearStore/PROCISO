@@ -200,7 +200,8 @@ select is(
 select is(
   (select array_agg(estado_nuevo || ':' || n.nombre order by h.id)
    from public.historial h join public.perfiles n on n.id = h.autor_id
-   where h.entidad_tipo = 'tarea' and h.entidad_id = 'b5b5b5b5-0000-0000-0000-000000000001'),
+   -- Solo los cambios de estado: desde L2 las reasignaciones y cambios de fecha también dejan evento.
+   where h.entidad_tipo = 'tarea' and h.entidad_id = 'b5b5b5b5-0000-0000-0000-000000000001' and h.estado_nuevo is not null),
   array['En proceso:U', 'En revisión:U', 'Requiere corrección:K1', 'En proceso:U', 'En revisión:U', 'Completada:K1'],
   'El historial registra cada cambio con su autor real'
 );

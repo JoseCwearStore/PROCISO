@@ -68,7 +68,8 @@ select is(
 
 select set_config('request.jwt.claims', '{"sub":"d1d1d1d1-0000-0000-0000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
--- Enviar a revisión dos veces la misma versión: una sola instantánea (se actualiza).
+-- Enviar a revisión: queda UNA instantánea. Desde L2 reenviar la misma versión ya no se
+-- acepta (el documento queda congelado en revisión y la instantánea no se pisa).
 select lives_ok(
   $$ select public.guardar_documento(
        '{"id":"d6d6d6d6-0000-0000-0000-000000000001","proyecto_id":"d4d4d4d4-0000-0000-0000-000000000001",
@@ -76,12 +77,12 @@ select lives_ok(
        '{"version":"0.1","comentario":"Primer envío","motivo":"Creación"}'::jsonb, null) $$,
   'El consultor envía el documento a revisión (y desvincula la evidencia)'
 );
-select lives_ok(
+select throws_ok(
   $$ select public.guardar_documento(
        '{"id":"d6d6d6d6-0000-0000-0000-000000000001","proyecto_id":"d4d4d4d4-0000-0000-0000-000000000001",
          "nombre":"Procedimiento de compras","tipo":"Procedimiento","estado":"Pendiente de revisión","version":"0.1","evidencias":[]}'::jsonb,
        '{"version":"0.1","comentario":"Segundo envío","motivo":"Ajustes"}'::jsonb, null) $$,
-  'Reenvía la misma versión'
+  '42501', null, 'Reenviar la misma versión ya no se acepta (en revisión está congelado)'
 );
 select throws_ok(
   $$ select public.guardar_documento(
@@ -96,8 +97,8 @@ select is(
   (select array[(select count(*)::text from public.documento_versiones where documento_id = 'd6d6d6d6-0000-0000-0000-000000000001'),
                 (select comentario from public.documento_versiones where documento_id = 'd6d6d6d6-0000-0000-0000-000000000001'),
                 (select count(*)::text from public.documento_evidencias where documento_id = 'd6d6d6d6-0000-0000-0000-000000000001')]),
-  array['1', 'Segundo envío', '0'],
-  'Una sola instantánea por versión (actualizada) y la evidencia desvinculada'
+  array['1', 'Primer envío', '0'],
+  'Una sola instantánea por versión (la del primer envío, intacta) y la evidencia desvinculada'
 );
 
 -- Un documento aprobado queda congelado.

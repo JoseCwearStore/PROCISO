@@ -41,7 +41,7 @@ insert into public.documento_versiones (consultoria_id, proyecto_id, documento_i
 -- ─── Anónimo ────────────────────────────────────────────────────────────────
 set local role anon;
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null) $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null, '1.1') $$,
   '42501', null, 'Un anónimo no puede decidir'
 );
 reset role;
@@ -50,15 +50,15 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"c1c1c1c1-0000-0000-0000-000000000001","role":"authenticated"}', true);
 set local role authenticated;
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null) $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null, '1.1') $$,
   '42501', null, 'El consultor no puede aprobar (aprueba el cliente)'
 );
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'En corrección', null, '  ') $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'En corrección', null, '  ', '1.1') $$,
   '22023', null, 'Pedir corrección exige sección y comentario'
 );
 select lives_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'En corrección', 's1', 'Falta el alcance') $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'En corrección', 's1', 'Falta el alcance', '1.1') $$,
   'El consultor pide una corrección anclada a una sección'
 );
 reset role;
@@ -81,7 +81,7 @@ update public.documentos set estado = 'Pendiente de revisión' where id = 'c5c5c
 select set_config('request.jwt.claims', '{"sub":"c1c1c1c1-0000-0000-0000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Rechazado', 's1', 'No') $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Rechazado', 's1', 'No', '1.1') $$,
   '42501', null, 'Un consultor no asignado no puede revisar'
 );
 reset role;
@@ -90,7 +90,7 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"c1c1c1c1-0000-0000-0000-000000000004","role":"authenticated"}', true);
 set local role authenticated;
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null) $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null, '1.1') $$,
   '42501', null, 'Un cliente de otra empresa no puede aprobar'
 );
 reset role;
@@ -99,15 +99,15 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"c1c1c1c1-0000-0000-0000-000000000003","role":"authenticated"}', true);
 set local role authenticated;
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Rechazado', 's1', 'No me gusta') $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Rechazado', 's1', 'No me gusta', '1.1') $$,
   '42501', null, 'El cliente no rechaza (pide corrección o aprueba)'
 );
 select throws_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000004', 'Aprobado', null, null) $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000004', 'Aprobado', null, null, '0.1') $$,
   '22023', null, 'Solo se decide sobre documentos pendientes de revisión'
 );
 select lives_ok(
-  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null) $$,
+  $$ select public.decidir_documento('c5c5c5c5-0000-0000-0000-000000000002', 'Aprobado', null, null, '1.1') $$,
   'El cliente aprueba la versión 1.1'
 );
 reset role;
