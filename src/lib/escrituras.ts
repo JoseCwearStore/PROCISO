@@ -60,6 +60,9 @@ export type ErrorEscritura =
   | 'datos_invalidos'
   | 'archivo_grande'
   | 'tipo_no_permitido'
+  | 'documento_en_revision'
+  | 'version_ya_enviada'
+  | 'version_desactualizada'
   | 'servicio'
 export type ResultadoEscritura<T> = { ok: true; valor: T } | { ok: false; error: ErrorEscritura }
 
@@ -83,6 +86,7 @@ export interface ClienteEscritura {
       | 'revisar_evidencia'
       | 'guardar_documento'
       | 'decidir_documento'
+      | 'retirar_documento_de_revision'
       | 'cambiar_estado_tarea'
       | 'guardar_tratamiento_nc'
       | 'cambiar_estado_nc'
@@ -317,6 +321,10 @@ function filaRegistroNC(datos: DatosNC) {
 // 23514 (CHECK) y 23503 (FK): la BD rechazó los datos (p. ej. "No aplica" sin
 // justificar, o una evidencia de otro proyecto).
 function traducirError(error: ErrorBD): ErrorEscritura {
+  // Mensajes que la BD escribe a propósito para el usuario (L2): se distinguen por su texto.
+  if (error.code === '22023' && /cambió desde que lo abriste/i.test(error.message)) return 'version_desactualizada'
+  if (error.code === '42501' && /está en revisión/i.test(error.message)) return 'documento_en_revision'
+  if (error.code === '42501' && /ya se envió a revisión/i.test(error.message)) return 'version_ya_enviada'
   if (error.code === '22023' || error.code === '23514' || error.code === '23503') return 'datos_invalidos'
   return error.code === '42501' || error.code === 'PGRST116' ? 'sin_permiso' : 'servicio'
 }
@@ -654,9 +662,12 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
 
     // Revisión: el servidor decide quién puede qué (el cliente aprueba, el equipo
     // rechaza) y deja obsoleta la versión aprobada anterior en la misma transacción.
+    // `version` es la que el revisor VIO: si el documento cambió mientras tanto, el servidor
+    // rechaza la decisión (AUD06-M1) y hay que volver a cargarlo.
     async decidirDocumento(
       id: string,
       estado: 'Aprobado' | 'En corrección' | 'Rechazado',
+      version: string,
       seccionId?: string,
       comentario?: string,
     ): Promise<ResultadoEscritura<void>> {
@@ -665,8 +676,14 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_estado: estado,
         p_seccion_id: seccionId?.trim() || null,
         p_comentario: comentario?.trim() || null,
+        p_version: version,
       })
       return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    },
+
+    // La salida explícita de la revisión (solo el equipo): el contenido en revisión está congelado.
+    retirarDocumento(id: string, motivo?: string): Promise<ResultadoEscritura<void>> {
+      return llamar('retirar_documento_de_revision', { p_id: id, p_motivo: motivo?.trim() || null })
     },
 
     async comentarDocumento(
@@ -893,6 +910,9 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   sin_consultoria: 'Tu usuario no pertenece a una consultoría.',
   datos_invalidos: 'La operación no es válida en el estado actual. Revisa la información e intenta de nuevo.',
   archivo_grande: 'El archivo supera el límite de 25 MB.',
+  documento_en_revision: 'El documento está en revisión y no se puede modificar. Retíralo de la revisión para editarlo.',
+  version_ya_enviada: 'Esa versión ya se envió a revisión. Crea una versión nueva para reenviar.',
+  version_desactualizada: 'El documento cambió desde que lo abriste. Recarga la página para ver la versión actual.',
   tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',
 }

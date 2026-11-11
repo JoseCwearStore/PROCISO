@@ -449,33 +449,81 @@ describe('decidirDocumento', () => {
     const { cliente, llamadas } = crearClienteDoble()
     const escrituras = crearServicioEscritura(cliente)
 
-    expect(await escrituras.decidirDocumento(DOC, 'En corrección', 's1', '  Falta el alcance ')).toEqual({ ok: true, valor: undefined })
+    expect(await escrituras.decidirDocumento(DOC, 'En corrección', '1.1', 's1', '  Falta el alcance ')).toEqual({ ok: true, valor: undefined })
     expect(llamadas).toEqual([
       {
         tabla: 'decidir_documento',
         operacion: 'rpc',
-        datos: { p_id: DOC, p_estado: 'En corrección', p_seccion_id: 's1', p_comentario: 'Falta el alcance' },
+        datos: { p_id: DOC, p_estado: 'En corrección', p_seccion_id: 's1', p_comentario: 'Falta el alcance', p_version: '1.1' },
       },
     ])
   })
 
-  it('aprobar no exige sección ni comentario', async () => {
+  it('aprobar no exige sección ni comentario, pero SIEMPRE manda la versión que se vio (AUD06-M1)', async () => {
     const { cliente, llamadas } = crearClienteDoble()
     const escrituras = crearServicioEscritura(cliente)
 
-    await escrituras.decidirDocumento(DOC, 'Aprobado')
+    await escrituras.decidirDocumento(DOC, 'Aprobado', '2.0')
 
-    expect(llamadas[0].datos).toEqual({ p_id: DOC, p_estado: 'Aprobado', p_seccion_id: null, p_comentario: null })
+    expect(llamadas[0].datos).toEqual({ p_id: DOC, p_estado: 'Aprobado', p_seccion_id: null, p_comentario: null, p_version: '2.0' })
   })
 
   it.each([
     [{ code: '42501', message: 'Solo el cliente de la empresa aprueba documentos' }, 'sin_permiso'],
     [{ code: '22023', message: 'Solo se decide sobre documentos pendientes de revisión' }, 'datos_invalidos'],
+    [
+      { code: '22023', message: 'El documento cambió desde que lo abriste (ahora es la versión 0.2): vuelve a cargarlo' },
+      'version_desactualizada',
+    ],
   ] as const)('traduce %o a "%s"', async (error, esperado) => {
     const { cliente } = crearClienteDoble({ 'decidir_documento.rpc': { data: null, error } })
     const escrituras = crearServicioEscritura(cliente)
 
-    expect(await escrituras.decidirDocumento(DOC, 'Aprobado')).toEqual({ ok: false, error: esperado })
+    expect(await escrituras.decidirDocumento(DOC, 'Aprobado', '1.1')).toEqual({ ok: false, error: esperado })
+  })
+})
+
+describe('retirarDocumento', () => {
+  const DOC = '66666666-0000-0000-0000-000000000001'
+
+  it('llama a retirar_documento_de_revision con el motivo recortado', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.retirarDocumento(DOC, '  Me equivoqué de sección ')).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      { tabla: 'retirar_documento_de_revision', operacion: 'rpc', datos: { p_id: DOC, p_motivo: 'Me equivoqué de sección' } },
+    ])
+  })
+
+  it('sin motivo manda null', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    await escrituras.retirarDocumento(DOC)
+
+    expect(llamadas[0].datos).toEqual({ p_id: DOC, p_motivo: null })
+  })
+
+  it('traduce el rechazo del servidor (el cliente no retira) a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'retirar_documento_de_revision.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.retirarDocumento(DOC)).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+describe('guardarDocumento: mensajes del congelado en revisión (AUD02-H1)', () => {
+  const DOCUMENTO = { id: '66666666-0000-0000-0000-000000000001', proyectoId: P_NUEVO, version: '0.1' } as Documento
+
+  it.each([
+    [{ code: '42501', message: 'El documento está en revisión y no se puede modificar: retíralo de la revisión para editarlo' }, 'documento_en_revision'],
+    [{ code: '42501', message: 'La versión 0.1 ya se envió a revisión: crea una versión nueva para reenviar' }, 'version_ya_enviada'],
+  ] as const)('traduce %o a "%s"', async (error, esperado) => {
+    const { cliente } = crearClienteDoble({ 'guardar_documento.rpc': { data: null, error } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.guardarDocumento(DOCUMENTO)).toEqual({ ok: false, error: esperado })
   })
 })
 

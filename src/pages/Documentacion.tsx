@@ -13,12 +13,20 @@ import {
   Send,
   Table2,
   Trash2,
+  Undo2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
-import { documentoVisibleParaRol, estadosVisiblesParaRol, puedeRedactarDocumentos } from '../lib/documentos'
+import {
+  contenidoEditable,
+  documentoVisibleParaRol,
+  estadosVisiblesParaRol,
+  puedeRedactarDocumentos,
+  siguienteVersion,
+  versionParaEnviar,
+} from '../lib/documentos'
 import { PENDIENTE, PLANTILLAS, crearSecciones, plantillaPorId } from '../lib/plantillas'
 import { aplicarTextos, armarPedidoIA, camposIA } from '../lib/generacion'
 import { useAccionesGeneracion } from '../hooks/useAccionesGeneracion'
@@ -80,11 +88,6 @@ const GENERADOR_VACIO: Generador = {
   codigo: '',
   titulo: '',
   edicionNorma: 'ISO 9001:2026',
-}
-
-function versionSiguiente(version: string) {
-  const [major = '0', minor = '0'] = version.split('.')
-  return `${major}.${Number(minor) + 1}`
 }
 
 export default function Documentacion() {
@@ -225,7 +228,7 @@ export default function Documentacion() {
   // Ediciones en pantalla: se guardan en la BD al pulsar Guardar o Enviar.
   function actualizar(updates: Partial<Documento>) {
     // Defensa en profundidad: la pantalla ya no ofrece editar al cliente, y la BD lo rechazaría igual.
-    if (!documento || !puedeRedactarDocumentos(state.currentRole) || documento.bloqueado || documento.estado === 'Aprobado' || documento.estado === 'Obsoleto') return
+    if (!documento || !puedeRedactarDocumentos(state.currentRole) || !contenidoEditable(documento)) return
     dispatch({
       type: 'UPSERT_DOCUMENTO',
       documento: { ...documento, ...updates, fechaModificacion: formatearFecha(new Date().toISOString()) },
@@ -293,8 +296,11 @@ export default function Documentacion() {
     setErrores(faltantes)
     if (faltantes.length) return
     const motivo = documento.motivoCambio || 'Envío a revisión'
+    // La instantánea de una versión ya enviada no se pisa: si esta versión ya se envió
+    // (p. ej. tras una corrección), el reenvío usa la versión siguiente.
+    const version = versionParaEnviar(documento)
     const snapshot: VersionDocumento = {
-      version: documento.version,
+      version,
       fecha: formatearFecha(new Date().toISOString()),
       autorId: state.currentUser?.id ?? '',
       comentario: motivo,
@@ -305,15 +311,46 @@ export default function Documentacion() {
     const enviado = await persistir(
       {
         ...documento,
+        version,
         estado: 'Pendiente de revisión',
         historialVersiones: [...documento.historialVersiones.filter((item) => item.version !== snapshot.version), snapshot],
       },
       {
-        version: { version: documento.version, comentario: motivo, motivo },
-        evento: { accion: 'Enviado a revisión', detalle: `Versión ${documento.version}.` },
+        version: { version, comentario: motivo, motivo },
+        evento: { accion: 'Enviado a revisión', detalle: `Versión ${version}.` },
       },
     )
     if (enviado) showToast('Documento enviado al flujo de revisión.', 'success')
+  }
+
+  // Mientras está en revisión el contenido está congelado: para editarlo se retira de la revisión
+  // (queda en el historial) y, al reenviarlo, sale como versión nueva.
+  async function retirarRevision() {
+    if (!documento) return
+    const resultado = await servicioEscritura.retirarDocumento(documento.id)
+    if (!resultado.ok) {
+      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      return
+    }
+    const evento = {
+      id: crypto.randomUUID(),
+      fecha: formatearFecha(new Date().toISOString()),
+      autorId: state.currentUser?.id ?? '',
+      accion: 'Documento retirado de revisión',
+      detalle: `Versión ${documento.version}.`,
+    }
+    dispatch({
+      type: 'UPSERT_DOCUMENTO',
+      documento: {
+        ...documento,
+        estado: 'Borrador',
+        historialVersiones: documento.historialVersiones.map((item) =>
+          item.version === documento.version ? { ...item, estado: 'Borrador' } : item
+        ),
+        historial: [...(documento.historial || []), evento],
+      },
+    })
+    showToast('Documento retirado de la revisión. Ya puedes editarlo.', 'success')
   }
 
   async function nuevaVersion() {
@@ -321,7 +358,7 @@ export default function Documentacion() {
     const nueva: Documento = {
       ...documento,
       id: crypto.randomUUID(),
-      version: versionSiguiente(documento.version),
+      version: siguienteVersion(documento.version),
       estado: 'Borrador',
       bloqueado: false,
       aprobadoPorId: undefined,
@@ -390,6 +427,7 @@ export default function Documentacion() {
         volver={() => { setVista('lista'); setErrores([]) }}
         guardar={guardarBorrador}
         enviar={enviarRevision}
+        retirar={retirarRevision}
         nuevaVersion={nuevaVersion}
         errores={errores}
         evidencias={state.evidencias.filter((item) => item.proyectoId === documento.proyectoId)}
@@ -510,6 +548,7 @@ interface EditorProps {
   volver: () => void
   guardar: () => void
   enviar: () => void
+  retirar: () => void
   nuevaVersion: () => void
   errores: string[]
   evidencias: ReturnType<typeof useApp>['state']['evidencias']
@@ -532,9 +571,11 @@ interface EditorProps {
 function EditorDocumento(props: EditorProps) {
   const { documento, actualizar } = props
   const bloqueado = documento.bloqueado || documento.estado === 'Aprobado'
-  // Contenido: no se edita si el documento está bloqueado o si quien lo ve no redacta (cliente).
+  // En revisión el contenido está congelado (AUD02-H1): se sale con "Retirar de revisión".
+  const enRevision = documento.estado === 'Pendiente de revisión'
+  // Contenido: no se edita si el documento está bloqueado, en revisión o si quien lo ve no redacta (cliente).
   // Los comentarios siguen su propia regla (`bloqueado`): el cliente sí puede comentar.
-  const edicionBloqueada = bloqueado || props.soloLectura
+  const edicionBloqueada = !contenidoEditable(documento) || props.soloLectura
 
   function actualizarSeccion(id: string, updates: Partial<SeccionDocumento>) {
     actualizar({ secciones: documento.secciones?.map((item) => item.id === id ? { ...item, ...updates } : item) })
@@ -573,11 +614,12 @@ function EditorDocumento(props: EditorProps) {
           <Button variant="outline" onClick={props.abrirComparacion} disabled={documento.historialVersiones.length < 1} icon={<Columns2 className="h-4 w-4" />}>Comparar versiones</Button>
           <Button variant="outline" onClick={() => props.exportar('pdf')} disabled={props.exportando !== null}>{props.exportando === 'pdf' ? 'Generando PDF…' : 'Exportar PDF'}</Button>
           <Button variant="outline" onClick={() => props.exportar('word')} disabled={props.exportando !== null}>{props.exportando === 'word' ? 'Generando Word…' : 'Exportar Word'}</Button>
-          {props.soloLectura ? null : bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
+          {props.soloLectura ? null : bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : enRevision ? <Button variant="outline" onClick={props.retirar} icon={<Undo2 className="h-4 w-4" />}>Retirar de revisión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
         </div>
       </div>
 
       {props.soloLectura && <div className="mb-5 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-800">Estás viendo este documento en modo lectura. Puedes comentarlo y exportarlo; para aprobarlo o pedir correcciones usa «Revisiones y aprobaciones».</div>}
+      {enRevision && !props.soloLectura && <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Este documento está en revisión y su contenido está congelado. Para editarlo, retíralo de la revisión: al reenviarlo saldrá como una versión nueva.</div>}
       {bloqueado && !props.soloLectura && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">La versión aprobada está bloqueada para edición directa. Crea una nueva versión para realizar cambios.</div>}
       {props.errores.length > 0 && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p className="font-semibold">No se puede enviar a revisión:</p><p>{props.errores.join(', ')}.</p></div>}
       {/* La IA lee el documento desde la BD: analiza la última versión GUARDADA. */}

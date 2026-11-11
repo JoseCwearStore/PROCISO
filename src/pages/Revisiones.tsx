@@ -38,7 +38,7 @@ export default function Revisiones() {
       return
     }
     setDecidiendo(true)
-    const resultado = await servicioEscritura.decidirDocumento(documento.id, estado, seccionId, comentario)
+    const resultado = await servicioEscritura.decidirDocumento(documento.id, estado, documento.version, seccionId, comentario)
     setDecidiendo(false)
     if (!resultado.ok) {
       setError(MENSAJES_ERROR_ESCRITURA[resultado.error])
