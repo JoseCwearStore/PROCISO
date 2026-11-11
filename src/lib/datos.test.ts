@@ -541,6 +541,9 @@ describe('cargarFilasSesion', () => {
     const porTabla: Record<string, unknown[]> = {
       consultorias: filas.consultorias,
       empresas: filas.empresas,
+      // Vistas de solo lectura que usa el cliente (L3 · D3): mismas columnas, lo sensible en nulo.
+      mi_consultoria: filas.consultorias,
+      mi_empresa: filas.empresas,
       perfiles: filas.perfiles,
       proyectos: filas.proyectos,
       fases: filas.fases,
@@ -580,25 +583,56 @@ describe('cargarFilasSesion', () => {
     errorRpc = null
     const cliente = crearClienteDoble()
 
-    const resultado = await cargarFilasSesion(cliente)
+    const resultado = await cargarFilasSesion(cliente, 'Consultor')
 
     expect(resultado).toEqual({ ok: true, filas: filasBase() })
     expect(cliente.from).toHaveBeenCalledTimes(23)
     expect(cliente.rpc).toHaveBeenCalledWith('mis_notificaciones')
   })
 
+  it('el equipo lee las tablas consultorias y empresas (lo que su RLS le permite)', async () => {
+    errorRpc = null
+    for (const rol of ['Admin PROCISO', 'Admin Consultoría', 'Consultor'] as const) {
+      const cliente = crearClienteDoble()
+      await cargarFilasSesion(cliente, rol)
+      const leidas = cliente.from.mock.calls.map(([tabla]) => tabla)
+      expect(leidas, rol).toContain('consultorias')
+      expect(leidas, rol).toContain('empresas')
+      expect(leidas, rol).not.toContain('mi_consultoria')
+      expect(leidas, rol).not.toContain('mi_empresa')
+    }
+  })
+
+  // L3 · D3: al cliente la BD le cierra las tablas (plan/RFC de la consultoría, observaciones
+  // internas de la empresa); lee vistas mínimas. Si leyera las tablas, vería 0 filas.
+  it('el cliente lee las vistas mi_consultoria y mi_empresa, NO las tablas', async () => {
+    errorRpc = null
+    const cliente = crearClienteDoble()
+
+    const resultado = await cargarFilasSesion(cliente, 'Usuario Cliente')
+
+    const leidas = cliente.from.mock.calls.map(([tabla]) => tabla)
+    expect(leidas).toContain('mi_consultoria')
+    expect(leidas).toContain('mi_empresa')
+    expect(leidas).not.toContain('consultorias')
+    expect(leidas).not.toContain('empresas')
+    expect(cliente.from).toHaveBeenCalledTimes(23)
+    // Mismas filas con la misma forma: el resto de la app no distingue el origen.
+    expect(resultado).toEqual({ ok: true, filas: filasBase() })
+  })
+
   it('falla si alguna tabla no se pudo leer', async () => {
     errorRpc = null
     const cliente = crearClienteDoble({ message: 'Failed to fetch' })
 
-    expect(await cargarFilasSesion(cliente)).toEqual({ ok: false })
+    expect(await cargarFilasSesion(cliente, 'Consultor')).toEqual({ ok: false })
   })
 
   it('falla si las notificaciones no se pudieron calcular', async () => {
     errorRpc = { message: 'permission denied for function mis_notificaciones' }
     const cliente = crearClienteDoble()
 
-    expect(await cargarFilasSesion(cliente)).toEqual({ ok: false })
+    expect(await cargarFilasSesion(cliente, 'Consultor')).toEqual({ ok: false })
     errorRpc = null
   })
 })

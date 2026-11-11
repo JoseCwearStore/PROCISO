@@ -411,13 +411,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // dependiera de datosSesion, el propio dispatch('cargando') dispararía el cleanup y
   // cancelaría esta misma carga: la app quedaría en "Cargando…" para siempre.
   const usuarioId = state.currentUser?.id
+  // El rol real del usuario (no `currentRole`, que cambia con SET_ROLE) decide si lee las tablas o
+  // las vistas del cliente. Cambia solo con el usuario, así que no necesita entrar a las dependencias.
+  const rolUsuario = state.currentUser?.rol
   const intentoCarga = state.intentoCarga
   useEffect(() => {
-    if (!usuarioId) return
+    if (!usuarioId || !rolUsuario) return
     let cancelado = false
     dispatch({ type: 'DATOS_CARGANDO' })
     async function cargar() {
-      const resultado = await cargarFilasDeSesion()
+      const resultado = await cargarFilasDeSesion(rolUsuario as Rol)
       if (!resultado.ok) return null
       const datos = combinarDatosSesion(resultado.filas)
       // Los archivos son privados: cada evidencia recibe una URL firmada que vence.

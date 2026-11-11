@@ -4,6 +4,7 @@ import { cargarFilasSesion, type ClienteDatos } from './datos'
 import { crearServicioEscritura, type ClienteEscritura } from './escrituras'
 import { crearServicioArchivos, type ClienteArchivos } from './archivos'
 import { supabase } from './supabase'
+import type { Rol } from '../types'
 
 export { llegoDesdeEnlaceDeRecuperacion } from './supabase'
 
@@ -86,4 +87,4 @@ function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
 export const servicioEscritura = crearServicioEscritura(adaptarClienteEscritura(supabase))
 export const servicioArchivos = crearServicioArchivos(adaptarClienteArchivos(supabase))
 export const servicioAuth = crearServicioAuth(adaptarClienteAuth(supabase))
-export const cargarFilasDeSesion = () => cargarFilasSesion(adaptarClienteDatos(supabase))
+export const cargarFilasDeSesion = (rol: Rol) => cargarFilasSesion(adaptarClienteDatos(supabase), rol)

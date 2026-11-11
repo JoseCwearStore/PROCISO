@@ -24,6 +24,7 @@ import type {
   PageId,
   Proceso,
   Proyecto,
+  Rol,
   Tarea,
   TipoNotificacion,
   Usuario,
@@ -479,15 +480,24 @@ const CONSULTAS = {
   ],
 } as const satisfies Record<Exclude<keyof FilasSesion, 'notificaciones'>, readonly [string, string]>
 
+// L3 · D3: al cliente la BD le cierra las tablas consultorias (plan, RFC, cuotas) y empresas
+// (observaciones internas del consultor). Lee en su lugar vistas de solo lectura con las MISMAS
+// columnas y lo sensible en nulo, así el resto de la app no distingue el origen.
+const FUENTES_DEL_CLIENTE: Partial<Record<keyof typeof CONSULTAS, string>> = {
+  consultorias: 'mi_consultoria',
+  empresas: 'mi_empresa',
+}
+
 // El RLS decide qué filas devuelve cada tabla: acá no se filtra nada a mano.
 // Las notificaciones no son una tabla: las calcula mis_notificaciones() en cada lectura.
-export async function cargarFilasSesion(cliente: ClienteDatos): Promise<{ ok: true; filas: FilasSesion } | { ok: false }> {
+export async function cargarFilasSesion(cliente: ClienteDatos, rol: Rol): Promise<{ ok: true; filas: FilasSesion } | { ok: false }> {
   const claves = Object.keys(CONSULTAS) as (keyof typeof CONSULTAS)[]
+  const esCliente = rol === 'Usuario Cliente'
   const [notificaciones, ...respuestas] = await Promise.all([
     cliente.rpc('mis_notificaciones'),
     ...claves.map((clave) => {
       const [tabla, columnas] = CONSULTAS[clave]
-      return cliente.from(tabla).select(columnas)
+      return cliente.from((esCliente && FUENTES_DEL_CLIENTE[clave]) || tabla).select(columnas)
     }),
   ])
 

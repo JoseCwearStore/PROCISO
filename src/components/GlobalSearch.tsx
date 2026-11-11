@@ -22,7 +22,7 @@ export function GlobalSearch({ open, onClose }: { open: boolean; onClose: () => 
     let items: Resultado[]
     if (state.currentRole === 'Admin PROCISO') {
       items = [
-        ...state.consultorias.map((item) => ({ id: item.id, tipo: 'Consultoría', titulo: item.nombre, detalle: `${item.plan} · ${item.activa ? 'Activa' : 'Suspendida'}`, pagina: 'inicio' as PageId })),
+        ...state.consultorias.map((item) => ({ id: item.id, tipo: 'Consultoría', titulo: item.nombre, detalle: [item.plan, item.activa ? 'Activa' : 'Suspendida'].filter(Boolean).join(' · '), pagina: 'inicio' as PageId })),
         ...state.usuarios.map((item) => ({ id: item.id, tipo: 'Usuario', titulo: item.nombre, detalle: `${item.rol} · ${item.activo ? 'Activo' : 'Suspendido'}`, pagina: 'usuarios' as PageId })),
       ]
     } else {
