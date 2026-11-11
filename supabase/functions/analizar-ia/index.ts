@@ -1,12 +1,14 @@
 // Edge Function analizar-ia: preevaluación de un documento o una evidencia
 // contra criterios del catálogo, con el proveedor de IA configurado.
 //
-// DELGADA: las reglas viven en la BD (quién pide, qué se puede analizar) y la
-// lógica de IA en _compartido/analisis.ts (probada con Vitest).
-//   1. Con el TOKEN DEL USUARIO crea el pedido (el RLS exige ser del equipo).
+// DELGADA: las reglas viven en la BD (quién pide, qué se puede analizar, topes de uso) y
+// la lógica de IA en _compartido/ (probada con Vitest).
+//   0. Valida la FORMA del pedido y cierra los pedidos huérfanos (Pendiente viejos).
+//   1. Con el TOKEN DEL USUARIO crea el pedido (el RLS exige ser del equipo; un trigger
+//      aplica el tope diario de pedidos a la IA).
 //   2. Con el mismo token lee criterios y fuente (el RLS decide qué ve).
-//   3. Extrae → arma el pedido → llama al proveedor (puerto) → interpreta.
-//   4. Con la clave secreta registra "Completado" o "Error" con el motivo.
+//   3. Extrae → arma el pedido → llama al proveedor (puerto, con timeout) → interpreta.
+//   4. Con la clave secreta registra "Completado" o "Error" con un motivo SANEADO.
 //
 // Configuración (supabase/functions/.env en local; `supabase secrets set` desplegado):
 //   IA_PROVEEDOR=openai-compatible   (por ahora el único adaptador)
@@ -14,6 +16,7 @@
 //   IA_MODELO=gpt-oss:120b-cloud
 //   IA_API_KEY=…                     (nunca en el repo ni en el navegador)
 //   IA_VISION=false                  (true si el modelo acepta imágenes)
+//   CORS_ORIGEN=https://…            (en producción; sin él queda `*`)
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
 import {
@@ -21,30 +24,17 @@ import {
   crearAnalizadorCompatibleOpenAI,
   ErrorIA,
   interpretarRespuesta,
+  validarPedidoAnalisis,
+  verificarTamanoArchivo,
   type AnalizadorIA,
   type CriterioIA,
   type FuenteIA,
 } from '../_compartido/analisis.ts'
+import { crearCors, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
 import { extraerArchivo, extraerDocumento } from './extractores.ts'
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-}
-const responder = (status: number, cuerpo: Record<string, unknown>) =>
-  new Response(JSON.stringify(cuerpo), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
-const estadoDe = (code?: string) =>
-  code === '42501' ? 403 : code === '22023' || code === '23503' || code === '23514' ? 400 : 500
-
-interface Pedido {
-  consultoriaId: string
-  proyectoId: string
-  fuenteTipo: 'documento' | 'evidencia'
-  documentoId?: string | null
-  evidenciaId?: string | null
-  criterioIds: string[]
-}
+const CORS = crearCors(Deno.env.get('CORS_ORIGEN'))
+const responder = responderCon(CORS)
 
 function crearAnalizador(): { analizador: AnalizadorIA; proveedor: string; modelo: string } {
   const proveedor = Deno.env.get('IA_PROVEEDOR') ?? 'openai-compatible'
@@ -67,11 +57,12 @@ Deno.serve(async (req) => {
   const token = req.headers.get('Authorization')
   if (!token) return responder(401, { error: 'Sesión requerida' })
 
-  let pedido: Pedido
+  // 0. La forma del pedido, antes de tocar la BD (AUD04-B2: 400 claro, sin texto interno).
+  let pedido
   try {
-    pedido = await req.json()
-  } catch {
-    return responder(400, { error: 'Cuerpo inválido' })
+    pedido = validarPedidoAnalisis(await req.json())
+  } catch (e) {
+    return responder(400, { error: e instanceof ErrorIA ? e.message : 'Cuerpo inválido' })
   }
 
   const url = Deno.env.get('SUPABASE_URL')!
@@ -81,20 +72,29 @@ Deno.serve(async (req) => {
   })
   const conClaveSecreta = createClient(url, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } })
 
-  // 1. El pedido. Si no es del equipo del proyecto, el RLS lo rechaza acá.
+  // Pedidos que se quedaron "Pendiente" (función caída, proveedor colgado) pasan a Error.
+  // Es limpieza: si falla no se frena el pedido (AUD04-B4).
+  const { error: errorBarrido } = await conClaveSecreta.rpc('cerrar_pedidos_ia_huerfanos')
+  if (errorBarrido) console.error('[analizar-ia] no se pudo cerrar pedidos huérfanos:', errorBarrido)
+
+  // 1. El pedido. Si no es del equipo del proyecto, el RLS lo rechaza acá; si ya pidió
+  //    demasiado hoy, el trigger del tope lo rechaza (429).
   const { data: analisis, error: errorPedido } = await comoUsuario
     .from('analisis_ia')
     .insert({
       consultoria_id: pedido.consultoriaId,
       proyecto_id: pedido.proyectoId,
       fuente_tipo: pedido.fuenteTipo,
-      documento_id: pedido.fuenteTipo === 'documento' ? pedido.documentoId : null,
-      evidencia_id: pedido.fuenteTipo === 'evidencia' ? pedido.evidenciaId : null,
+      documento_id: pedido.documentoId,
+      evidencia_id: pedido.evidenciaId,
       criterio_ids: pedido.criterioIds,
     })
     .select('id')
     .single()
-  if (errorPedido) return responder(estadoDe(errorPedido.code), { error: errorPedido.message, code: errorPedido.code })
+  if (errorPedido) {
+    console.error('[analizar-ia] no se pudo registrar el pedido:', errorPedido)
+    return responder(estadoDe(errorPedido.code), { error: mensajeDeBD(errorPedido), code: errorPedido.code })
+  }
 
   let proveedor = Deno.env.get('IA_PROVEEDOR') ?? 'openai-compatible'
   let modelo = Deno.env.get('IA_MODELO') ?? ''
@@ -134,6 +134,8 @@ Deno.serve(async (req) => {
       if (errorArchivo || !archivo) throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
       nombre = ev.nombre
       const mime = ev.archivo_mime || archivo.type || 'application/octet-stream'
+      // AUD04-B5: se acota el tamaño ANTES de cargarlo en memoria y parsearlo.
+      verificarTamanoArchivo({ length: archivo.size }, mime)
       fuente = await extraerArchivo(new Uint8Array(await archivo.arrayBuffer()), mime, Deno.env.get('IA_VISION') === 'true')
     }
 
@@ -146,12 +148,17 @@ Deno.serve(async (req) => {
 
     // 4. Registrar.
     const { error: errorRegistro } = await registrar('Completado', { resumen, resultados })
-    if (errorRegistro) throw new ErrorIA(`No se pudo guardar el resultado: ${errorRegistro.message}`)
+    if (errorRegistro) {
+      console.error('[analizar-ia] no se pudo guardar el resultado:', errorRegistro)
+      throw new ErrorIA('No se pudo guardar el resultado.')
+    }
     // Se devuelve el análisis completo: la pantalla lo muestra sin otra consulta.
     return responder(200, { id: analisis.id, estado: 'Completado', resumen, proveedor, modelo, resultados })
   } catch (e) {
-    // Cualquier falla queda registrada con su motivo: así se puede actuar.
-    const motivo = e instanceof ErrorIA ? e.message : `Error inesperado: ${e instanceof Error ? e.message : String(e)}`
+    // Cualquier falla queda registrada con un motivo SANEADO (lo lee el cliente, AUD04-B3);
+    // el detalle técnico real va solo al log del servidor.
+    console.error('[analizar-ia] falló el análisis:', e)
+    const motivo = motivoSaneado(e)
     await registrar('Error', { error: motivo })
     return responder(200, { id: analisis.id, estado: 'Error', error: motivo, proveedor, modelo, resultados: [] })
   }

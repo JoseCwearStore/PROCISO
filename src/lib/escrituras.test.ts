@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crearServicioEscritura, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
+import { crearServicioEscritura, MENSAJES_ERROR_ESCRITURA, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
 import type { FilaEmpresa, FilaEntregable, FilaIndicador, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
 import type { Documento, IndicadorGestion, ListaVerificacion, Proceso } from '../types'
 
@@ -1238,6 +1238,13 @@ describe('generarTextosConIA', () => {
     expect(await generar(400)).toEqual({ ok: false, error: 'datos_invalidos' })
     expect(await generar(500)).toEqual({ ok: false, error: 'servicio' })
   })
+
+  it('un 429 (tope diario de pedidos a la IA) es su propio error, con un mensaje que explica qué pasó', async () => {
+    const cliente = crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status: 429 } }).cliente
+
+    expect(await crearServicioEscritura(cliente).generarTextosConIA(PEDIDO)).toEqual({ ok: false, error: 'limite_ia' })
+    expect(MENSAJES_ERROR_ESCRITURA.limite_ia).toMatch(/tope diario/i)
+  })
 })
 
 describe('analizarConIA', () => {
@@ -1289,5 +1296,11 @@ describe('analizarConIA', () => {
     const { cliente } = crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status: 403 } })
 
     expect(await crearServicioEscritura(cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+
+  it('un 429 (tope diario de pedidos a la IA) es "limite_ia", no un error genérico del servicio', async () => {
+    const { cliente } = crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status: 429 } })
+
+    expect(await crearServicioEscritura(cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')).toEqual({ ok: false, error: 'limite_ia' })
   })
 })

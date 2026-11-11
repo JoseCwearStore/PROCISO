@@ -63,7 +63,12 @@ export type ErrorEscritura =
   | 'documento_en_revision'
   | 'version_ya_enviada'
   | 'version_desactualizada'
+  | 'limite_ia'
   | 'servicio'
+
+// Status HTTP de las Edge Functions de IA → error de la app. 429 = tope diario de pedidos.
+const errorDeFuncionIA = (status?: number): ErrorEscritura =>
+  status === 403 ? 'sin_permiso' : status === 400 ? 'datos_invalidos' : status === 429 ? 'limite_ia' : 'servicio'
 export type ResultadoEscritura<T> = { ok: true; valor: T } | { ok: false; error: ErrorEscritura }
 
 interface ErrorBD {
@@ -373,9 +378,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     async generarTextosConIA(pedido: PedidoGeneracionIA): Promise<ResultadoEscritura<ResultadoGeneracionIA>> {
       if (!pedido.campos.length) return { ok: false, error: 'datos_invalidos' }
       const { data, error } = await cliente.functions.invoke('generar-documento', { body: { ...pedido } })
-      if (error) {
-        return { ok: false, error: error.status === 403 ? 'sin_permiso' : error.status === 400 ? 'datos_invalidos' : 'servicio' }
-      }
+      if (error) return { ok: false, error: errorDeFuncionIA(error.status) }
       const r = data as RespuestaGeneracionIA
       if (r.estado !== 'Completado') return { ok: true, valor: { estado: 'Error', error: r.error ?? 'La IA no pudo generar el borrador.' } }
       if (!r.textos || !Object.keys(r.textos).length) return { ok: true, valor: { estado: 'Error', error: 'La IA no devolvió texto.' } }
@@ -391,9 +394,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     async analizarConIA(pedido: PedidoAnalisisIA, solicitadoPorId: string, fecha: string): Promise<ResultadoEscritura<AnalisisIA>> {
       if (!pedido.criterioIds.length) return { ok: false, error: 'datos_invalidos' }
       const { data, error } = await cliente.functions.invoke('analizar-ia', { body: { ...pedido } })
-      if (error) {
-        return { ok: false, error: error.status === 403 ? 'sin_permiso' : error.status === 400 ? 'datos_invalidos' : 'servicio' }
-      }
+      if (error) return { ok: false, error: errorDeFuncionIA(error.status) }
       const r = data as RespuestaAnalisisIA
       return {
         ok: true,
@@ -914,5 +915,6 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   version_ya_enviada: 'Esa versión ya se envió a revisión. Crea una versión nueva para reenviar.',
   version_desactualizada: 'El documento cambió desde que lo abriste. Recarga la página para ver la versión actual.',
   tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
+  limite_ia: 'Se alcanzó el tope diario de pedidos a la IA. Inténtalo mañana o continúa sin IA.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',
 }
