@@ -106,6 +106,8 @@ Deno.serve(async (req) => {
       documento_id: pedido.documentoId,
       evidencia_id: pedido.evidenciaId,
       criterio_ids: pedido.criterioIds,
+      // AUD09-M4: el video tiene su propio tope diario en la BD (más bajo que el general).
+      modo: pedido.modo,
     })
     .select('id')
     .single()
