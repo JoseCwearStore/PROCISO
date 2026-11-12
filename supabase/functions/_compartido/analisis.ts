@@ -81,6 +81,95 @@ export function verificarTamanoArchivo(bytes: { length: number }, mime: string):
   }
 }
 
+// ─── Descarga acotada (AUD09-M3) ────────────────────────────────────────────
+// Con el bucket en 200 MB, `storage.download()` (que devuelve el archivo YA entero en memoria) dejaba medir el
+// tamaño recién después de cargarlo: un archivo de 200 MB agotaba los 256 MB de la función. Acá se decide ANTES
+// de leer el cuerpo (content-length) y, como esa cabecera puede faltar o mentir, también mientras se lee.
+
+export const MAX_IMAGEN_BYTES = 5 * 1024 * 1024
+
+// Mismo tope que verificarTamanoArchivo para audio/video, PDF y texto; la imagen tiene el de su extractor. Un tipo
+// que igual se va a rechazar ("no se pueden analizar archivos de tipo…") no justifica bajar más que un PDF.
+export function limiteDeBytes(mime: string): number {
+  const tipo = mime.split(';')[0].trim().toLowerCase()
+  if (tipo.startsWith('audio/') || tipo.startsWith('video/')) return MAX_MEDIA_BYTES
+  if (tipo.startsWith('text/')) return MAX_TEXTO_BYTES
+  if (tipo.startsWith('image/')) return MAX_IMAGEN_BYTES
+  return MAX_PDF_BYTES
+}
+
+function errorDeTamano(mime: string): ErrorIA {
+  const tipo = mime.split(';')[0].trim().toLowerCase()
+  const mb = limiteDeBytes(tipo) / 1024 / 1024
+  if (tipo.startsWith('audio/') || tipo.startsWith('video/')) return new ErrorIA(`El archivo de audio o video supera ${mb} MB; acórtalo o comprímelo antes de analizarlo.`)
+  if (tipo === 'application/pdf') return new ErrorIA(`El PDF supera ${mb} MB; divídelo o reduce su tamaño antes de analizarlo.`)
+  if (tipo.startsWith('text/')) return new ErrorIA(`El archivo de texto supera ${mb} MB; divídelo antes de analizarlo.`)
+  if (tipo.startsWith('image/')) return new ErrorIA(`La imagen supera ${mb} MB; reducila antes de analizarla.`)
+  return new ErrorIA(`El archivo supera ${mb} MB y este tipo no se puede analizar.`)
+}
+
+const TIMEOUT_DESCARGA_MS = 60_000
+
+export async function descargarAcotado(
+  url: string,
+  mimeDeclarado: string,
+  llamar: typeof fetch = fetch,
+  timeoutMs = TIMEOUT_DESCARGA_MS,
+): Promise<{ bytes: Uint8Array; mime: string }> {
+  let respuesta: Response
+  try {
+    respuesta = await llamar(url, { signal: AbortSignal.timeout(timeoutMs) })
+  } catch (e) {
+    const nombre = e instanceof Error ? e.name : ''
+    if (nombre === 'TimeoutError' || nombre === 'AbortError') throw new ErrorIA(`La descarga del archivo tardó demasiado (más de ${Math.round(timeoutMs / 1000)} s). Inténtalo de nuevo.`)
+    // El mensaje de un error de red trae la URL firmada (con su token): se loguea solo el tipo de error.
+    console.error('[IA] no se pudo descargar el archivo de Storage:', nombre || 'error')
+    throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
+  }
+  if (!respuesta.ok || !respuesta.body) {
+    await respuesta.body?.cancel()
+    throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
+  }
+
+  const mime = mimeDeclarado || respuesta.headers.get('content-type')?.split(';')[0].trim() || 'application/octet-stream'
+  const max = limiteDeBytes(mime)
+  const declarado = Number(respuesta.headers.get('content-length'))
+  if (respuesta.headers.has('content-length') && Number.isFinite(declarado) && declarado > max) {
+    await respuesta.body.cancel()
+    throw errorDeTamano(mime)
+  }
+
+  const lector = respuesta.body.getReader()
+  const trozos: Uint8Array[] = []
+  let total = 0
+  try {
+    for (;;) {
+      const { done, value } = await lector.read()
+      if (done) break
+      total += value.length
+      if (total > max) {
+        await lector.cancel()
+        throw errorDeTamano(mime)
+      }
+      trozos.push(value)
+    }
+  } catch (e) {
+    if (e instanceof ErrorIA) throw e
+    const nombre = e instanceof Error ? e.name : ''
+    if (nombre === 'TimeoutError' || nombre === 'AbortError') throw new ErrorIA(`La descarga del archivo tardó demasiado (más de ${Math.round(timeoutMs / 1000)} s). Inténtalo de nuevo.`)
+    console.error('[IA] se cortó la descarga del archivo de Storage:', nombre || 'error')
+    throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
+  }
+
+  const bytes = new Uint8Array(total)
+  let desde = 0
+  for (const t of trozos) {
+    bytes.set(t, desde)
+    desde += t.length
+  }
+  return { bytes, mime }
+}
+
 // ─── Tipos ──────────────────────────────────────────────────────────────────
 
 export interface CriterioIA {

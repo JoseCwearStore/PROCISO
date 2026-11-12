@@ -18,7 +18,7 @@
 //   CORS_ORIGEN=https://…            (en producción; sin él queda `*`)
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
-import { ErrorIA, verificarTamanoArchivo } from '../_compartido/analisis.ts'
+import { descargarAcotado, ErrorIA } from '../_compartido/analisis.ts'
 import { crearCors, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
 import { crearTranscriptorCompatibleOpenAI, esMediaTranscribible, validarPedidoTranscripcion } from '../_compartido/transcripcion.ts'
 
@@ -68,11 +68,13 @@ Deno.serve(async (req) => {
   const modelo = Deno.env.get('IA_STT_MODELO') ?? ''
   try {
     // 2. El archivo, con el token del usuario (el RLS de Storage decide).
-    const { data: archivo, error: errorArchivo } = await comoUsuario.storage.from('evidencias').download(evidencia.archivo_ruta)
-    if (errorArchivo || !archivo) throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
-    const mime = evidencia.archivo_mime || archivo.type || 'application/octet-stream'
+    // AUD09-M3: sin `download()` (carga el archivo entero antes de medirlo, y el bucket admite 200 MB): URL
+    // firmada con el token del usuario y lectura acotada (25 MB para audio y video).
+    const { data: firmada, error: errorFirma } = await comoUsuario.storage.from('evidencias').createSignedUrl(evidencia.archivo_ruta, 300)
+    if (errorFirma || !firmada) throw new ErrorIA('No se pudo acceder al archivo de la evidencia.')
+    if (evidencia.archivo_mime && !esMediaTranscribible(evidencia.archivo_mime)) throw new ErrorIA('El archivo de la evidencia no es de audio ni de video.')
+    const { bytes, mime } = await descargarAcotado(firmada.signedUrl, evidencia.archivo_mime ?? '')
     if (!esMediaTranscribible(mime)) throw new ErrorIA('El archivo de la evidencia no es de audio ni de video.')
-    verificarTamanoArchivo({ length: archivo.size }, mime)
 
     // 3. Transcribir.
     const transcriptor = crearTranscriptorCompatibleOpenAI({
@@ -80,7 +82,7 @@ Deno.serve(async (req) => {
       apiKey: Deno.env.get('IA_STT_API_KEY') ?? '',
       modelo,
     })
-    const texto = await transcriptor.transcribir(new Uint8Array(await archivo.arrayBuffer()), mime)
+    const texto = await transcriptor.transcribir(bytes, mime)
 
     // 4. Registrar (solo la clave secreta puede).
     const { error: errorRegistro } = await conClaveSecreta.rpc('registrar_transcripcion', {

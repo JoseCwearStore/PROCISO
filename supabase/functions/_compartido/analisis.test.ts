@@ -4,8 +4,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   armarMensajes,
   crearAnalizadorCompatibleOpenAI,
+  descargarAcotado,
   ErrorIA,
   interpretarRespuesta,
+  limiteDeBytes,
   limiteDeCaracteres,
   textoDeSecciones,
   validarPedidoAnalisis,
@@ -315,6 +317,115 @@ describe('verificarTamanoArchivo (AUD04-B5: se acota ANTES de parsear)', () => {
 
   it('el texto plano también tiene tope (no se decodifica un archivo enorme)', () => {
     expect(() => verificarTamanoArchivo(new Uint8Array(MAX_TEXTO_BYTES + 1), 'text/plain')).toThrow(/supera/i)
+  })
+})
+
+// AUD09-M3: con el bucket en 200 MB, el archivo no puede bajarse ENTERO para recién después medirlo.
+describe('limiteDeBytes (tope por tipo, antes de bajar el cuerpo)', () => {
+  it('fija el tope de cada familia de archivos', () => {
+    const MB = 1024 * 1024
+    expect(limiteDeBytes('audio/mp4')).toBe(25 * MB)
+    expect(limiteDeBytes('video/webm')).toBe(25 * MB)
+    expect(limiteDeBytes('application/pdf')).toBe(10 * MB)
+    expect(limiteDeBytes('text/plain')).toBe(1 * MB)
+    expect(limiteDeBytes('image/png')).toBe(5 * MB)
+    // Un tipo que igual se va a rechazar no justifica bajar decenas de MB.
+    expect(limiteDeBytes('application/vnd.ms-excel')).toBe(10 * MB)
+    expect(limiteDeBytes('application/pdf; charset=binary')).toBe(10 * MB)
+  })
+})
+
+describe('descargarAcotado (AUD09-M3)', () => {
+  const URL_FIRMADA = 'https://storage.test/object/sign/evidencias/x.pdf?token=SECRETO123'
+
+  // Un cuerpo que cuenta cuántos trozos de 1 KB se leyeron y si lo cancelaron.
+  function cuerpoDe(trozos: number, estado: { leidos: number; cancelado: boolean }) {
+    let i = 0
+    return new ReadableStream<Uint8Array>({
+      pull(c) {
+        if (i >= trozos) return c.close()
+        i++
+        estado.leidos++
+        c.enqueue(new Uint8Array(1024).fill(7))
+      },
+      cancel() {
+        estado.cancelado = true
+      },
+      // Sin lectura anticipada: así `leidos` cuenta solo lo que el código pidió de verdad.
+    }, { highWaterMark: 0 })
+  }
+  const respuesta = (cuerpo: ReadableStream<Uint8Array> | null, headers: Record<string, string> = {}, status = 200) =>
+    new Response(cuerpo, { status, headers })
+
+  it('devuelve los bytes y el tipo declarado cuando entra en el tope', async () => {
+    const estado = { leidos: 0, cancelado: false }
+    const llamar = (async () => respuesta(cuerpoDe(3, estado), { 'content-length': '3072' })) as typeof fetch
+    const r = await descargarAcotado(URL_FIRMADA, 'application/pdf', llamar)
+    expect(r.bytes.length).toBe(3072)
+    expect(r.mime).toBe('application/pdf')
+  })
+
+  it('sin tipo declarado usa el content-type de la respuesta (sin parámetros)', async () => {
+    const estado = { leidos: 0, cancelado: false }
+    const llamar = (async () => respuesta(cuerpoDe(1, estado), { 'content-type': 'text/plain; charset=utf-8' })) as typeof fetch
+    expect((await descargarAcotado(URL_FIRMADA, '', llamar)).mime).toBe('text/plain')
+  })
+
+  it('si content-length ya supera el tope, rechaza SIN leer el cuerpo y lo cancela', async () => {
+    const estado = { leidos: 0, cancelado: false }
+    const llamar = (async () => respuesta(cuerpoDe(5, estado), { 'content-length': String(MAX_PDF_BYTES + 1) })) as typeof fetch
+    await expect(descargarAcotado(URL_FIRMADA, 'application/pdf', llamar)).rejects.toThrow(ErrorIA)
+    await expect(descargarAcotado(URL_FIRMADA, 'application/pdf', llamar)).rejects.toThrow(/PDF.*supera/i)
+    expect(estado.leidos).toBe(0)
+    expect(estado.cancelado).toBe(true)
+  })
+
+  it('si no hay content-length (o miente), corta al pasarse del tope y deja de leer', async () => {
+    const estado = { leidos: 0, cancelado: false }
+    // 2 000 KB de cuerpo contra un tope de 1 MB (texto): debe cortar cerca de 1 024 KB.
+    const llamar = (async () => respuesta(cuerpoDe(2000, estado), { 'content-length': '10' })) as typeof fetch
+    await expect(descargarAcotado(URL_FIRMADA, 'text/plain', llamar)).rejects.toThrow(/texto.*supera/i)
+    expect(estado.cancelado).toBe(true)
+    expect(estado.leidos).toBeLessThan(1100)
+    expect(estado.leidos).toBeGreaterThan(1000)
+  })
+
+  it('exactamente en el tope pasa; un byte más no', async () => {
+    const exacto = new Uint8Array(MAX_TEXTO_BYTES)
+    const llamarExacto = (async () => respuesta(new Response(exacto).body)) as typeof fetch
+    expect((await descargarAcotado(URL_FIRMADA, 'text/plain', llamarExacto)).bytes.length).toBe(MAX_TEXTO_BYTES)
+    const demas = new Uint8Array(MAX_TEXTO_BYTES + 1)
+    const llamarDemas = (async () => respuesta(new Response(demas).body)) as typeof fetch
+    await expect(descargarAcotado(URL_FIRMADA, 'text/plain', llamarDemas)).rejects.toThrow(ErrorIA)
+  })
+
+  it('una respuesta que no es 2xx o sin cuerpo es un ErrorIA claro', async () => {
+    const estado = { leidos: 0, cancelado: false }
+    const e403 = (async () => respuesta(cuerpoDe(1, estado), {}, 403)) as typeof fetch
+    await expect(descargarAcotado(URL_FIRMADA, 'application/pdf', e403)).rejects.toThrow(/No se pudo descargar/)
+    const sinCuerpo = (async () => respuesta(null, {}, 200)) as typeof fetch
+    await expect(descargarAcotado(URL_FIRMADA, 'application/pdf', sinCuerpo)).rejects.toThrow(/No se pudo descargar/)
+  })
+
+  it('si la red falla, el error NO deja pasar la URL firmada (lleva token)', async () => {
+    const caida = (async () => { throw new TypeError(`error sending request for url (${URL_FIRMADA})`) }) as typeof fetch
+    const errores = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = await descargarAcotado(URL_FIRMADA, 'application/pdf', caida).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ErrorIA)
+    expect((error as Error).message).not.toMatch(/SECRETO123|storage\.test/)
+    // Ni siquiera al log del servidor: solo el nombre del error.
+    expect(errores).toHaveBeenCalled()
+    // (JSON.stringify de un Error da "{}": se pasa cada argumento por String para ver su mensaje.)
+    expect(errores.mock.calls.flat().map(String).join(' ')).not.toMatch(/SECRETO123/)
+    errores.mockRestore()
+  })
+
+  it('un timeout se traduce a un mensaje propio', async () => {
+    const colgado: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      })
+    await expect(descargarAcotado(URL_FIRMADA, 'application/pdf', colgado, 20)).rejects.toThrow(/tard/i)
   })
 })
 

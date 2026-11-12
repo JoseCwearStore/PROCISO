@@ -28,12 +28,12 @@ import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
 import {
   armarMensajes,
   crearAnalizadorCompatibleOpenAI,
+  descargarAcotado,
   ErrorIA,
   interpretarRespuesta,
   limiteDeCaracteres,
   sinSugerenciasEnNoEvaluables,
   validarPedidoAnalisis,
-  verificarTamanoArchivo,
   type AnalizadorIA,
   type CriterioIA,
   type FuenteIA,
@@ -204,12 +204,12 @@ Deno.serve(async (req) => {
         fuente = fuenteDeTranscripcion(transcripcion, ev.tipo === 'Video' || mimeDeclarado.startsWith('video/'))
       } else {
         if (!ev.archivo_ruta) throw new ErrorIA('La evidencia no tiene archivo adjunto.')
-        const { data: archivo, error: errorArchivo } = await comoUsuario.storage.from('evidencias').download(ev.archivo_ruta)
-        if (errorArchivo || !archivo) throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
-        const mime = mimeDeclarado || archivo.type || 'application/octet-stream'
-        // AUD04-B5: se acota el tamaño ANTES de cargarlo en memoria y parsearlo.
-        verificarTamanoArchivo({ length: archivo.size }, mime)
-        fuente = await extraerArchivo(new Uint8Array(await archivo.arrayBuffer()), mime, Deno.env.get('IA_VISION') === 'true')
+        // AUD04-B5 / AUD09-M3: el bucket admite 200 MB, así que NO se usa `download()` (carga el archivo entero y
+        // recién después se mide): URL firmada con el token del usuario y lectura acotada por tipo.
+        const { data: firmada, error: errorFirma } = await comoUsuario.storage.from('evidencias').createSignedUrl(ev.archivo_ruta, 300)
+        if (errorFirma || !firmada) throw new ErrorIA('No se pudo acceder al archivo de la evidencia.')
+        const { bytes, mime } = await descargarAcotado(firmada.signedUrl, mimeDeclarado)
+        fuente = await extraerArchivo(bytes, mime, Deno.env.get('IA_VISION') === 'true')
       }
     }
 

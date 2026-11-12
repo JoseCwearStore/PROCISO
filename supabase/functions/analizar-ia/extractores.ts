@@ -6,10 +6,8 @@
 // corregir), que arma index.ts con fuenteDeTranscripcion. Si un audio llegara hasta acá es un error.
 
 import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1'
-import { ErrorIA, textoDeSecciones, type FuenteIA } from '../_compartido/analisis.ts'
+import { ErrorIA, MAX_IMAGEN_BYTES, textoDeSecciones, type FuenteIA } from '../_compartido/analisis.ts'
 import { esMediaTranscribible } from '../_compartido/transcripcion.ts'
-
-const MAX_IMAGEN_BYTES = 5 * 1024 * 1024
 
 function aBase64(bytes: Uint8Array): string {
   let binario = ''
