@@ -6,9 +6,9 @@ create extension if not exists pgtap with schema extensions;
 
 select plan(5);
 
-insert into auth.users (id, email, aud, role) values
-  ('fbfbfbfb-0000-0000-0000-000000000001', 'temp1@cowin.test', 'authenticated', 'authenticated'),
-  ('fbfbfbfb-0000-0000-0000-000000000002', 'temp2@cowin.test', 'authenticated', 'authenticated');
+insert into auth.users (id, email, aud, role, encrypted_password) values
+  ('fbfbfbfb-0000-0000-0000-000000000001', 'temp1@cowin.test', 'authenticated', 'authenticated', '$2a$06$hashInicialUno'),
+  ('fbfbfbfb-0000-0000-0000-000000000002', 'temp2@cowin.test', 'authenticated', 'authenticated', '$2a$06$hashInicialDos');
 
 insert into public.consultorias (id, nombre) values ('f5f5f5f5-0000-0000-0000-000000000001', 'Consultoría Temp');
 
@@ -35,9 +35,15 @@ select throws_ok(
   'El usuario no puede editar password_temporal directamente'
 );
 
+-- Quien cambió su contraseña (el hash de auth.users ya es otro) puede desmarcar la
+-- bandera. Sin ese cambio la función se niega: eso se prueba en 032.
+reset role;
+update auth.users set encrypted_password = '$2a$10$hashNuevoUno' where id = 'fbfbfbfb-0000-0000-0000-000000000001';
+set local role authenticated;
+
 select lives_ok(
   $$ select public.marcar_contrasena_cambiada() $$,
-  'El usuario puede marcar su contraseña como cambiada'
+  'El usuario puede marcar su contraseña como cambiada una vez que la cambió'
 );
 reset role;
 
