@@ -14,7 +14,7 @@ import {
 } from "lucide-react"
 import { useApp } from "../context/AppContext"
 import { servicioEscritura } from "../lib/servicios"
-import { MENSAJES_ERROR_ESCRITURA } from "../lib/escrituras"
+import { mensajeDeError } from "../lib/escrituras"
 import { formatearFecha } from "../lib/datos"
 import { Button } from "../components/ui/Button"
 import { ConfirmDialog } from "../components/ui/ConfirmDialog"
@@ -341,7 +341,7 @@ export default function LevantamientoProcesos() {
     }
     const resultado = await servicioEscritura.guardarProceso(proceso)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], "error")
+      showToast(mensajeDeError(resultado), "error")
       return
     }
     dispatch({ type: "UPSERT_PROCESO", proceso })

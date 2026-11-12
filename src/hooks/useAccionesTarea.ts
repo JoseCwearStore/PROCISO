@@ -1,7 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { usuariosAsignables } from '../lib/asignables'
 import { formatearFecha } from '../lib/datos'
-import { MENSAJES_ERROR_ESCRITURA, type CambiosTarea, type NuevaTarea } from '../lib/escrituras'
+import { type CambiosTarea, type NuevaTarea, mensajeDeError, type FallaEscritura } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import { fechaISO, hoyLocal, transicionesPermitidas } from '../lib/tareas'
 import type { EstadoTarea, Rol, Tarea, Usuario } from '../types'
@@ -17,8 +17,8 @@ export function useAccionesTarea() {
   // Quién ve el proyecto lo decide el RLS: si un consultor lo ve, es del equipo.
   const esEquipo = EQUIPO.includes(state.currentRole)
 
-  const fallo = (error: keyof typeof MENSAJES_ERROR_ESCRITURA) => {
-    showToast(MENSAJES_ERROR_ESCRITURA[error], 'error')
+  const fallo = (falla: FallaEscritura) => {
+    showToast(mensajeDeError(falla), 'error')
     return null
   }
 
@@ -32,7 +32,7 @@ export function useAccionesTarea() {
 
     async crear(nueva: Omit<NuevaTarea, 'id'>): Promise<Tarea | null> {
       const resultado = await servicioEscritura.crearTarea(consultoriaId, { ...nueva, id: crypto.randomUUID() })
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       dispatch({ type: 'ADD_TAREA', tarea: resultado.valor })
       return resultado.valor
     },
@@ -40,7 +40,7 @@ export function useAccionesTarea() {
     async editar(tarea: Tarea, cambios: CambiosTarea): Promise<Tarea | null> {
       if (Object.keys(cambios).length === 0) return tarea
       const resultado = await servicioEscritura.editarTarea(tarea.id, cambios)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       // En pantalla, igual que lo guardó la BD: textos recortados y fecha dd/mm/aaaa.
       const updates: Partial<Tarea> = { ...cambios }
       if (cambios.titulo !== undefined) updates.titulo = cambios.titulo.trim()
@@ -52,7 +52,7 @@ export function useAccionesTarea() {
 
     async cambiarEstado(tarea: Tarea, estado: EstadoTarea, comentario?: string): Promise<Tarea | null> {
       const resultado = await servicioEscritura.cambiarEstadoTarea(tarea.id, estado, comentario)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
 
       // Lo mismo que hizo cambiar_estado_tarea en la BD: estado, historial y comentario.
       const fecha = formatearFecha(hoyLocal())
@@ -71,7 +71,7 @@ export function useAccionesTarea() {
 
     async comentar(tarea: Tarea, texto: string): Promise<Tarea | null> {
       const resultado = await servicioEscritura.comentarTarea(consultoriaId, tarea, texto)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       const comentarios = [...tarea.comentarios, resultado.valor]
       dispatch({ type: 'UPDATE_TAREA', id: tarea.id, updates: { comentarios } })
       return { ...tarea, comentarios }

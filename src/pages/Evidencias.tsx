@@ -17,7 +17,7 @@ import {
 } from "lucide-react"
 import { useApp } from "../context/AppContext"
 import { servicioArchivos, servicioEscritura } from "../lib/servicios"
-import { MENSAJES_ERROR_ESCRITURA } from "../lib/escrituras"
+import { mensajeDeError } from "../lib/escrituras"
 import { formatearFecha } from "../lib/datos"
 import { Button } from "../components/ui/Button"
 import { Modal } from "../components/ui/Modal"
@@ -184,7 +184,7 @@ export default function Evidencias() {
       archivo,
     )
     if (!resultado.ok) {
-      setErrorCarga(MENSAJES_ERROR_ESCRITURA[resultado.error])
+      setErrorCarga(mensajeDeError(resultado))
       setEstadoCarga("error")
       setProgreso(0)
       return
@@ -238,7 +238,7 @@ export default function Evidencias() {
     if (evidencia.estado === estadoNuevo) return
     const resultado = await servicioEscritura.revisarEvidencia(evidencia.id, estadoNuevo)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], "error")
+      showToast(mensajeDeError(resultado), "error")
       return
     }
     // La BD ya registró el cambio en el historial; acá se refleja sin recargar.

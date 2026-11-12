@@ -28,7 +28,7 @@ import { Tabs } from '../components/ui/Tabs'
 import type { Column } from '../components/ui/DataTable'
 import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId, Usuario } from '../types'
 import { servicioEscritura } from '../lib/servicios'
-import { MENSAJES_ERROR_ESCRITURA, type NuevoEntregable, type NuevoProyecto } from '../lib/escrituras'
+import { type NuevoEntregable, type NuevoProyecto, mensajeDeError } from '../lib/escrituras'
 import { useAccionesEntregable } from '../hooks/useAccionesEntregable'
 import { useAccionesGestion } from '../hooks/useAccionesGestion'
 import { EquipoProyecto } from '../components/EquipoProyecto'
@@ -587,7 +587,7 @@ export function Proyectos() {
   async function handleCreated(data: NuevoProyecto): Promise<boolean> {
     const resultado = await servicioEscritura.crearProyecto(state.currentUser?.consultoriaId ?? null, data)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return false
     }
     dispatch({ type: 'ADD_PROYECTO', proyecto: resultado.valor })
@@ -620,7 +620,7 @@ export function Proyectos() {
     setDragOver(null)
     const resultado = await servicioEscritura.cambiarEstadoProyecto(id, targetEstado)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return
     }
     dispatch({ type: 'UPDATE_PROYECTO', id, updates: { estado: targetEstado } })
@@ -1051,7 +1051,7 @@ export function ProyectoDetalle() {
     }
     const resultado = await servicioEscritura.cambiarEstadoProyecto(proyecto.id, nuevoEstado)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return
     }
     dispatch({ type: 'UPDATE_PROYECTO', id: proyecto.id, updates: { estado: nuevoEstado } })

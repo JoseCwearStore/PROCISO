@@ -76,7 +76,13 @@ export type ErrorEscritura =
 // Status HTTP de las Edge Functions de IA → error de la app. 429 = tope diario de pedidos.
 const errorDeFuncionIA = (status?: number): ErrorEscritura =>
   status === 403 ? 'sin_permiso' : status === 400 ? 'datos_invalidos' : status === 429 ? 'limite_ia' : 'servicio'
-export type ResultadoEscritura<T> = { ok: true; valor: T } | { ok: false; error: ErrorEscritura }
+// `detalle`: el texto que la propia BD escribió para el usuario cuando una regla de negocio rechazó la
+// operación (código 22023). Si está, la pantalla lo muestra en lugar del mensaje genérico (AUD06-B1).
+export interface FallaEscritura {
+  error: ErrorEscritura
+  detalle?: string
+}
+export type ResultadoEscritura<T> = { ok: true; valor: T } | ({ ok: false } & FallaEscritura)
 
 interface ErrorBD {
   code?: string
@@ -351,22 +357,38 @@ function traducirError(error: ErrorBD): ErrorEscritura {
   return error.code === '42501' || error.code === 'PGRST116' ? 'sin_permiso' : 'servicio'
 }
 
+// Las reglas de negocio de la BD (raise … errcode '22023') son frases pensadas para el usuario. Por
+// seguridad no se muestra nada que parezca texto interno de Postgres (tablas, columnas, restricciones).
+const TEXTO_TECNICO = /\b(relation|column|constraint|syntax|violates|schema|operator|uuid|null value|permission denied|input value)\b|"[a-z_]+"/i
+const MAX_DETALLE = 240
+
+function falla(error: ErrorBD): { ok: false } & FallaEscritura {
+  const codigo = traducirError(error)
+  const esReglaDeNegocio = codigo === 'datos_invalidos' && error.code === '22023'
+  if (esReglaDeNegocio && error.message.length <= MAX_DETALLE && !TEXTO_TECNICO.test(error.message)) {
+    return { ok: false, error: codigo, detalle: error.message }
+  }
+  return { ok: false, error: codigo }
+}
+
+export const mensajeDeError = (falla: FallaEscritura): string => falla.detalle ?? MENSAJES_ERROR_ESCRITURA[falla.error]
+
 const nulo = (texto: string) => (texto.trim() === '' ? null : texto.trim())
 
 export function crearServicioEscritura(cliente: ClienteEscritura) {
   async function insertar<T>(tabla: string, fila: Record<string, unknown>): Promise<ResultadoEscritura<T>> {
     const { data, error } = await cliente.from(tabla).insert(fila).select('*').single()
-    return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: data as T }
+    return error ? falla(error) : { ok: true, valor: data as T }
   }
 
   async function actualizar(tabla: string, id: string, cambios: Record<string, unknown>): Promise<ResultadoEscritura<void>> {
     const { error } = await cliente.from(tabla).update(cambios).eq('id', id).select('id').single()
-    return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    return error ? falla(error) : { ok: true, valor: undefined }
   }
 
   async function llamar(funcion: Parameters<ClienteEscritura['rpc']>[0], args: Record<string, unknown>): Promise<ResultadoEscritura<void>> {
     const { error } = await cliente.rpc(funcion, args)
-    return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+    return error ? falla(error) : { ok: true, valor: undefined }
   }
 
   return {
@@ -489,7 +511,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     async marcarNotificacionesLeidas(claves: string[]): Promise<ResultadoEscritura<void>> {
       if (claves.length === 0) return { ok: true, valor: undefined }
       const { error } = await cliente.rpc('marcar_notificaciones_leidas', { p_claves: claves })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     async crearEmpresa(consultoriaId: string | null, datos: NuevaEmpresa): Promise<ResultadoEscritura<Empresa>> {
@@ -539,7 +561,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_fecha_inicio: nulo(datos.fechaInicio),
         p_fecha_fin_estimada: nulo(datos.fechaFinEstimada),
       })
-      if (error) return { ok: false, error: traducirError(error) }
+      if (error) return falla(error)
       return { ok: true, valor: traducirProyecto(data as FilaProyecto, [], []) }
     },
 
@@ -595,7 +617,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
           orden: a.orden,
         })),
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     // Estado + historial en una transacción (la función de la BD lo garantiza).
@@ -605,7 +627,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_estado: estado,
         p_comentario: comentario?.trim() || null,
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     // Dos sistemas (Storage y la tabla), sin transacción común: si el registro
@@ -674,7 +696,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_version: opciones.version ?? null,
         p_evento: opciones.evento ?? null,
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     // Revisión: el servidor decide quién puede qué (el cliente aprueba, el equipo
@@ -695,7 +717,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_comentario: comentario?.trim() || null,
         p_version: version,
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     // La salida explícita de la revisión (solo el equipo): el contenido en revisión está congelado.
@@ -764,7 +786,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_estado: estado,
         p_comentario: comentario?.trim() || null,
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     async comentarTarea(
@@ -812,7 +834,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_causa: tratamiento.causa.trim(),
         p_accion: tratamiento.accion.trim(),
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     // ─── Indicadores ────────────────────────────────────────────────────────
@@ -875,7 +897,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_estado: estado,
         p_comentario: comentario?.trim() || null,
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
 
     // ─── Listas de verificación ─────────────────────────────────────────────
@@ -904,7 +926,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
           justificacion_no_aplica: (p.justificacionNoAplica ?? '').trim(),
         })),
       })
-      if (error) return { ok: false, error: traducirError(error) }
+      if (error) return falla(error)
       const creadas = (Array.isArray(data) ? data : []) as FilaTarea[]
       return { ok: true, valor: creadas.map((fila) => traducirTarea(fila, [], [])) }
     },
@@ -915,7 +937,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_estado: estado,
         p_verificacion: verificacion?.trim() || null,
       })
-      return error ? { ok: false, error: traducirError(error) } : { ok: true, valor: undefined }
+      return error ? falla(error) : { ok: true, valor: undefined }
     },
   }
 }

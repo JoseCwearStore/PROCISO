@@ -7,7 +7,7 @@ import {
 import { useApp } from '../context/AppContext'
 import { useAccionesGestion } from '../hooks/useAccionesGestion'
 import { servicioEscritura } from '../lib/servicios'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -275,7 +275,7 @@ export function EmpresaDetalle() {
   async function handleArchive() {
     const resultado = await servicioEscritura.archivarEmpresa(empresa!.id)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return
     }
     dispatch({ type: 'UPDATE_EMPRESA', id: empresa!.id, updates: { activa: false } })
@@ -550,7 +550,7 @@ export function Empresas() {
   async function handleCreate(form: FormData) {
     const resultado = await servicioEscritura.crearEmpresa(state.currentUser?.consultoriaId ?? null, form)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return
     }
     const nueva = resultado.valor

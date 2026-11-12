@@ -1,6 +1,7 @@
-import React, { createContext, useContext, useReducer, useCallback, useEffect } from 'react'
+import React, { createContext, useContext, useReducer, useCallback, useEffect, useRef } from 'react'
 import { cargarFilasDeSesion, llegoDesdeEnlaceDeRecuperacion, servicioArchivos, servicioAuth } from '../lib/servicios'
 import { combinarDatosSesion, type DatosSesion } from '../lib/datos'
+import { debeRefrescar } from '../lib/refresco'
 import type {
   Rol,
   PageId,
@@ -347,6 +348,9 @@ interface AppContextType {
   calcularAvance: (proyectoId: string) => number
   unreadCount: number
   tareasVencidas: number
+  // Vuelve a leer de la BD lo que el usuario puede ver, sin pantalla de "Cargando…" (AUD06-M1). Devuelve los
+  // datos frescos para que quien decide compare; null si no se pudo leer (se conserva lo que había).
+  refrescarDatos: () => Promise<DatosSesion | null>
 }
 
 const AppContext = createContext<AppContextType | null>(null)
@@ -373,6 +377,14 @@ export function estadoInicial(): AppState {
     toasts: [],
     modal: null,
   }
+}
+
+// Lo que el RLS le deja ver a este rol, con las URLs firmadas de las evidencias (los archivos son privados).
+async function cargarDatosDeSesion(rol: Rol): Promise<DatosSesion | null> {
+  const resultado = await cargarFilasDeSesion(rol)
+  if (!resultado.ok) return null
+  const datos = combinarDatosSesion(resultado.filas)
+  return { ...datos, evidencias: await servicioArchivos.firmarEvidencias(datos.evidencias) }
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -410,28 +422,69 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // las vistas del cliente. Cambia solo con el usuario, así que no necesita entrar a las dependencias.
   const rolUsuario = state.currentUser?.rol
   const intentoCarga = state.intentoCarga
+  // Cuándo se leyó por última vez (null = todavía no hubo una carga) y la sesión a la que corresponde,
+  // para no refrescar de más ni pisar los datos de otro usuario si la sesión cambia a mitad de camino.
+  const ultimaLectura = useRef<number | null>(null)
+  const usuarioActual = useRef(usuarioId)
+  usuarioActual.current = usuarioId
+  const refrescoEnCurso = useRef<Promise<DatosSesion | null> | null>(null)
+
   useEffect(() => {
     if (!usuarioId || !rolUsuario) return
     let cancelado = false
+    ultimaLectura.current = null
     dispatch({ type: 'DATOS_CARGANDO' })
-    async function cargar() {
-      const resultado = await cargarFilasDeSesion(rolUsuario as Rol)
-      if (!resultado.ok) return null
-      const datos = combinarDatosSesion(resultado.filas)
-      // Los archivos son privados: cada evidencia recibe una URL firmada que vence.
-      return { ...datos, evidencias: await servicioArchivos.firmarEvidencias(datos.evidencias) }
-    }
-    cargar()
+    cargarDatosDeSesion(rolUsuario as Rol)
       .catch(() => null)
       .then((datos) => {
         if (cancelado) return
-        if (datos) dispatch({ type: 'DATOS_CARGADOS', datos })
-        else dispatch({ type: 'DATOS_ERROR' })
+        if (datos) {
+          ultimaLectura.current = Date.now()
+          dispatch({ type: 'DATOS_CARGADOS', datos })
+        } else dispatch({ type: 'DATOS_ERROR' })
       })
     return () => {
       cancelado = true
     }
   }, [usuarioId, intentoCarga])
+
+  // Relectura silenciosa (AUD06-M1). Una sola a la vez; si falla se conserva lo que había; y no se aplica si
+  // mientras tanto cambió la sesión.
+  const refrescarDatos = useCallback((): Promise<DatosSesion | null> => {
+    if (!usuarioId || !rolUsuario) return Promise.resolve(null)
+    if (refrescoEnCurso.current) return refrescoEnCurso.current
+    const quien = usuarioId
+    const lectura = cargarDatosDeSesion(rolUsuario as Rol)
+      .catch(() => null)
+      .then((datos) => {
+        if (datos && usuarioActual.current === quien) {
+          ultimaLectura.current = Date.now()
+          dispatch({ type: 'DATOS_CARGADOS', datos })
+          return datos
+        }
+        return null
+      })
+      .finally(() => {
+        refrescoEnCurso.current = null
+      })
+    refrescoEnCurso.current = lectura
+    return lectura
+  }, [usuarioId, rolUsuario])
+
+  // Al volver a la pestaña (o a la ventana) se relee, pero no más de una vez por minuto.
+  const datosListos = state.datosSesion === 'listo'
+  useEffect(() => {
+    if (!datosListos) return
+    const alVolver = () => {
+      if (document.visibilityState === 'visible' && debeRefrescar(ultimaLectura.current, Date.now())) void refrescarDatos()
+    }
+    window.addEventListener('focus', alVolver)
+    document.addEventListener('visibilitychange', alVolver)
+    return () => {
+      window.removeEventListener('focus', alVolver)
+      document.removeEventListener('visibilitychange', alVolver)
+    }
+  }, [datosListos, refrescarDatos])
 
   const navigate = useCallback((page: PageId, params?: NavParams) => {
     dispatch({ type: 'NAVIGATE', page, params })
@@ -511,6 +564,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         calcularAvance,
         unreadCount,
         tareasVencidas,
+        refrescarDatos,
       }}
     >
       {children}

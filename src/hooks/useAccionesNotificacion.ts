@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 
 // Única puerta de escritura de notificaciones: lo único que se guarda es "leída".
@@ -13,7 +13,7 @@ export function useAccionesNotificacion() {
       if (ids.length === 0) return true
       const resultado = await servicioEscritura.marcarNotificacionesLeidas(ids)
       if (!resultado.ok) {
-        showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+        showToast(mensajeDeError(resultado), 'error')
         return false
       }
       dispatch({ type: 'MARCAR_LEIDAS', ids })

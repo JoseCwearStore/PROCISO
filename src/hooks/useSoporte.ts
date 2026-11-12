@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { servicioSoporte } from '../lib/servicios'
 import type { ReporteSoporte, TipoReporte } from '../lib/soporte'
 
@@ -30,7 +30,7 @@ export function useSoporte() {
       const resultado = await servicioSoporte.enviar(pedido)
       setEnviando(false)
       if (!resultado.ok) {
-        showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+        showToast(mensajeDeError(resultado), 'error')
         return false
       }
       showToast('Reporte enviado. Un administrador lo revisará.', 'success')
@@ -40,7 +40,7 @@ export function useSoporte() {
 
     async atender(id: string): Promise<void> {
       const resultado = await servicioSoporte.atender(id)
-      if (!resultado.ok) showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      if (!resultado.ok) showToast(mensajeDeError(resultado), 'error')
       else showToast('Reporte marcado como atendido.', 'success')
       await cargar()
     },

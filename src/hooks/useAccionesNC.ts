@@ -1,7 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { usuariosAsignables } from '../lib/asignables'
 import { formatearFecha } from '../lib/datos'
-import { MENSAJES_ERROR_ESCRITURA, type DatosNC, type TratamientoNC } from '../lib/escrituras'
+import { type DatosNC, type TratamientoNC, mensajeDeError, type FallaEscritura } from '../lib/escrituras'
 import { accionesNC, lineasDeAccion, tratamientoEditable } from '../lib/noConformidades'
 import { servicioEscritura } from '../lib/servicios'
 import { fechaISO, hoyLocal } from '../lib/tareas'
@@ -17,8 +17,8 @@ export function useAccionesNC() {
   const consultoriaId = state.currentUser?.consultoriaId ?? null
   const esEquipo = EQUIPO.includes(state.currentRole)
 
-  const fallo = (error: keyof typeof MENSAJES_ERROR_ESCRITURA) => {
-    showToast(MENSAJES_ERROR_ESCRITURA[error], 'error')
+  const fallo = (falla: FallaEscritura) => {
+    showToast(mensajeDeError(falla), 'error')
     return null
   }
   const evento = (accion: string, detalle: string) => ({
@@ -39,7 +39,7 @@ export function useAccionesNC() {
 
   async function guardarTratamiento(nc: NoConformidad, t: TratamientoNC): Promise<NoConformidad | null> {
     const resultado = await servicioEscritura.guardarTratamientoNC(nc.id, t)
-    return resultado.ok ? conTratamiento(nc, t) : fallo(resultado.error)
+    return resultado.ok ? conTratamiento(nc, t) : fallo(resultado)
   }
 
   const mismoTratamiento = (nc: NoConformidad, t: TratamientoNC) =>
@@ -56,7 +56,7 @@ export function useAccionesNC() {
     // Solo el equipo registra. Si además trae tratamiento, se guarda a continuación.
     async registrar(datos: DatosNC, t: TratamientoNC): Promise<NoConformidad | null> {
       const resultado = await servicioEscritura.registrarNoConformidad(consultoriaId, crypto.randomUUID(), datos)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       let nc: NoConformidad = {
         ...resultado.valor,
         empresaId: state.proyectos.find((p) => p.id === datos.proyectoId)?.empresaId,
@@ -76,7 +76,7 @@ export function useAccionesNC() {
       let actual = nc
       if (datos && esEquipo) {
         const resultado = await servicioEscritura.editarNoConformidad(nc.id, datos)
-        if (!resultado.ok) return fallo(resultado.error)
+        if (!resultado.ok) return fallo(resultado)
         actual = {
           ...actual,
           titulo: datos.titulo.trim(),
@@ -104,7 +104,7 @@ export function useAccionesNC() {
     // Lo mismo que hace cambiar_estado_nc: estado, eficacia, verificación y cierre.
     async cambiarEstado(nc: NoConformidad, estado: EstadoNC, verificacion?: string): Promise<NoConformidad | null> {
       const resultado = await servicioEscritura.cambiarEstadoNC(nc.id, estado, verificacion)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
 
       const verificando = nc.estado === 'En corrección'
       const eficacia = verificando ? (estado === 'Verificada' ? 'Eficaz' : 'No eficaz') : nc.eficacia

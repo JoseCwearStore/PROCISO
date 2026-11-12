@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { crearServicioEscritura, MENSAJES_ERROR_ESCRITURA, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
+import { crearServicioEscritura, mensajeDeError, MENSAJES_ERROR_ESCRITURA, type ClienteEscritura, type NuevaEmpresa, type DatosNC, type NuevaTarea, type NuevoProyecto } from './escrituras'
 import type { FilaEmpresa, FilaEntregable, FilaIndicador, FilaNoConformidad, FilaProyecto, FilaTarea } from './datos'
 import type { Documento, IndicadorGestion, ListaVerificacion, Proceso } from '../types'
 
@@ -212,7 +212,48 @@ describe('crearProyecto', () => {
     ['XX000', 'Failed to fetch', 'servicio'],
   ])('traduce el error %s "%s" a "%s"', async (code, message, esperado) => {
     const { cliente } = crearClienteDoble({ 'crear_proyecto.rpc': { data: null, error: { code, message } } })
-    expect(await crearServicioEscritura(cliente).crearProyecto(C1, NUEVO_PROYECTO)).toEqual({ ok: false, error: esperado })
+    expect(await crearServicioEscritura(cliente).crearProyecto(C1, NUEVO_PROYECTO)).toMatchObject({ ok: false, error: esperado })
+  })
+})
+
+// L5e (AUD06-B1): la BD escribe a propósito ~55 mensajes de regla de negocio (código 22023) pensados para
+// el usuario ("Para pasar a corrección hace falta el análisis de causa y la acción correctiva"). Antes se
+// colapsaban todos en un texto genérico; ahora la falla lleva ese texto en `detalle` y la pantalla lo muestra.
+describe('mensajes de la BD (AUD06-B1)', () => {
+  const llamar = (error: { code?: string; message: string }) => {
+    const { cliente } = crearClienteDoble({ 'cambiar_estado_nc.rpc': { data: null, error } })
+    return crearServicioEscritura(cliente).cambiarEstadoNC('nc-1', 'En corrección')
+  }
+
+  it('una regla de negocio de la BD (22023) llega al usuario con su texto', async () => {
+    const mensaje = 'Para pasar a corrección hace falta el análisis de causa y la acción correctiva'
+    expect(await llamar({ code: '22023', message: mensaje })).toEqual({ ok: false, error: 'datos_invalidos', detalle: mensaje })
+  })
+
+  it('los errores que ya tienen su propio mensaje no llevan detalle (no se duplica)', async () => {
+    expect(await llamar({ code: '22023', message: 'Ya es parte del equipo del proyecto.' })).toEqual({ ok: false, error: 'ya_es_miembro' })
+    expect(await llamar({ code: '42501', message: 'Solo el administrador de la consultoría arma el equipo del proyecto.' })).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+
+  it.each([
+    ['un CHECK de Postgres (23514)', { code: '23514', message: 'new row for relation "tareas" violates check constraint "tareas_estado_check"' }],
+    ['una FK de Postgres (23503)', { code: '23503', message: 'insert or update on table "x" violates foreign key constraint' }],
+    ['un 22023 con texto técnico de Postgres', { code: '22023', message: 'invalid input syntax for type uuid: "xyz"' }],
+    ['un 22023 que menciona una columna', { code: '22023', message: 'null value in column "criterio_ids" of relation "analisis_ia"' }],
+    ['un 22023 larguísimo', { code: '22023', message: 'a'.repeat(241) }],
+    // Solo el código 22023 es "nuestro": una CHECK o FK nunca muestra su texto, aunque parezca inofensivo.
+    ['un 23514 con un texto que no parece técnico', { code: '23514', message: 'Algo salió mal con este dato' }],
+    ['un 23503 con un texto que no parece técnico', { code: '23503', message: 'Referencia inválida' }],
+  ])('no muestra el texto interno de %s', async (_caso, error) => {
+    const r = await llamar(error)
+    expect(r).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect('detalle' in r).toBe(false)
+  })
+
+  it('mensajeDeError usa el detalle si hay y, si no, el mensaje fijo del tipo de error', () => {
+    expect(mensajeDeError({ error: 'datos_invalidos', detalle: 'Falta algo concreto.' })).toBe('Falta algo concreto.')
+    expect(mensajeDeError({ error: 'datos_invalidos' })).toBe(MENSAJES_ERROR_ESCRITURA.datos_invalidos)
+    expect(mensajeDeError({ error: 'sin_permiso' })).toBe(MENSAJES_ERROR_ESCRITURA.sin_permiso)
   })
 })
 
@@ -240,7 +281,7 @@ describe('equipo del proyecto (L5d, D8)', () => {
     ['XX000', 'Failed to fetch', 'servicio'],
   ])('traduce el error %s "%s" a "%s"', async (code, message, esperado) => {
     const { cliente } = crearClienteDoble({ 'agregar_miembro_proyecto.rpc': { data: null, error: { code, message } } })
-    expect(await crearServicioEscritura(cliente).agregarMiembroProyecto(P_NUEVO, ROBERTO)).toEqual({ ok: false, error: esperado })
+    expect(await crearServicioEscritura(cliente).agregarMiembroProyecto(P_NUEVO, ROBERTO)).toMatchObject({ ok: false, error: esperado })
   })
 
   it('cada error específico tiene un mensaje que le dice al usuario qué hacer', () => {
@@ -525,7 +566,7 @@ describe('decidirDocumento', () => {
     const { cliente } = crearClienteDoble({ 'decidir_documento.rpc': { data: null, error } })
     const escrituras = crearServicioEscritura(cliente)
 
-    expect(await escrituras.decidirDocumento(DOC, 'Aprobado', '1.1')).toEqual({ ok: false, error: esperado })
+    expect(await escrituras.decidirDocumento(DOC, 'Aprobado', '1.1')).toMatchObject({ ok: false, error: esperado })
   })
 })
 
@@ -677,7 +718,7 @@ describe('crearTarea', () => {
     const { cliente } = crearClienteDoble({ 'tareas.insert': { data: null, error: { code: '22023', message: 'El asignado no es…' } } })
     const escrituras = crearServicioEscritura(cliente)
 
-    expect(await escrituras.crearTarea(C1, NUEVA_TAREA)).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(await escrituras.crearTarea(C1, NUEVA_TAREA)).toMatchObject({ ok: false, error: 'datos_invalidos' })
   })
 })
 
@@ -848,7 +889,7 @@ describe('guardarTratamientoNC', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.guardarTratamientoNC(NC_NUEVA, { correccion: '', causa: '', accion: '' }))
-      .toEqual({ ok: false, error: 'datos_invalidos' })
+      .toMatchObject({ ok: false, error: 'datos_invalidos' })
   })
 })
 
@@ -995,7 +1036,7 @@ describe('decidirEntregable', () => {
     const { cliente } = crearClienteDoble({ 'decidir_entregable.rpc': { data: null, error: { code: '22023', message: 'documento' } } })
     const escrituras = crearServicioEscritura(cliente)
 
-    expect(await escrituras.decidirEntregable(EN_NUEVO, 'Aprobado')).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(await escrituras.decidirEntregable(EN_NUEVO, 'Aprobado')).toMatchObject({ ok: false, error: 'datos_invalidos' })
   })
 
   it('si el equipo intenta aprobar, el servidor lo rechaza y llega como "sin permiso"', async () => {
@@ -1122,7 +1163,7 @@ describe('comentar', () => {
     const { cliente, llamadas } = crearClienteDoble()
 
     expect(await crearServicioEscritura(cliente).comentar(C1, { entidadTipo: 'tarea', entidadId: 't', proyectoId: P_NUEVO }, '   '))
-      .toEqual({ ok: false, error: 'datos_invalidos' })
+      .toMatchObject({ ok: false, error: 'datos_invalidos' })
     expect(llamadas).toEqual([])
   })
 
@@ -1130,7 +1171,7 @@ describe('comentar', () => {
     const { cliente } = crearClienteDoble({ 'comentarios.insert': { data: null, error: { code: '22023', message: 'no existe' } } })
 
     expect(await crearServicioEscritura(cliente).comentar(C1, { entidadTipo: 'proceso', entidadId: 'x', proyectoId: P_NUEVO }, 'Hola'))
-      .toEqual({ ok: false, error: 'datos_invalidos' })
+      .toMatchObject({ ok: false, error: 'datos_invalidos' })
   })
 })
 

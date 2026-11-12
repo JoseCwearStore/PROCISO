@@ -1,6 +1,6 @@
 import { useApp } from '../context/AppContext'
 import { formatearFecha } from '../lib/datos'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { AnalisisIA } from '../types'
 import { refrescarUsoIA, useUsoIA } from './useUsoIA'
@@ -44,7 +44,7 @@ export function useAccionesIA() {
       // Pida lo que pida (también si lo rechazó el tope), el contador se vuelve a leer de la BD.
       void refrescarUsoIA(state.currentUser.id)
       if (!resultado.ok) {
-        showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+        showToast(mensajeDeError(resultado), 'error')
         return null
       }
       dispatch({ type: 'ADD_ANALISIS_IA', analisis: resultado.valor })

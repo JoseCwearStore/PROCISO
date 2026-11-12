@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { ComentarioGlobal } from '../types'
 
@@ -13,7 +13,7 @@ export function useAccionesComentario() {
     async comentar(ref: Pick<ComentarioGlobal, 'entidadTipo' | 'entidadId' | 'proyectoId'>, texto: string): Promise<boolean> {
       const resultado = await servicioEscritura.comentar(state.currentUser?.consultoriaId ?? null, ref, texto)
       if (!resultado.ok) {
-        showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+        showToast(mensajeDeError(resultado), 'error')
         return false
       }
       const comentario = resultado.valor

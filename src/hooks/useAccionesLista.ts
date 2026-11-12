@@ -1,7 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { usuariosAsignables } from '../lib/asignables'
 import { formatearFecha } from '../lib/datos'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import { fechaISO } from '../lib/tareas'
 import type { ListaVerificacion, Rol, Tarea, Usuario } from '../types'
@@ -24,7 +24,7 @@ export function useAccionesLista() {
     async guardar(lista: ListaVerificacion): Promise<Tarea[] | null> {
       const resultado = await servicioEscritura.guardarLista(lista)
       if (!resultado.ok) {
-        showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+        showToast(mensajeDeError(resultado), 'error')
         return null
       }
       // En pantalla, igual que lo guardó la BD: textos recortados y fecha dd/mm/aaaa.

@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA, type ResultadoGeneracionIA } from '../lib/escrituras'
+import { type ResultadoGeneracionIA, mensajeDeError } from '../lib/escrituras'
 import type { PedidoGeneracionIA } from '../lib/generacion'
 import { servicioEscritura } from '../lib/servicios'
 import { refrescarUsoIA, useUsoIA } from './useUsoIA'
@@ -20,7 +20,7 @@ export function useAccionesGeneracion() {
       const resultado = await servicioEscritura.generarTextosConIA(pedido)
       // Pida lo que pida (también si lo rechazó el tope), el contador se vuelve a leer de la BD.
       if (state.currentUser) void refrescarUsoIA(state.currentUser.id)
-      if (!resultado.ok) return { estado: 'Error', error: MENSAJES_ERROR_ESCRITURA[resultado.error] }
+      if (!resultado.ok) return { estado: 'Error', error: mensajeDeError(resultado) }
       return resultado.valor
     },
   }

@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError, type ResultadoEscritura } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { Proyecto } from '../types'
 
@@ -14,14 +14,14 @@ export function useAccionesEquipo() {
   const consultoriaId = state.currentUser?.consultoriaId
 
   async function aplicar(
-    operacion: Promise<{ ok: true } | { ok: false; error: keyof typeof MENSAJES_ERROR_ESCRITURA }>,
+    operacion: Promise<ResultadoEscritura<void>>,
     proyectoId: string,
     cambios: Partial<Proyecto>,
     exito: string,
   ): Promise<boolean> {
     const resultado = await operacion
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return false
     }
     dispatch({ type: 'UPDATE_PROYECTO', id: proyectoId, updates: cambios })

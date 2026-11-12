@@ -17,7 +17,7 @@ import {
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
 import {
   contenidoEditable,
@@ -244,7 +244,7 @@ export default function Documentacion() {
   ): Promise<boolean> {
     const resultado = await servicioEscritura.guardarDocumento(doc, opciones)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return false
     }
     const evento = {
@@ -262,7 +262,7 @@ export default function Documentacion() {
     if (!documento) return false
     const resultado = await servicioEscritura.comentarDocumento(state.currentUser?.consultoriaId ?? null, documento, seccionId, texto)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return false
     }
     dispatch({ type: 'UPSERT_DOCUMENTO', documento: { ...documento, comentarios: [...(documento.comentarios || []), resultado.valor] } })
@@ -331,7 +331,7 @@ export default function Documentacion() {
     if (!documento) return
     const resultado = await servicioEscritura.retirarDocumento(documento.id)
     if (!resultado.ok) {
-      showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+      showToast(mensajeDeError(resultado), 'error')
       return
     }
     const evento = {

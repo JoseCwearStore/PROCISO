@@ -10,7 +10,8 @@ import {
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
+import { documentoCambio } from '../lib/refresco'
 import { formatearFecha } from '../lib/datos'
 import { Button } from '../components/ui/Button'
 import { StatusBadge } from '../components/ui/StatusBadge'
@@ -19,7 +20,7 @@ import type { Documento } from '../types'
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100'
 
 export default function Revisiones() {
-  const { state, dispatch, getProyecto, getEmpresa, getUsuario, showToast } = useApp()
+  const { state, dispatch, getProyecto, getEmpresa, getUsuario, showToast, refrescarDatos } = useApp()
   const [seleccionadoId, setSeleccionadoId] = useState<string | null>(null)
   const [seccionId, setSeccionId] = useState('')
   const [comentario, setComentario] = useState('')
@@ -38,10 +39,19 @@ export default function Revisiones() {
       return
     }
     setDecidiendo(true)
+    // AUD06-M1: antes de decidir se relee la BD. Si el documento cambió mientras estaba abierto no se decide: la
+    // pantalla ya muestra la versión actual para que se revise de nuevo (además, decidir_documento rechaza si la
+    // versión que se vio ya no es la vigente). Si la relectura falla, se intenta igual.
+    const fresco = await refrescarDatos()
+    if (fresco && documentoCambio(documento, fresco.documentos.find((d) => d.id === documento.id))) {
+      setDecidiendo(false)
+      setError('Este documento cambió desde que lo abriste. Revisa la versión actual antes de decidir.')
+      return
+    }
     const resultado = await servicioEscritura.decidirDocumento(documento.id, estado, documento.version, seccionId, comentario)
     setDecidiendo(false)
     if (!resultado.ok) {
-      setError(MENSAJES_ERROR_ESCRITURA[resultado.error])
+      setError(mensajeDeError(resultado))
       return
     }
 

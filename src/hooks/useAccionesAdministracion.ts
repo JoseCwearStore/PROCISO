@@ -1,11 +1,5 @@
 import { useApp } from '../context/AppContext'
-import {
-  MENSAJES_ERROR_ESCRITURA,
-  ROLES_DEL_EQUIPO,
-  ROLES_INVITABLES,
-  type NuevaConsultoria,
-  type NuevaInvitacion,
-} from '../lib/escrituras'
+import { ROLES_DEL_EQUIPO, ROLES_INVITABLES, type NuevaConsultoria, type NuevaInvitacion, mensajeDeError, type FallaEscritura } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { Consultoria, Rol, Usuario } from '../types'
 
@@ -25,8 +19,8 @@ export function useAccionesAdministracion() {
     usuario.rol !== 'Admin PROCISO' &&
     (esAdminProciso || (esAdminConsultoria && !!yo?.consultoriaId && usuario.consultoriaId === yo.consultoriaId))
 
-  const fallo = (error: keyof typeof MENSAJES_ERROR_ESCRITURA) => {
-    showToast(MENSAJES_ERROR_ESCRITURA[error], 'error')
+  const fallo = (falla: FallaEscritura) => {
+    showToast(mensajeDeError(falla), 'error')
     return false
   }
 
@@ -41,7 +35,7 @@ export function useAccionesAdministracion() {
     async invitarUsuario(datos: NuevaInvitacion): Promise<boolean> {
       // El enlace del correo vuelve a esta misma app (tiene que estar en additional_redirect_urls).
       const resultado = await servicioEscritura.invitarUsuario(datos, window.location.origin)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       dispatch({
         type: 'UPSERT_USUARIO',
         usuario: {
@@ -66,14 +60,14 @@ export function useAccionesAdministracion() {
 
     async cambiarRol(usuario: Usuario, rol: Rol): Promise<boolean> {
       const resultado = await servicioEscritura.administrarUsuario(usuario.id, { rol })
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       dispatch({ type: 'UPSERT_USUARIO', usuario: { ...usuario, rol } })
       return true
     },
 
     async cambiarAcceso(usuario: Usuario, activo: boolean): Promise<boolean> {
       const resultado = await servicioEscritura.administrarUsuario(usuario.id, { activo })
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       dispatch({ type: 'UPSERT_USUARIO', usuario: { ...usuario, activo } })
       return true
     },
@@ -81,7 +75,7 @@ export function useAccionesAdministracion() {
     async crearConsultoria(datos: NuevaConsultoria): Promise<Consultoria | null> {
       const resultado = await servicioEscritura.crearConsultoria(datos)
       if (!resultado.ok) {
-        fallo(resultado.error)
+        fallo(resultado)
         return null
       }
       dispatch({ type: 'UPSERT_CONSULTORIA', consultoria: resultado.valor })
@@ -90,7 +84,7 @@ export function useAccionesAdministracion() {
 
     async cambiarEstadoConsultoria(consultoria: Consultoria, activa: boolean): Promise<boolean> {
       const resultado = await servicioEscritura.cambiarEstadoConsultoria(consultoria.id, activa)
-      if (!resultado.ok) return fallo(resultado.error)
+      if (!resultado.ok) return fallo(resultado)
       dispatch({ type: 'UPSERT_CONSULTORIA', consultoria: { ...consultoria, activa } })
       return true
     },

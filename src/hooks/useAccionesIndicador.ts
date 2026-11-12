@@ -1,5 +1,5 @@
 import { useApp } from '../context/AppContext'
-import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
+import { mensajeDeError } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import type { IndicadorGestion, Rol, Usuario } from '../types'
 
@@ -38,7 +38,7 @@ export function useAccionesIndicador() {
       const nuevo = !state.indicadores.some((i) => i.id === indicador.id)
       const resultado = await servicioEscritura.guardarIndicador(state.currentUser?.consultoriaId ?? null, indicador, nuevo)
       if (!resultado.ok) {
-        showToast(MENSAJES_ERROR_ESCRITURA[resultado.error], 'error')
+        showToast(mensajeDeError(resultado), 'error')
         return null
       }
       dispatch({ type: 'UPSERT_INDICADOR', indicador: resultado.valor })
