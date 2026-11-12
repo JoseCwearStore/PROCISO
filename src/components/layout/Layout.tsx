@@ -1,6 +1,5 @@
 import { Sidebar } from './Sidebar'
 import { TopBar } from './TopBar'
-import { DemoBanner } from '../DemoBanner'
 import { ToastContainer } from '../ui/Toast'
 import { useApp } from '../../context/AppContext'
 import { Dashboard } from '../../pages/Dashboard'
@@ -9,7 +8,6 @@ import { EmpresaDetalle } from '../../pages/EmpresaDetalle'
 import { Proyectos } from '../../pages/Proyectos'
 import { ProyectoDetalle } from '../../pages/ProyectoDetalle'
 import { Notificaciones } from '../../pages/Notificaciones'
-import { PlaceholderPage } from '../../pages/PlaceholderPage'
 import { Unauthorized } from '../../pages/Unauthorized'
 import TableroTareas from '../../pages/TableroTareas'
 import LevantamientoProcesos from '../../pages/LevantamientoProcesos'
@@ -60,7 +58,8 @@ function PageRenderer() {
     case 'notificaciones': return <Notificaciones />
     case 'unauthorized': return <Unauthorized />
     default:
-      return <PlaceholderPage />
+      // Una ruta desconocida no existe: se trata como no autorizada (canAccess ya la rechaza antes).
+      return <Unauthorized />
   }
 }
 
@@ -71,7 +70,6 @@ export function Layout() {
       <Sidebar />
       <div className={`${state.sidebarCollapsed ? 'lg:ml-20' : 'lg:ml-64'} flex flex-col min-h-screen transition-[margin] duration-300`}>
         <TopBar />
-        <DemoBanner />
         <main className="flex-1 pt-14">
           <PageRenderer />
         </main>

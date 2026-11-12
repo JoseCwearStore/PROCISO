@@ -138,11 +138,7 @@ export default function Login() {
                 </div>
               </div>
 
-              <div className="flex items-center justify-between text-sm">
-                <label className="flex items-center gap-2 text-fg/40">
-                  <input type="checkbox" disabled className="rounded border-line" />
-                  Recordar sesión · Requiere integración
-                </label>
+              <div className="flex items-center justify-end text-sm">
                 <button
                   type="button"
                   onClick={() => dispatch({ type: 'SET_AUTH_SCREEN', screen: 'recovery' })}

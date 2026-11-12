@@ -68,6 +68,8 @@ const NAVY_BACKGROUND_ITEMS = new Set<PageId>([
 
 export function Sidebar() {
   const { state, dispatch, navigate, unreadCount, tareasVencidas } = useApp()
+  // La consultoría real de quien inició sesión (el Admin PROCISO no pertenece a ninguna).
+  const nombreConsultoria = state.consultorias.find((c) => c.id === state.currentUser?.consultoriaId)?.nombre ?? 'PROCISO'
   const visibleItems = NAV_ITEMS.filter((item) => canAccess(item.id, state.currentRole))
 
   return (
@@ -193,7 +195,7 @@ export function Sidebar() {
             borderTop: '1px solid rgba(255,255,255,0.1)',
           }}
         >
-          <p className="text-[10px] text-white/30 text-center">ConsultiCalidad S.C. · ISO 9001:2026</p>
+          <p className="text-[10px] text-white/30 text-center">{nombreConsultoria} · ISO 9001:2026</p>
         </div>
       </aside>
     </>

@@ -66,7 +66,7 @@ export default function Indicadores() {
 
   return (
     <div className="p-4 sm:p-6">
-      <div className="mb-6 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold text-navy">Indicadores e informes</h2><p className="mt-1 text-sm text-slate-500">{acciones.esCliente ? 'Indicadores del sistema de gestión de tu empresa, registrados por la consultoría.' : 'Configuración y seguimiento separado de la operación de la consultoría y del SGC de cada empresa.'}</p></div><Button variant="outline" disabled>Generar informe · Requiere integración</Button></div>
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-3"><div><h2 className="text-xl font-bold text-navy">Indicadores e informes</h2><p className="mt-1 text-sm text-slate-500">{acciones.esCliente ? 'Indicadores del sistema de gestión de tu empresa, registrados por la consultoría.' : 'Configuración y seguimiento separado de la operación de la consultoría y del SGC de cada empresa.'}</p></div></div>
       {/* El cliente nunca ve los indicadores internos de la consultoría. */}
       {!acciones.esCliente && (
         <>

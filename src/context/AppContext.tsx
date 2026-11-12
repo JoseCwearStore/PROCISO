@@ -77,7 +77,6 @@ interface AppState {
   currentRole: Rol
   currentPage: PageId
   navParams: NavParams
-  bannerDismissed: boolean
   sidebarOpen: boolean
   sidebarCollapsed: boolean
   datosSesion: EstadoDatosSesion
@@ -115,7 +114,6 @@ type Action =
   | { type: 'DATOS_REINTENTAR' }
   | { type: 'SET_ROLE'; role: Rol }
   | { type: 'NAVIGATE'; page: PageId; params?: NavParams }
-  | { type: 'DISMISS_BANNER' }
   | { type: 'TOGGLE_SIDEBAR' }
   | { type: 'SET_SIDEBAR'; open: boolean }
   | { type: 'TOGGLE_SIDEBAR_COLLAPSED' }
@@ -197,8 +195,6 @@ export function reducer(state: AppState, action: Action): AppState {
       return { ...state, currentRole: action.role, currentPage: 'inicio', navParams: {} }
     case 'NAVIGATE':
       return { ...state, currentPage: action.page, navParams: action.params ?? {}, sidebarOpen: false }
-    case 'DISMISS_BANNER':
-      return { ...state, bannerDismissed: true }
     case 'TOGGLE_SIDEBAR':
       return { ...state, sidebarOpen: !state.sidebarOpen }
     case 'SET_SIDEBAR':
@@ -366,7 +362,6 @@ export function estadoInicial(): AppState {
     currentRole: 'Admin Consultoría',
     currentPage: 'inicio',
     navParams: {},
-    bannerDismissed: false,
     sidebarOpen: false,
     sidebarCollapsed: false,
     datosSesion: 'pendiente',
