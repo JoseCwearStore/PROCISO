@@ -4,7 +4,9 @@ import {
   crearTranscriptorCompatibleOpenAI,
   esMediaTranscribible,
   extensionDeMime,
+  fuenteDeTranscripcion,
   MAX_MEDIA_BYTES,
+  validarPedidoTranscripcion,
   VOCABULARIO_ISO,
 } from './transcripcion.ts'
 
@@ -215,6 +217,53 @@ describe('tamaño de audio y video', () => {
   })
 })
 
+// El análisis de un audio o video usa el texto GUARDADO (el que el consultor pudo corregir), no vuelve a transcribir.
+describe('fuenteDeTranscripcion', () => {
+  const sinCorregir = { texto: 'Las quejas se resuelven en 5 días.', corregida_en: null }
+  const corregida = { texto: 'Las quejas se resuelven en cinco días hábiles.', corregida_en: '2026-11-11T22:00:00Z' }
+
+  it('usa el texto guardado y lo marca como transcripción de audio', () => {
+    expect(fuenteDeTranscripcion(sinCorregir, false)).toEqual({
+      texto: 'Las quejas se resuelven en 5 días.', imagenes: [], origen: 'transcripcion-audio', revisada: false,
+    })
+  })
+
+  it('en un video marca la transcripción de video', () => {
+    expect(fuenteDeTranscripcion(sinCorregir, true).origen).toBe('transcripcion-video')
+  })
+
+  it('si alguien la corrigió, lo marca como revisada y usa el texto corregido', () => {
+    const fuente = fuenteDeTranscripcion(corregida, false)
+    expect(fuente.revisada).toBe(true)
+    expect(fuente.texto).toBe('Las quejas se resuelven en cinco días hábiles.')
+  })
+
+  it('sin transcripción guardada pide transcribir primero, con un ErrorIA accionable', () => {
+    for (const nada of [null, undefined]) {
+      expect(() => fuenteDeTranscripcion(nada, false)).toThrow(ErrorIA)
+      expect(() => fuenteDeTranscripcion(nada, false)).toThrow(/transcrib/i)
+    }
+  })
+})
+
+describe('validarPedidoTranscripcion', () => {
+  const ID = '34343434-0000-0000-0004-000000000001'
+
+  it('acepta un pedido con el id de la evidencia', () => {
+    expect(validarPedidoTranscripcion({ evidenciaId: ID })).toEqual({ evidenciaId: ID })
+  })
+
+  it('ignora los campos que sobran: el proyecto y la consultoría los pone la BD, no quien llama', () => {
+    expect(validarPedidoTranscripcion({ evidenciaId: ID, proyectoId: 'x', consultoriaId: 'y', texto: 'inventado' })).toEqual({ evidenciaId: ID })
+  })
+
+  it('rechaza lo que no es un pedido, con un ErrorIA (400 claro, no un TypeError)', () => {
+    for (const malo of [null, undefined, 'texto', 42, [], {}, { evidenciaId: null }, { evidenciaId: 'no-es-un-uuid' }, { evidenciaId: 123 }, { evidenciaId: `${ID}; drop table x` }]) {
+      expect(() => validarPedidoTranscripcion(malo), JSON.stringify(malo)).toThrow(ErrorIA)
+    }
+  })
+})
+
 describe('armarMensajes con una transcripción', () => {
   const criterio: CriterioIA = {
     id: 'c-1', clausula: '7.5.1', titulo: 'Información documentada', intencion: 'Comprobar.',
@@ -232,6 +281,24 @@ describe('armarMensajes con una transcripción', () => {
     const texto = contenido({ texto: 'hola', imagenes: [], origen: 'transcripcion-video' })
     expect(texto).toMatch(/audio del video/i)
     expect(texto).toMatch(/no se analizó la imagen/i)
+  })
+
+  it('si una persona corrigió la transcripción lo dice, también FUERA del bloque de datos no confiables', () => {
+    for (const origen of ['transcripcion-audio', 'transcripcion-video'] as const) {
+      const texto = contenido({ texto: 'las quejas se resuelven', imagenes: [], origen, revisada: true })
+      expect(texto, origen).toMatch(/revisó y corrigió/i)
+      expect(texto.indexOf('revisó y corrigió'), origen).toBeLessThan(texto.indexOf('<fuente-n0nce>'))
+      expect(texto, origen).toMatch(/transcripción automática/i)
+    }
+  })
+
+  it('si nadie la corrigió no afirma que una persona la revisó', () => {
+    expect(contenido({ texto: 'hola', imagenes: [], origen: 'transcripcion-audio' })).not.toMatch(/revisó y corrigió/i)
+    expect(contenido({ texto: 'hola', imagenes: [], origen: 'transcripcion-audio', revisada: false })).not.toMatch(/revisó y corrigió/i)
+  })
+
+  it('"revisada" sin origen no agrega ninguna nota', () => {
+    expect(contenido({ texto: 'hola', imagenes: [], revisada: true })).not.toMatch(/revisó y corrigió/i)
   })
 
   it('sin origen no agrega ninguna nota', () => {

@@ -16,9 +16,7 @@
 //   IA_MODELO=gpt-oss:120b-cloud
 //   IA_API_KEY=…                     (nunca en el repo ni en el navegador)
 //   IA_VISION=false                  (true si el modelo acepta imágenes)
-//   IA_STT_BASE_URL=https://api.groq.com/openai/v1   (transcripción de audio y video)
-//   IA_STT_MODELO=whisper-large-v3-turbo
-//   IA_STT_API_KEY=…                 (otra clave: la del servicio de transcripción)
+//   (La transcripción de audio y video la hace transcribir-evidencia; acá se analiza el texto guardado.)
 //   CORS_ORIGEN=https://…            (en producción; sin él queda `*`)
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
@@ -34,7 +32,7 @@ import {
   type FuenteIA,
 } from '../_compartido/analisis.ts'
 import { crearCors, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
-import { crearTranscriptorCompatibleOpenAI, esMediaTranscribible } from '../_compartido/transcripcion.ts'
+import { esMediaTranscribible, fuenteDeTranscripcion } from '../_compartido/transcripcion.ts'
 import { extraerArchivo, extraerDocumento } from './extractores.ts'
 
 const CORS = crearCors(Deno.env.get('CORS_ORIGEN'))
@@ -53,15 +51,6 @@ function crearAnalizador(): { analizador: AnalizadorIA; proveedor: string; model
       modelo,
     }),
   }
-}
-
-// Transcripción de audio y video (servicio compatible con OpenAI en /audio/transcriptions).
-function crearTranscriptor() {
-  return crearTranscriptorCompatibleOpenAI({
-    baseUrl: Deno.env.get('IA_STT_BASE_URL') ?? '',
-    apiKey: Deno.env.get('IA_STT_API_KEY') ?? '',
-    modelo: Deno.env.get('IA_STT_MODELO') ?? '',
-  })
 }
 
 Deno.serve(async (req) => {
@@ -140,19 +129,26 @@ Deno.serve(async (req) => {
       fuente = extraerDocumento(doc.secciones)
     } else {
       const { data: ev, error } = await comoUsuario
-        .from('evidencias').select('nombre, archivo_ruta, archivo_mime').eq('id', pedido.evidenciaId).single()
+        .from('evidencias').select('nombre, tipo, archivo_ruta, archivo_mime').eq('id', pedido.evidenciaId).single()
       if (error || !ev) throw new ErrorIA('No se pudo leer la evidencia.')
-      if (!ev.archivo_ruta) throw new ErrorIA('La evidencia no tiene archivo adjunto.')
-      const { data: archivo, error: errorArchivo } = await comoUsuario.storage.from('evidencias').download(ev.archivo_ruta)
-      if (errorArchivo || !archivo) throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
       nombre = ev.nombre
-      const mime = ev.archivo_mime || archivo.type || 'application/octet-stream'
-      // AUD04-B5: se acota el tamaño ANTES de cargarlo en memoria y parsearlo.
-      verificarTamanoArchivo({ length: archivo.size }, mime)
-      // Solo el audio y el video necesitan el servicio de transcripción: los demás análisis no
-      // dependen de que esté configurado.
-      const transcriptor = esMediaTranscribible(mime) ? crearTranscriptor() : undefined
-      fuente = await extraerArchivo(new Uint8Array(await archivo.arrayBuffer()), mime, Deno.env.get('IA_VISION') === 'true', transcriptor)
+      const mimeDeclarado = ev.archivo_mime ?? ''
+      if (ev.tipo === 'Audio' || ev.tipo === 'Video' || esMediaTranscribible(mimeDeclarado)) {
+        // Audio y video: se analiza la transcripción GUARDADA (la que el equipo pudo corregir), no se
+        // vuelve a transcribir: lo que se analiza es lo que una persona vio. El RLS decide si la ve.
+        const { data: transcripcion, error: errorTranscripcion } = await comoUsuario
+          .from('transcripciones').select('texto, corregida_en').eq('evidencia_id', pedido.evidenciaId).maybeSingle()
+        if (errorTranscripcion) throw new ErrorIA('No se pudo leer la transcripción.')
+        fuente = fuenteDeTranscripcion(transcripcion, ev.tipo === 'Video' || mimeDeclarado.startsWith('video/'))
+      } else {
+        if (!ev.archivo_ruta) throw new ErrorIA('La evidencia no tiene archivo adjunto.')
+        const { data: archivo, error: errorArchivo } = await comoUsuario.storage.from('evidencias').download(ev.archivo_ruta)
+        if (errorArchivo || !archivo) throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
+        const mime = mimeDeclarado || archivo.type || 'application/octet-stream'
+        // AUD04-B5: se acota el tamaño ANTES de cargarlo en memoria y parsearlo.
+        verificarTamanoArchivo({ length: archivo.size }, mime)
+        fuente = await extraerArchivo(new Uint8Array(await archivo.arrayBuffer()), mime, Deno.env.get('IA_VISION') === 'true')
+      }
     }
 
     // 3. Proveedor (puerto) → respuesta → resultados por criterio.

@@ -12,12 +12,12 @@ export const NOTA_CONTENIDO_NO_CONFIABLE =
 // Se avisa en el punto donde se pide el análisis. Del video no se analiza la imagen.
 export function avisoTranscripcion(tipoEvidencia: string | null | undefined): string | null {
   if (tipoEvidencia === 'Audio') {
-    return 'Para analizar un audio se transcribe con un servicio externo: el archivo sale de la plataforma. ' +
-      'La transcripción es automática y puede tener errores; revísala contra el audio original.'
+    return 'Para analizar un audio primero se transcribe con un servicio externo: el archivo sale de la plataforma. ' +
+      'La transcripción es automática y puede tener errores; revísala y corrígela antes de analizar.'
   }
   if (tipoEvidencia === 'Video') {
-    return 'Para analizar un video se transcribe su audio con un servicio externo: el archivo sale de la plataforma. ' +
-      'La transcripción es automática y puede tener errores, y no se analiza la imagen del video.'
+    return 'Para analizar un video primero se transcribe su audio con un servicio externo: el archivo sale de la plataforma. ' +
+      'La transcripción es automática y puede tener errores, y no se analiza la imagen del video; revísala y corrígela antes de analizar.'
   }
   return null
 }

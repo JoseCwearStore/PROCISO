@@ -1,9 +1,12 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertTriangle, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { Button } from './ui/Button'
 import { IndicadorUsoIA } from './IndicadorUsoIA'
+import { TranscripcionEvidencia } from './TranscripcionEvidencia'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
+import { useTranscripcion } from '../hooks/useTranscripcion'
 import { avisoTranscripcion, criteriosSugeridos, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from '../lib/ia'
+import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
 
 const COLOR: Record<EstadoResultadoIA, string> = {
@@ -29,6 +32,17 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const ia = useAccionesIA()
   const aviso = avisoTranscripcion(tipoEvidencia)
   const [seleccion, setSeleccion] = useState<string[]>(() => criteriosSugeridos(tipoDocumento, ia.criterios))
+
+  // Audio y video: se analiza el texto GUARDADO de la transcripción (el que el equipo pudo corregir), no el audio.
+  const tipoMedia = tipoEvidencia === 'Audio' || tipoEvidencia === 'Video' ? tipoEvidencia : null
+  const tr = useTranscripcion(tipoMedia ? fuente.id : null)
+  const [textoEditado, setTextoEditado] = useState('')
+  const guardado = tr.transcripcion?.texto ?? ''
+  useEffect(() => setTextoEditado(guardado), [guardado, fuente.id])
+  const estadoTr = estadoTranscripcion(tipoEvidencia, tr.transcripcion, textoEditado)
+  // Mientras se lee la transcripción no se sabe si falta: no se muestra un aviso que después desaparece.
+  const puedeAnalizar = puedeAnalizarConTranscripcion(estadoTr)
+  const motivoBloqueo = tipoMedia && !tr.cargado ? null : mensajeDeEstado(estadoTr)
   const [analizando, setAnalizando] = useState(false)
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
   const historial = ia.analisisDe(fuente)
@@ -53,6 +67,10 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
         <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
         <span>{NOTA_CONTENIDO_NO_CONFIABLE}</span>
       </p>
+
+      {tipoMedia && (
+        <TranscripcionEvidencia tipo={tipoMedia} puedeEditar={ia.puedePedir} tr={tr} texto={textoEditado} onTexto={setTextoEditado} />
+      )}
 
       {ia.puedePedir && (
         <div className="mb-4 space-y-2">
@@ -89,13 +107,14 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
             </select>
             <Button
               onClick={() => void analizar()}
-              disabled={analizando || !seleccion.length || !!ia.estadoUsoIA?.agotado}
+              disabled={analizando || !seleccion.length || !!ia.estadoUsoIA?.agotado || !puedeAnalizar}
               title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : undefined}
               icon={analizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             >
               {analizando ? 'Analizando…' : 'Analizar con IA'}
             </Button>
           </div>
+          {motivoBloqueo && <p className="text-xs text-amber-700">{motivoBloqueo}</p>}
         </div>
       )}
 

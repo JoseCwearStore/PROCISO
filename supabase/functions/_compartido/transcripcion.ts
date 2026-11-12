@@ -13,9 +13,25 @@
 // Estos servicios aceptan mp4, m4a y webm directo y extraen el audio solos: el mismo adaptador
 // sirve para el audio de un video.
 
-import { ErrorIA, MAX_MEDIA_BYTES } from './analisis.ts'
+import { ErrorIA, MAX_MEDIA_BYTES, type FuenteIA } from './analisis.ts'
+import { esUuid } from './validar.ts'
 
 export { MAX_MEDIA_BYTES }
+
+// ─── Validación del pedido de transcripción ─────────────────────────────────
+// Solo se pide el id de la evidencia: el proyecto, la consultoría y el archivo los decide la BD
+// (autorizar_transcripcion), nunca quien llama. Lo que sobre en el cuerpo se ignora.
+
+export interface PedidoTranscripcion {
+  evidenciaId: string
+}
+
+export function validarPedidoTranscripcion(entrada: unknown): PedidoTranscripcion {
+  if (!entrada || typeof entrada !== 'object') throw new ErrorIA('El pedido de transcripción es inválido.')
+  const { evidenciaId } = entrada as Record<string, unknown>
+  if (!esUuid(evidenciaId)) throw new ErrorIA('evidenciaId no es un identificador válido.')
+  return { evidenciaId }
+}
 
 export interface Transcriptor {
   transcribir(bytes: Uint8Array, mime: string): Promise<string>
@@ -30,6 +46,22 @@ export const VOCABULARIO_ISO =
   'Procedimiento de atención a quejas y reclamaciones. Sistema de gestión de la calidad ISO 9001. No conformidad, acción correctiva, auditoría interna, indicadores, registros, código documental.'
 
 export const esMediaTranscribible = (mime: string): boolean => mime.startsWith('audio/') || mime.startsWith('video/')
+
+// El análisis de un audio o video usa el texto GUARDADO (el que el equipo pudo corregir), no vuelve a
+// transcribir: lo que se analiza es lo que una persona vio. Si todavía no hay transcripción, se pide
+// transcribir primero. Del video solo se transcribe el audio.
+export function fuenteDeTranscripcion(
+  fila: { texto: string; corregida_en: string | null } | null | undefined,
+  esVideo: boolean,
+): FuenteIA {
+  if (!fila) throw new ErrorIA('Antes de analizar un audio o un video hay que transcribirlo y revisar el texto (botón "Transcribir").')
+  return {
+    texto: fila.texto,
+    imagenes: [],
+    origen: esVideo ? 'transcripcion-video' : 'transcripcion-audio',
+    revisada: Boolean(fila.corregida_en),
+  }
+}
 
 // Whisper inventa texto cuando el audio no tiene voz (aprendió de subtítulos de video). Medido el 2026-11-11 con
 // Groq: 3 s de silencio devolvieron "Gracias por ver el video." con no_speech_prob = 0, así que ese campo NO sirve

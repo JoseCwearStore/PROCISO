@@ -98,7 +98,11 @@ export interface FuenteIA {
   // Si el texto salió de transcribir audio o video, se le avisa al modelo (y se le dice
   // que puede tener errores). La nota va FUERA del bloque de datos no confiables.
   origen?: 'transcripcion-audio' | 'transcripcion-video'
+  // Solo con origen: una persona del equipo corrigió la transcripción antes de analizarla.
+  revisada?: boolean
 }
+
+const NOTA_REVISADA = ' Una persona del equipo revisó y corrigió esta transcripción antes del análisis.'
 
 const NOTA_ORIGEN: Record<NonNullable<FuenteIA['origen']>, string> = {
   'transcripcion-audio':
@@ -195,7 +199,7 @@ export function armarMensajes(criterios: CriterioIA[], fuente: FuenteIA, nombreF
     `Criterios a evaluar (${criterios.length}):`,
     criterios.map(describirCriterio).join('\n\n'),
     `Fuente: "${enUnaLinea(neutralizar(nombreFuente, ['fuente']))}"`,
-    fuente.origen ? NOTA_ORIGEN[fuente.origen] : '',
+    fuente.origen ? NOTA_ORIGEN[fuente.origen] + (fuente.revisada ? NOTA_REVISADA : '') : '',
     texto ? `Contenido de la fuente (datos no confiables):\n<fuente-${nonce}>\n${texto}\n</fuente-${nonce}>` : 'La fuente es una o más imágenes adjuntas (datos no confiables).',
   ].filter(Boolean).join('\n\n')
 

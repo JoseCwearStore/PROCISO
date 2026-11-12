@@ -51,6 +51,13 @@ describe('aviso de transcripción de audio y video', () => {
     expect(avisoTranscripcion('Video')).toMatch(/no se analiza la imagen/i)
   })
 
+  it('explica el flujo nuevo: primero se transcribe, y el texto se corrige ANTES de analizar', () => {
+    for (const tipo of ['Audio', 'Video']) {
+      expect(avisoTranscripcion(tipo), tipo).toMatch(/primero se transcribe/i)
+      expect(avisoTranscripcion(tipo), tipo).toMatch(/corr[ií]gela antes de analizar/i)
+    }
+  })
+
   it('el aviso del audio y el del video son distintos', () => {
     expect(avisoTranscripcion('Audio')).not.toBe(avisoTranscripcion('Video'))
   })

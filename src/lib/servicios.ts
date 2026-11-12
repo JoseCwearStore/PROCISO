@@ -4,6 +4,7 @@ import { cargarFilasSesion, type ClienteDatos } from './datos'
 import { crearServicioEscritura, type ClienteEscritura } from './escrituras'
 import { crearServicioUsoIA, type ClienteUsoIA } from './usoIA'
 import { crearServicioSoporte, type ClienteSoporte } from './soporte'
+import { crearServicioTranscripciones, type ClienteTranscripciones } from './transcripciones'
 import { crearServicioArchivos, type ClienteArchivos } from './archivos'
 import { supabase } from './supabase'
 import type { Rol } from '../types'
@@ -89,6 +90,26 @@ export function adaptarClienteSoporte(cliente: SupabaseClient): ClienteSoporte {
   }
 }
 
+export function adaptarClienteTranscripciones(cliente: SupabaseClient): ClienteTranscripciones {
+  return {
+    from: (tabla) => ({
+      select: (columnas) => ({
+        eq: (columna, valor) => ({ maybeSingle: () => cliente.from(tabla).select(columnas).eq(columna, valor).maybeSingle() }),
+      }),
+    }),
+    rpc: (funcion, args) => cliente.rpc(funcion, args),
+    functions: {
+      // supabase-js entrega el Response en error.context: de ahí sale el status (429 = tope diario).
+      invoke: async (nombre, opciones) => {
+        const { data, error } = await cliente.functions.invoke(nombre, opciones)
+        if (!error) return { data, error: null }
+        const status = (error as { context?: { status?: number } }).context?.status
+        return { data: null, error: { message: error.message, status } }
+      },
+    },
+  }
+}
+
 function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
   return {
     storage: {
@@ -102,6 +123,7 @@ function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
 // Punto de composición: acá los servicios reciben el cliente real de Supabase.
 export const servicioEscritura = crearServicioEscritura(adaptarClienteEscritura(supabase))
 export const servicioSoporte = crearServicioSoporte(adaptarClienteSoporte(supabase))
+export const servicioTranscripciones = crearServicioTranscripciones(adaptarClienteTranscripciones(supabase))
 export const servicioUsoIA =crearServicioUsoIA(adaptarClienteUsoIA(supabase))
 export const servicioArchivos =crearServicioArchivos(adaptarClienteArchivos(supabase))
 export const servicioAuth = crearServicioAuth(adaptarClienteAuth(supabase))

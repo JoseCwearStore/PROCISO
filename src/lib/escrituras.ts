@@ -64,6 +64,7 @@ export type ErrorEscritura =
   | 'version_ya_enviada'
   | 'version_desactualizada'
   | 'limite_ia'
+  | 'limite_transcripciones'
   | 'limite_reportes'
   // Mensajes que la BD escribe a propósito en las operaciones del equipo de un proyecto (L5d).
   | 'empresa_archivada'
@@ -362,7 +363,7 @@ function traducirError(error: ErrorBD): ErrorEscritura {
 const TEXTO_TECNICO = /\b(relation|column|constraint|syntax|violates|schema|operator|uuid|null value|permission denied|input value)\b|"[a-z_]+"/i
 const MAX_DETALLE = 240
 
-function falla(error: ErrorBD): { ok: false } & FallaEscritura {
+export function falla(error: ErrorBD): { ok: false } & FallaEscritura {
   const codigo = traducirError(error)
   const esReglaDeNegocio = codigo === 'datos_invalidos' && error.code === '22023'
   if (esReglaDeNegocio && error.message.length <= MAX_DETALLE && !TEXTO_TECNICO.test(error.message)) {
@@ -954,6 +955,7 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   version_desactualizada: 'El documento cambió desde que lo abriste. Recarga la página para ver la versión actual.',
   tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
   limite_ia: 'Se alcanzó el tope diario de pedidos a la IA. Inténtalo mañana o continúa sin IA.',
+  limite_transcripciones: 'Alcanzaste el tope diario de transcripciones. Inténtalo mañana.',
   limite_reportes: 'Alcanzaste el máximo de reportes de soporte por día. Inténtalo mañana.',
   empresa_archivada: 'La empresa está archivada: no se le pueden crear proyectos.',
   ya_es_miembro: 'Esa persona ya es parte del equipo del proyecto.',
