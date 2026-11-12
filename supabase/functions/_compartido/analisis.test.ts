@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   armarMensajes,
   crearAnalizadorCompatibleOpenAI,
@@ -247,6 +247,49 @@ describe('crearAnalizadorCompatibleOpenAI', () => {
     await expect(con(404).completar([])).rejects.toThrow(/modelo.*no existe/i)
     await expect(con(429).completar([])).rejects.toThrow(/límite/i)
     await expect(con(500).completar([])).rejects.toThrow(/500/)
+  })
+
+  describe('proveedor sin saldo', () => {
+    // Cuerpos reales vistos en el log de `functions serve` el 2026-11-11.
+    const CUERPO_OLLAMA = '{"error":{"message":"Add usage credits or subscribe and save up to 66%: https://ollama.com/plans (ref: 4459231f-2dad-40da-8359-2f5d6f869b75)","type":"api_error","param":null,"code":null}}'
+    const CUERPO_ANTHROPIC = '{"error":{"code":"invalid_request_error","message":"Your credit balance is too low to access the Anthropic API. Please go to Plans & Billing to upgrade or purchase credits.","type":"invalid_request_error"}}'
+    const con = (status: number, cuerpo: string) => crearAnalizadorCompatibleOpenAI({ ...config, fetch: async () => new Response(cuerpo, { status }) })
+
+    beforeEach(() => { vi.spyOn(console, 'error').mockImplementation(() => {}) })
+    afterEach(() => { vi.restoreAllMocks() })
+
+    it('un 402 (Ollama) se explica como falta de saldo, no como "respondió 402"', async () => {
+      await expect(con(402, CUERPO_OLLAMA).completar([])).rejects.toThrow(ErrorIA)
+      await expect(con(402, CUERPO_OLLAMA).completar([])).rejects.toThrow(/saldo/i)
+      await expect(con(402, CUERPO_OLLAMA).completar([])).rejects.not.toThrow(/402/)
+    })
+
+    it('un 400 con "credit balance" (Anthropic) también es falta de saldo', async () => {
+      await expect(con(400, CUERPO_ANTHROPIC).completar([])).rejects.toThrow(ErrorIA)
+      await expect(con(400, CUERPO_ANTHROPIC).completar([])).rejects.toThrow(/saldo/i)
+    })
+
+    it('un 400 que NO habla de saldo sigue siendo un 400 genérico', async () => {
+      const cuerpo = '{"error":{"message":"messages: at least one message is required","type":"invalid_request_error"}}'
+      await expect(con(400, cuerpo).completar([])).rejects.toThrow(/400/)
+      await expect(con(400, cuerpo).completar([])).rejects.not.toThrow(/saldo/i)
+    })
+
+    it('un 500 que menciona "credit balance" no se toma por falta de saldo', async () => {
+      await expect(con(500, CUERPO_ANTHROPIC).completar([])).rejects.toThrow(/500/)
+    })
+
+    it('el mensaje no copia el cuerpo del proveedor (URLs, refs, nombres)', async () => {
+      for (const [status, cuerpo] of [[402, CUERPO_OLLAMA], [400, CUERPO_ANTHROPIC]] as const) {
+        const error = await con(status, cuerpo).completar([]).catch((e: unknown) => e as Error)
+        expect(error.message).not.toMatch(/ollama|anthropic|https?:|ref:|4459231f/i)
+      }
+    })
+
+    it('el cuerpo sí va al log del servidor, para quien opera la función', async () => {
+      await con(402, CUERPO_OLLAMA).completar([]).catch(() => {})
+      expect(console.error).toHaveBeenCalledWith(expect.stringContaining('402'), expect.stringContaining('ollama.com/plans'))
+    })
   })
 
   it('sin clave o sin modelo no llama a nadie: la IA no está configurada', () => {

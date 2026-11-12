@@ -247,6 +247,13 @@ export function interpretarRespuesta(
 // Debe quedar por debajo del límite de tiempo del runtime de la función.
 const TIMEOUT_PROVEEDOR_MS = 90_000
 
+// Falta de saldo: Ollama Cloud responde 402; Anthropic responde 400 con "credit balance is too low".
+// El 400 se mira por el texto porque un 400 también es "pedido mal armado" (no es saldo).
+function sinSaldo(estado: number, cuerpo: string): boolean {
+  if (estado === 402) return true
+  return estado === 400 && /credit balance|insufficient[ _](credit|fund|balanc)/i.test(cuerpo)
+}
+
 export function crearAnalizadorCompatibleOpenAI(config: {
   baseUrl: string
   apiKey: string
@@ -283,7 +290,9 @@ export function crearAnalizadorCompatibleOpenAI(config: {
       if (!respuesta.ok) {
         // El cuerpo del error del proveedor puede traer cuentas, URLs o cuotas: va al log
         // del servidor, no al mensaje que lee el cliente (AUD04-B3).
-        console.error(`[IA] el proveedor respondió ${respuesta.status}:`, (await respuesta.text().catch(() => '')).slice(0, 200))
+        const cuerpo = await respuesta.text().catch(() => '')
+        console.error(`[IA] el proveedor respondió ${respuesta.status}:`, cuerpo.slice(0, 200))
+        if (sinSaldo(respuesta.status, cuerpo)) throw new ErrorIA('La cuenta del proveedor de IA no tiene saldo o créditos. Carga créditos en el proveedor e inténtalo de nuevo.')
         if (respuesta.status === 401 || respuesta.status === 403) throw new ErrorIA('La clave de la IA es inválida o no tiene permiso (revisa IA_API_KEY).')
         if (respuesta.status === 404) throw new ErrorIA(`El modelo "${config.modelo}" no existe en el proveedor (revisa IA_MODELO e IA_BASE_URL).`)
         if (respuesta.status === 429) throw new ErrorIA('Se alcanzó el límite de uso del proveedor de IA. Inténtalo más tarde o revisa tu plan.')
