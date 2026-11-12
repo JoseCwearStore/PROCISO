@@ -5,6 +5,7 @@ import {
   AlertTriangle, MapPin, Phone, Mail, User, BarChart2,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
+import { useAccionesGestion } from '../hooks/useAccionesGestion'
 import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA } from '../lib/escrituras'
 import { StatusBadge } from '../components/ui/StatusBadge'
@@ -249,6 +250,7 @@ export function EmpresaDetalle() {
   const { state, navigate, dispatch, showToast, getProcesos, getDocumentos } = useApp()
   const { navParams, empresas } = state
   const empresa = empresas.find((e) => e.id === navParams.id)
+  const permisos = useAccionesGestion()
 
   const [showArchive, setShowArchive] = useState(false)
 
@@ -324,7 +326,7 @@ export function EmpresaDetalle() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {empresa.activa && (
+            {empresa.activa && permisos.puedeArchivarEmpresa && (
               <Button variant="ghost" size="sm" icon={<Archive className="w-4 h-4" />} onClick={() => setShowArchive(true)}>
                 Archivar
               </Button>
@@ -529,6 +531,7 @@ function ProyectoCard({ proyecto }: { proyecto: Proyecto }) {
 export function Empresas() {
   const { state, navigate, dispatch, showToast } = useApp()
   const { empresas } = state
+  const permisos = useAccionesGestion()
 
   const [search, setSearch] = useState('')
   const [filterSector, setFilterSector] = useState('')
@@ -565,9 +568,13 @@ export function Empresas() {
           <h1 className="text-2xl font-bold text-fg">Empresas cliente</h1>
           <p className="text-sm text-fg/50 mt-0.5">{empresas.filter((e) => e.activa).length} empresa{empresas.filter((e) => e.activa).length !== 1 ? 's' : ''} activa{empresas.filter((e) => e.activa).length !== 1 ? 's' : ''}</p>
         </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
-          Nueva empresa
-        </Button>
+        {permisos.puedeCrearEmpresa ? (
+          <Button variant="primary" icon={<Plus className="w-4 h-4" />} onClick={() => setShowModal(true)}>
+            Nueva empresa
+          </Button>
+        ) : (
+          <p className="max-w-xs text-right text-xs text-fg/50">{permisos.motivo}</p>
+        )}
       </div>
 
       {/* Filters */}

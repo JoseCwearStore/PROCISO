@@ -31,6 +31,7 @@ import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavP
 import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA, type NuevoEntregable, type NuevoProyecto } from '../lib/escrituras'
 import { useAccionesEntregable } from '../hooks/useAccionesEntregable'
+import { useAccionesGestion } from '../hooks/useAccionesGestion'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -223,7 +224,7 @@ function ListView({
 }: {
   proyectos: Proyecto[]
   onView: (id: string) => void
-  onNew: () => void
+  onNew?: () => void // sin esto, no se ofrece "Nuevo proyecto" (la BD solo deja a los admins)
   calcularAvance: (id: string) => number
   getEmpresa: (id: string) => { nombre: string; logoInicial: string } | undefined
   getUsuario: (id: string) => Usuario | undefined
@@ -309,7 +310,7 @@ function ListView({
       onRowClick={(r) => onView(r.id)}
       emptyTitle="Sin proyectos encontrados"
       emptyDescription="No hay proyectos que coincidan con los filtros aplicados."
-      emptyAction={{ label: 'Nuevo proyecto', onClick: onNew }}
+      emptyAction={onNew ? { label: 'Nuevo proyecto', onClick: onNew } : undefined}
     />
   )
 }
@@ -321,7 +322,7 @@ function TarjetasView({
 }: {
   proyectos: Proyecto[]
   onView: (id: string) => void
-  onNew: () => void
+  onNew?: () => void // sin esto, no se ofrece "Nuevo proyecto" (la BD solo deja a los admins)
   calcularAvance: (id: string) => number
   getEmpresa: (id: string) => { nombre: string; logoInicial: string } | undefined
   getUsuario: (id: string) => Usuario | undefined
@@ -332,7 +333,7 @@ function TarjetasView({
         <Package className="w-10 h-10 text-slate-300 mx-auto mb-3" />
         <p className="font-medium text-slate-500">Sin proyectos encontrados</p>
         <p className="text-sm text-slate-400 mb-4">No hay proyectos que coincidan con los filtros aplicados.</p>
-        <Button size="sm" onClick={onNew} icon={<Plus className="w-4 h-4" />}>Nuevo proyecto</Button>
+        {onNew && <Button size="sm" onClick={onNew} icon={<Plus className="w-4 h-4" />}>Nuevo proyecto</Button>}
       </div>
     )
   }
@@ -394,7 +395,7 @@ function KanbanView({
 }: {
   proyectos: Proyecto[]
   onView: (id: string) => void
-  onNew: () => void
+  onNew?: () => void // sin esto, no se ofrece "Nuevo proyecto" (la BD solo deja a los admins)
   calcularAvance: (id: string) => number
   getEmpresa: (id: string) => { nombre: string; logoInicial: string } | undefined
   dragId: string | null
@@ -411,7 +412,7 @@ function KanbanView({
         <Columns className="w-10 h-10 text-slate-300 mx-auto mb-3" />
         <p className="font-medium text-slate-500">Sin proyectos encontrados</p>
         <p className="text-sm text-slate-400 mb-4">No hay proyectos que coincidan con los filtros aplicados.</p>
-        <Button size="sm" onClick={onNew} icon={<Plus className="w-4 h-4" />}>Nuevo proyecto</Button>
+        {onNew && <Button size="sm" onClick={onNew} icon={<Plus className="w-4 h-4" />}>Nuevo proyecto</Button>}
       </div>
     )
   }
@@ -563,6 +564,8 @@ function CronogramaView({
 
 export function Proyectos() {
   const { state, dispatch, navigate, getEmpresa, getUsuario, showToast, calcularAvance, getEntregables } = useApp()
+  const permisos = useAccionesGestion()
+  const abrirAlta = permisos.puedeCrearProyecto ? () => setCreateOpen(true) : undefined
 
   const [viewMode, setViewMode] = useState<ViewMode>('lista')
   const [createOpen, setCreateOpen] = useState(false)
@@ -650,9 +653,13 @@ export function Proyectos() {
               </button>
             ))}
           </div>
-          <Button onClick={() => setCreateOpen(true)} icon={<Plus className="w-4 h-4" />}>
-            Nuevo proyecto
-          </Button>
+          {permisos.puedeCrearProyecto ? (
+            <Button onClick={() => setCreateOpen(true)} icon={<Plus className="w-4 h-4" />}>
+              Nuevo proyecto
+            </Button>
+          ) : (
+            <p className="max-w-xs text-xs text-slate-500">{permisos.motivo}</p>
+          )}
         </div>
       </div>
 
@@ -677,18 +684,18 @@ export function Proyectos() {
 
       {viewMode === 'lista' && (
         <ListView proyectos={filtered} onView={(id) => navigate('proyecto-detalle', { id })}
-          onNew={() => setCreateOpen(true)} calcularAvance={calcularAvance}
+          onNew={abrirAlta} calcularAvance={calcularAvance}
           getEmpresa={getEmpresa} getUsuario={getUsuario} />
       )}
       {viewMode === 'tarjetas' && (
         <TarjetasView proyectos={filtered} onView={(id) => navigate('proyecto-detalle', { id })}
-          onNew={() => setCreateOpen(true)} calcularAvance={calcularAvance}
+          onNew={abrirAlta} calcularAvance={calcularAvance}
           getEmpresa={getEmpresa} getUsuario={getUsuario} />
       )}
       {viewMode === 'kanban' && (
         <KanbanView
           proyectos={filtered} onView={(id) => navigate('proyecto-detalle', { id })}
-          onNew={() => setCreateOpen(true)} calcularAvance={calcularAvance} getEmpresa={getEmpresa}
+          onNew={abrirAlta} calcularAvance={calcularAvance} getEmpresa={getEmpresa}
           dragId={dragId} dragOver={dragOver}
           onDragStart={(id) => setDragId(id)}
           onDragOver={(e) => e.preventDefault()}
