@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
+  abrirArchivoFirmado,
   armarMensajes,
   crearAnalizadorCompatibleOpenAI,
   descargarAcotado,
@@ -459,6 +460,42 @@ describe('descargarAcotado (AUD09-M3)', () => {
         init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
       })
     await expect(descargarAcotado(URL_FIRMADA, 'application/pdf', colgado, 20)).rejects.toThrow(/tard/i)
+  })
+})
+
+// AUD09-B5/B6: la rama de video abría el archivo con un fetch sin plazo y con el error crudo (trae la URL firmada).
+describe('abrirArchivoFirmado', () => {
+  const URL_FIRMADA = 'https://storage.test/object/sign/evidencias/v.mp4?token=SECRETO456'
+
+  it('devuelve la respuesta, y el plazo corre solo hasta recibir las cabeceras (no corta el cuerpo después)', async () => {
+    let senal: AbortSignal | undefined
+    const llamar = (async (_u: unknown, init?: RequestInit) => {
+      senal = init?.signal ?? undefined
+      return new Response('cuerpo')
+    }) as typeof fetch
+    const r = await abrirArchivoFirmado(URL_FIRMADA, 20, llamar)
+    await new Promise((res) => setTimeout(res, 60))   // pasa el plazo con el cuerpo todavía sin leer
+    expect(senal?.aborted).toBe(false)
+    expect(await r.text()).toBe('cuerpo')
+  })
+
+  it('si las cabeceras no llegan a tiempo, corta con un mensaje propio', async () => {
+    const colgado: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError')))
+      })
+    await expect(abrirArchivoFirmado(URL_FIRMADA, 20, colgado)).rejects.toThrow(/tard/i)
+  })
+
+  it('si la red falla, ni el error ni el log llevan la URL firmada', async () => {
+    const caida = (async () => { throw new TypeError(`error sending request for url (${URL_FIRMADA})`) }) as typeof fetch
+    const errores = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const error = await abrirArchivoFirmado(URL_FIRMADA, 1000, caida).catch((e: unknown) => e)
+    expect(error).toBeInstanceOf(ErrorIA)
+    expect((error as Error).message).not.toMatch(/SECRETO456|storage\.test/)
+    expect(errores).toHaveBeenCalled()
+    expect(errores.mock.calls.flat().map(String).join(' ')).not.toMatch(/SECRETO456/)
+    errores.mockRestore()
   })
 })
 

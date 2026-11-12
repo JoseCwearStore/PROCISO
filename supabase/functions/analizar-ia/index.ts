@@ -26,6 +26,7 @@
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
 import {
+  abrirArchivoFirmado,
   armarMensajes,
   crearAnalizadorCompatibleOpenAI,
   descargarAcotado,
@@ -161,7 +162,8 @@ Deno.serve(async (req) => {
 
       const { data: firmada, error: errorFirma } = await comoUsuario.storage.from('evidencias').createSignedUrl(ev.archivo_ruta, 300)
       if (errorFirma || !firmada) throw new ErrorIA('No se pudo acceder al archivo de la evidencia.')
-      const archivo = await fetch(firmada.signedUrl)
+      // AUD09-B5/B6: con plazo para las cabeceras y sin dejar la URL firmada en el log si la red falla.
+      const archivo = await abrirArchivoFirmado(firmada.signedUrl)
       const tamano = Number(archivo.headers.get('content-length'))
       if (!archivo.ok || !archivo.body || !Number.isFinite(tamano)) {
         await archivo.body?.cancel()
@@ -233,7 +235,10 @@ Deno.serve(async (req) => {
     // el detalle técnico real va solo al log del servidor.
     console.error('[analizar-ia] falló el análisis:', e)
     const motivo = motivoSaneado(e)
-    await registrar('Error', { error: motivo })
+    // AUD09-B7: el RPC devuelve { error } y no lanza: si falla, el análisis queda Pendiente hasta el barrido
+    // y la pantalla ya muestra "Error"; que al menos quede en el log del servidor.
+    const { error: errorRegistroError } = await registrar('Error', { error: motivo })
+    if (errorRegistroError) console.error('[analizar-ia] no se pudo registrar el error del análisis:', errorRegistroError)
     return responder(200, { id: analisis.id, estado: 'Error', error: motivo, proveedor, modelo, resultados: [] })
   }
 })

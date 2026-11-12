@@ -109,6 +109,24 @@ function errorDeTamano(mime: string): ErrorIA {
 }
 
 const TIMEOUT_DESCARGA_MS = 60_000
+const PLAZO_CABECERAS_MS = 30_000
+
+// AUD09-B5/B6: abre un archivo por su URL firmada con un plazo SOLO para recibir las cabeceras (después el cuerpo
+// se consume como flujo, bajo el reloj de quien lo use) y sin dejar pasar la URL (lleva el token) al error ni al log.
+export async function abrirArchivoFirmado(url: string, plazoMs = PLAZO_CABECERAS_MS, llamar: typeof fetch = fetch): Promise<Response> {
+  const control = new AbortController()
+  const reloj = setTimeout(() => control.abort(), plazoMs)
+  try {
+    return await llamar(url, { signal: control.signal })
+  } catch (e) {
+    const nombre = e instanceof Error ? e.name : ''
+    if (nombre === 'TimeoutError' || nombre === 'AbortError') throw new ErrorIA(`El archivo de la evidencia tardó demasiado en empezar a descargarse (más de ${Math.round(plazoMs / 1000)} s). Inténtalo de nuevo.`)
+    console.error('[IA] no se pudo abrir el archivo de Storage:', nombre || 'error')
+    throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
+  } finally {
+    clearTimeout(reloj)
+  }
+}
 
 export async function descargarAcotado(
   url: string,
