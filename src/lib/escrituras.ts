@@ -64,6 +64,7 @@ export type ErrorEscritura =
   | 'version_ya_enviada'
   | 'version_desactualizada'
   | 'limite_ia'
+  | 'limite_reportes'
   | 'servicio'
 
 // Status HTTP de las Edge Functions de IA → error de la app. 429 = tope diario de pedidos.
@@ -916,5 +917,6 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   version_desactualizada: 'El documento cambió desde que lo abriste. Recarga la página para ver la versión actual.',
   tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
   limite_ia: 'Se alcanzó el tope diario de pedidos a la IA. Inténtalo mañana o continúa sin IA.',
+  limite_reportes: 'Alcanzaste el máximo de reportes de soporte por día. Inténtalo mañana.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',
 }

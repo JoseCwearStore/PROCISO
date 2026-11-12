@@ -3,6 +3,7 @@ import { crearServicioAuth, type ClienteAuth, type PerfilBD } from './auth'
 import { cargarFilasSesion, type ClienteDatos } from './datos'
 import { crearServicioEscritura, type ClienteEscritura } from './escrituras'
 import { crearServicioUsoIA, type ClienteUsoIA } from './usoIA'
+import { crearServicioSoporte, type ClienteSoporte } from './soporte'
 import { crearServicioArchivos, type ClienteArchivos } from './archivos'
 import { supabase } from './supabase'
 import type { Rol } from '../types'
@@ -78,6 +79,16 @@ export function adaptarClienteUsoIA(cliente: SupabaseClient): ClienteUsoIA {
   return { rpc: (funcion) => cliente.rpc(funcion) }
 }
 
+export function adaptarClienteSoporte(cliente: SupabaseClient): ClienteSoporte {
+  return {
+    from: (tabla) => ({
+      select: (columnas) => ({ order: (columna, opciones) => cliente.from(tabla).select(columnas).order(columna, opciones) }),
+      insert: (fila) => cliente.from(tabla).insert(fila),
+    }),
+    rpc: (funcion, args) => cliente.rpc(funcion, args),
+  }
+}
+
 function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
   return {
     storage: {
@@ -90,7 +101,8 @@ function adaptarClienteArchivos(cliente: SupabaseClient): ClienteArchivos {
 
 // Punto de composición: acá los servicios reciben el cliente real de Supabase.
 export const servicioEscritura = crearServicioEscritura(adaptarClienteEscritura(supabase))
-export const servicioUsoIA = crearServicioUsoIA(adaptarClienteUsoIA(supabase))
+export const servicioSoporte = crearServicioSoporte(adaptarClienteSoporte(supabase))
+export const servicioUsoIA =crearServicioUsoIA(adaptarClienteUsoIA(supabase))
 export const servicioArchivos =crearServicioArchivos(adaptarClienteArchivos(supabase))
 export const servicioAuth = crearServicioAuth(adaptarClienteAuth(supabase))
 export const cargarFilasDeSesion = (rol: Rol) => cargarFilasSesion(adaptarClienteDatos(supabase), rol)
