@@ -16,6 +16,8 @@
 //   IA_MODELO=gpt-oss:120b-cloud
 //   IA_API_KEY=…                     (nunca en el repo ni en el navegador)
 //   IA_VISION=false                  (true si el modelo acepta imágenes)
+//   IA_MAX_CARACTERES=24000          (opcional: recorta el documento; por defecto 60000. Para un proveedor con tope
+//                                     de tokens por pedido, p. ej. plan gratis de Groq: 8000 tokens ≈ 27600 caracteres con 3 criterios)
 //   (La transcripción de audio y video la hace transcribir-evidencia; acá se analiza el texto guardado.)
 //   CORS_ORIGEN=https://…            (en producción; sin él queda `*`)
 
@@ -25,6 +27,7 @@ import {
   crearAnalizadorCompatibleOpenAI,
   ErrorIA,
   interpretarRespuesta,
+  limiteDeCaracteres,
   validarPedidoAnalisis,
   verificarTamanoArchivo,
   type AnalizadorIA,
@@ -155,7 +158,7 @@ Deno.serve(async (req) => {
     const configurado = crearAnalizador()
     proveedor = configurado.proveedor
     modelo = configurado.modelo
-    const respuesta = await configurado.analizador.completar(armarMensajes(criterios as CriterioIA[], fuente, nombre))
+    const respuesta = await configurado.analizador.completar(armarMensajes(criterios as CriterioIA[], fuente, nombre, undefined, limiteDeCaracteres(Deno.env.get('IA_MAX_CARACTERES'))))
     const { resumen, resultados } = interpretarRespuesta(respuesta, criterios as CriterioIA[])
 
     // 4. Registrar.

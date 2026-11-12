@@ -1,9 +1,12 @@
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   armarMensajes,
   crearAnalizadorCompatibleOpenAI,
   ErrorIA,
   interpretarRespuesta,
+  limiteDeCaracteres,
   textoDeSecciones,
   validarPedidoAnalisis,
   verificarTamanoArchivo,
@@ -54,6 +57,73 @@ describe('armarMensajes', () => {
 
     expect(String(usuario.content).length).toBeLessThan(80_000)
     expect(String(usuario.content)).toContain('[texto recortado]')
+  })
+})
+
+// Un proveedor con un tope de tokens por pedido (p. ej. el plan gratis de Groq: 8 000, ~27 600 caracteres de
+// documento con 3 criterios) rechaza con 413 un documento largo. IA_MAX_CARACTERES lo recorta ANTES de pedirlo,
+// y al modelo se le avisa para que no tome por "hueco" lo que puede estar en la parte omitida.
+describe('límite de caracteres del documento (IA_MAX_CARACTERES)', () => {
+  it('sin valor, o con uno que no sirve, se usa el de siempre: 60 000', () => {
+    for (const v of [undefined, null, '', '   ', 'abc', '0', '-5', 'NaN']) expect(limiteDeCaracteres(v), String(v)).toBe(60_000)
+  })
+
+  it('toma el valor configurado', () => {
+    expect(limiteDeCaracteres('24000')).toBe(24_000)
+    expect(limiteDeCaracteres('  24000  ')).toBe(24_000)
+    expect(limiteDeCaracteres('24000.9')).toBe(24_000)
+  })
+
+  it('no baja de 2 000 (un límite absurdo dejaría el análisis sin contenido) ni sube de 60 000 (lo probado)', () => {
+    expect(limiteDeCaracteres('500')).toBe(2_000)
+    expect(limiteDeCaracteres('1999')).toBe(2_000)
+    expect(limiteDeCaracteres('2000')).toBe(2_000)
+    expect(limiteDeCaracteres('999999')).toBe(60_000)
+    expect(limiteDeCaracteres('60001')).toBe(60_000)
+  })
+
+  const MARCA = '¤' // un carácter que no aparece en el prompt ni en los criterios: se puede contar exacto
+  const armar = (largo: number, max?: number) => String(armarMensajes([C521], { texto: MARCA.repeat(largo), imagenes: [] }, 'Largo', 'n0nce', max)[1].content)
+  const cuenta = (s: string) => s.split(MARCA).length - 1
+
+  it('recorta el texto al límite configurado', () => {
+    expect(cuenta(armar(20_000, 5_000))).toBe(5_000)
+    expect(armar(20_000, 5_000)).toContain('[texto recortado]')
+  })
+
+  it('sin límite configurado recorta en 60 000', () => {
+    expect(cuenta(armar(70_000))).toBe(60_000)
+  })
+
+  it('un texto justo del tamaño del límite NO se recorta', () => {
+    expect(cuenta(armar(5_000, 5_000))).toBe(5_000)
+    expect(armar(5_000, 5_000)).not.toContain('[texto recortado]')
+    expect(armar(5_000, 5_000)).not.toMatch(/recortado/i)
+  })
+
+  it('al recortar le avisa al modelo, FUERA del bloque de datos no confiables, cuánto se incluyó y qué hacer', () => {
+    const texto = armar(20_000, 5_000)
+    const nota = texto.slice(0, texto.indexOf('<fuente-n0nce>'))
+    expect(nota).toMatch(/recortado/i)
+    // En ese orden: lo incluido de lo total (no al revés).
+    expect(nota).toContain('(5000 de 20000 caracteres)')
+    expect(nota).toMatch(/No evaluable/)
+    expect(nota).toMatch(/resumen/i)
+  })
+
+  it('un texto corto no lleva ninguna nota de recorte', () => {
+    expect(armar(100, 5_000)).not.toMatch(/recortado/i)
+  })
+
+  it('la función analizar-ia lee IA_MAX_CARACTERES y se lo pasa a armarMensajes (no queda sin cablear)', () => {
+    const index = readFileSync(resolve(__dirname, '..', 'analizar-ia', 'index.ts'), 'utf8')
+    expect(index).toContain("limiteDeCaracteres(Deno.env.get('IA_MAX_CARACTERES'))")
+    expect(index).toMatch(/armarMensajes\([^)]*limiteDeCaracteres\(/)
+  })
+
+  it('una fuente que son solo imágenes no lleva nota de recorte', () => {
+    const [, usuario] = armarMensajes([C521], { texto: '', imagenes: [{ mime: 'image/png', base64: 'AAAA' }] }, 'Foto', 'n0nce', 2_000)
+    expect(JSON.stringify(usuario.content)).not.toMatch(/recortado/i)
   })
 })
 
@@ -247,6 +317,15 @@ describe('crearAnalizadorCompatibleOpenAI', () => {
     await expect(con(404).completar([])).rejects.toThrow(/modelo.*no existe/i)
     await expect(con(429).completar([])).rejects.toThrow(/límite/i)
     await expect(con(500).completar([])).rejects.toThrow(/500/)
+  })
+
+  it('un 413 (pedido demasiado grande para el límite de tokens) dice qué hacer y no solo "respondió 413"', async () => {
+    const error = await crearAnalizadorCompatibleOpenAI({ ...config, fetch: async () => new Response('Request too large … Limit 8000, Requested 12603', { status: 413 }) })
+      .completar([]).catch((e: unknown) => e as Error)
+    expect(error).toBeInstanceOf(ErrorIA)
+    expect(error.message).toMatch(/demasiado grande/i)
+    expect(error.message).toMatch(/IA_MAX_CARACTERES/)
+    expect(error.message).not.toMatch(/413|12603|8000/)
   })
 
   describe('proveedor sin saldo', () => {
