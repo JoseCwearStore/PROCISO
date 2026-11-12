@@ -224,9 +224,9 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"f7f7f7f7-0001-0000-0000-000000000004","role":"authenticated"}', true);
 set local role authenticated;
 select lives_ok(
-  $$ insert into public.proyectos (consultoria_id, empresa_id, nombre, objetivo)
-     values ('f7f7f7f7-0002-0000-0000-000000000001', 'f7f7f7f7-0003-0000-0000-000000000001', 'Nuevo proyecto', 'Objetivo') $$,
-  'El admin crea un proyecto con las columnas que usa la app'
+  $$ select public.crear_proyecto(p_empresa_id => 'f7f7f7f7-0003-0000-0000-000000000001', p_consultor_id => null,
+       p_nombre => 'Nuevo proyecto', p_objetivo => 'Objetivo') $$,
+  'El admin crea un proyecto con las columnas que usa la app (por crear_proyecto, desde L5d)'
 );
 select throws_ok(
   $$ insert into public.proyectos (consultoria_id, empresa_id, nombre, avance)
@@ -271,14 +271,15 @@ select lives_ok(
   'La subida de evidencia con TODAS las columnas de la app funciona'
 );
 reset role;
+-- (una prueba anterior archivó esta empresa y crear_proyecto rechaza las archivadas: se reactiva)
+update public.empresas set activa = true where id = 'f7f7f7f7-0003-0000-0000-000000000001';
 select set_config('request.jwt.claims', '{"sub":"f7f7f7f7-0001-0000-0000-000000000004","role":"authenticated"}', true);
 set local role authenticated;
 select lives_ok(
-  $$ insert into public.proyectos (consultoria_id, empresa_id, consultor_id, nombre, objetivo, alcance, edicion_norma, fecha_inicio, fecha_fin_estimada)
-     values ('f7f7f7f7-0002-0000-0000-000000000001', 'f7f7f7f7-0003-0000-0000-000000000001', 'f7f7f7f7-0001-0000-0000-000000000001',
-             'Proyecto completo', 'obj', 'alc', 'ISO 9001:2026', '2026-01-01', '2026-12-31')
-     returning * $$,
-  'Crear proyecto con TODAS las columnas de la app funciona'
+  $$ select public.crear_proyecto(p_empresa_id => 'f7f7f7f7-0003-0000-0000-000000000001', p_consultor_id => 'f7f7f7f7-0001-0000-0000-000000000001',
+       p_nombre => 'Proyecto completo', p_objetivo => 'obj', p_alcance => 'alc', p_edicion_norma => 'ISO 9001:2026',
+       p_fecha_inicio => '2026-01-01', p_fecha_fin_estimada => '2026-12-31') $$,
+  'Crear proyecto con TODAS las columnas de la app funciona (por crear_proyecto, desde L5d)'
 );
 select lives_ok(
   $$ insert into public.empresas (consultoria_id, nombre, nombre_comercial, rfc, sector, tamano, trabajadores, ciudad,

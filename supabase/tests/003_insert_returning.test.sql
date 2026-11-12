@@ -6,7 +6,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(4);
+select plan(4);   -- empresas RETURNING · crear_proyecto · consultor asignado · el consultor lo ve
 
 insert into auth.users (id, email, aud, role) values
   ('fcfcfcfc-0000-0000-0000-000000000001', 'admin@ret.test', 'authenticated', 'authenticated'),
@@ -28,25 +28,16 @@ select lives_ok(
   'El admin puede crear una empresa y recibirla de vuelta (RETURNING)'
 );
 
--- Sin `id`, como hace la app: desde L1 el INSERT de proyectos tiene permisos por columna
--- y el id sale del default.
+-- Desde L5d los proyectos NO se insertan por la API: se crean con crear_proyecto(), que devuelve la
+-- fila y asigna al consultor responsable en la MISMA transacción (el RETURNING ya no aplica).
 select lives_ok(
-  $$ insert into public.proyectos (consultoria_id, empresa_id, consultor_id, nombre)
-     values ('f6f6f6f6-0000-0000-0000-000000000001',
-             'f7f7f7f7-0000-0000-0000-000000000001', 'fcfcfcfc-0000-0000-0000-000000000002', 'Nuevo proyecto') returning id $$,
-  'El admin puede crear un proyecto y recibirlo de vuelta (RETURNING)'
+  $$ select public.crear_proyecto(p_empresa_id => 'f7f7f7f7-0000-0000-0000-000000000001',
+       p_consultor_id => 'fcfcfcfc-0000-0000-0000-000000000002', p_nombre => 'Nuevo proyecto') $$,
+  'El admin crea un proyecto con crear_proyecto y recibe la fila de vuelta'
 );
--- Se fija un id conocido (como postgres) para los chequeos que siguen.
-reset role;
-update public.proyectos set id = 'f8f8f8f8-0000-0000-0000-000000000001' where nombre = 'Nuevo proyecto';
-select set_config('request.jwt.claims', '{"sub":"fcfcfcfc-0000-0000-0000-000000000001","role":"authenticated"}', true);
-set local role authenticated;
-
-select lives_ok(
-  $$ insert into public.proyecto_miembros (proyecto_id, usuario_id, consultoria_id)
-     values ('f8f8f8f8-0000-0000-0000-000000000001', 'fcfcfcfc-0000-0000-0000-000000000002',
-             'f6f6f6f6-0000-0000-0000-000000000001') returning proyecto_id $$,
-  'El admin puede asignar al consultor y recibir la fila de vuelta (RETURNING)'
+select is(
+  (select count(*)::int from public.proyecto_miembros where usuario_id = 'fcfcfcfc-0000-0000-0000-000000000002'), 1,
+  'El consultor responsable quedó asignado en la misma operación'
 );
 reset role;
 
@@ -54,7 +45,7 @@ reset role;
 select set_config('request.jwt.claims', '{"sub":"fcfcfcfc-0000-0000-0000-000000000002","role":"authenticated"}', true);
 set local role authenticated;
 select is(
-  (select count(*) from public.proyectos where id = 'f8f8f8f8-0000-0000-0000-000000000001'),
+  (select count(*) from public.proyectos where nombre = 'Nuevo proyecto'),
   1::bigint,
   'El consultor asignado ve el proyecto recién creado'
 );
