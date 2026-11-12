@@ -148,7 +148,8 @@ export function textoDeSecciones(
 // ─── Armado del pedido ──────────────────────────────────────────────────────
 
 // Un modelo chico tiene contexto chico, y algunos proveedores topean los tokens por pedido (el plan gratis de
-// Groq: 8 000, unos 27 600 caracteres de documento con 3 criterios): se recorta el texto y se avisa.
+// Groq: 8 000; medido sobre el TEXTO que se manda: ~19 000 caracteres pasan con 3 y con 6 criterios, y con 24 000
+// queda en el borde) se recorta el texto y se avisa.
 // IA_MAX_CARACTERES lo baja; sube hasta 60 000 (lo probado) y no baja de 2 000 (dejaría el análisis sin contenido).
 export const LIMITE_TEXTO_POR_DEFECTO = 60_000
 const LIMITE_TEXTO_MINIMO = 2_000

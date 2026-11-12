@@ -60,8 +60,8 @@ describe('armarMensajes', () => {
   })
 })
 
-// Un proveedor con un tope de tokens por pedido (p. ej. el plan gratis de Groq: 8 000, ~27 600 caracteres de
-// documento con 3 criterios) rechaza con 413 un documento largo. IA_MAX_CARACTERES lo recorta ANTES de pedirlo,
+// Un proveedor con un tope de tokens por pedido (p. ej. el plan gratis de Groq: 8 000, ~19 000 caracteres de
+// texto con 3 a 6 criterios) rechaza con 413 un documento largo. IA_MAX_CARACTERES lo recorta ANTES de pedirlo,
 // y al modelo se le avisa para que no tome por "hueco" lo que puede estar en la parte omitida.
 describe('límite de caracteres del documento (IA_MAX_CARACTERES)', () => {
   it('sin valor, o con uno que no sirve, se usa el de siempre: 60 000', () => {
