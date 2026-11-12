@@ -1,6 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { formatearFecha } from '../lib/datos'
 import { mensajeDeError } from '../lib/escrituras'
+import { textoAvisoFallo } from '../lib/ia'
 import { servicioEscritura } from '../lib/servicios'
 import type { AnalisisIA } from '../types'
 import { refrescarUsoIA, useUsoIA } from './useUsoIA'
@@ -49,7 +50,7 @@ export function useAccionesIA() {
         return null
       }
       dispatch({ type: 'ADD_ANALISIS_IA', analisis: resultado.valor })
-      if (resultado.valor.estado === 'Error') showToast('El análisis no se pudo completar. El motivo quedó registrado.', 'warning')
+      if (resultado.valor.estado === 'Error') showToast(textoAvisoFallo(resultado.valor), 'error')
       else showToast('Preevaluación lista. Revísala antes de usarla.', 'success')
       return resultado.valor
     },

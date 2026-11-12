@@ -6,8 +6,8 @@ import { TranscripcionEvidencia } from './TranscripcionEvidencia'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
 import {
-  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, esAnalisisDeVideo, etiquetaSugerencia, fuenteAnalizada,
-  NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
+  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
+  fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
 } from '../lib/ia'
 import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
@@ -48,21 +48,28 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const motivoBloqueo = tipoMedia && !tr.cargado ? null : mensajeDeEstado(estadoTr)
   const [analizando, setAnalizando] = useState(false)
   const [analizandoVideo, setAnalizandoVideo] = useState(false)
+  // El último análisis que falló: se muestra como alerta junto a los botones (no solo enterrado en el historial).
+  const [fallo, setFallo] = useState<AnalisisIA | null>(null)
+  useEffect(() => setFallo(null), [fuente.id])
   const esVideo = tipoEvidencia === 'Video'
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
   const historial = ia.analisisDe(fuente)
 
   async function analizar() {
+    setFallo(null)
     setAnalizando(true)
-    await ia.analizar(fuente, seleccion)
+    const resultado = await ia.analizar(fuente, seleccion)
     setAnalizando(false)
+    setFallo(resultado?.estado === 'Error' ? resultado : null)
   }
 
   // Video nativo: el modelo mira la imagen y oye el audio; no depende de la transcripción.
   async function analizarVideo() {
+    setFallo(null)
     setAnalizandoVideo(true)
-    await ia.analizar(fuente, seleccion, 'video')
+    const resultado = await ia.analizar(fuente, seleccion, 'video')
     setAnalizandoVideo(false)
+    setFallo(resultado?.estado === 'Error' ? resultado : null)
   }
 
   return (
@@ -142,6 +149,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
               {analizando ? 'Analizando…' : esVideo ? 'Analizar transcripción' : 'Analizar con IA'}
             </Button>
           </div>
+          {fallo && <AvisoFallo analisis={fallo} onCerrar={() => setFallo(null)} />}
           {motivoBloqueo && (
             <p className="text-xs text-amber-700">{esVideo ? <strong>Solo para «Analizar transcripción»: </strong> : null}{motivoBloqueo}</p>
           )}
@@ -154,6 +162,24 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
         <div className="space-y-3">{historial.map((a) => <TarjetaAnalisis key={a.id} analisis={a} porId={porId} tipoEvidencia={tipoEvidencia} />)}</div>
       )}
     </section>
+  )
+}
+
+// Un análisis que falló: alerta bien visible junto a los botones, con el motivo real y si se descontó del cupo diario.
+function AvisoFallo({ analisis, onCerrar }: { analisis: AnalisisIA; onCerrar: () => void }) {
+  const { titulo, motivo, cupo } = detalleFalloAnalisis(analisis)
+  return (
+    <div role="alert" className="flex gap-3 rounded-lg border-2 border-red-300 bg-red-50 p-3 text-sm text-red-800">
+      <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-red-600" />
+      <div className="min-w-0 flex-1 space-y-1">
+        <p className="font-semibold">{titulo}</p>
+        <p>{motivo}</p>
+        {cupo && <p className="text-xs text-red-700">{cupo}</p>}
+      </div>
+      <button type="button" aria-label="Cerrar aviso" onClick={onCerrar} className="h-fit text-red-600 hover:text-red-800">
+        <X className="h-4 w-4" />
+      </button>
+    </div>
   )
 }
 

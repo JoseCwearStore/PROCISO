@@ -50,6 +50,13 @@ export function mensajeDeBD(error: { code?: string; message?: string }): string 
 
 export { esUuid } from './validar.ts'
 
+// ─── ¿El pedido fallido gastó tokens? ───────────────────────────────────────
+
+// Decisión del 12/11: el tope diario solo cuenta lo que sí gastó tokens (como un producto que no se encuentra en la
+// tienda: no se cobra). Un ErrorIA lo dice él mismo (`consumio`, falso por defecto); cualquier OTRO error cuenta,
+// porque no se sabe qué pasó y descontar de más es lo conservador (p. ej. falló algo nuestro DESPUÉS de la respuesta).
+export const huboConsumo = (e: unknown): boolean => (e instanceof ErrorIA ? e.consumio : true)
+
 // ─── Motivo guardado en error_detalle ───────────────────────────────────────
 
 // `error_detalle` lo lee el cliente (AUD04-B3). Un ErrorIA ya es un mensaje accionable y

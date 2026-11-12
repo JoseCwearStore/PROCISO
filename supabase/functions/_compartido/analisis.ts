@@ -10,7 +10,17 @@
 
 import { esUuid } from './validar.ts'
 
-export class ErrorIA extends Error {}
+// `consumio`: ¿el pedido llegó a gastar tokens en el proveedor? (decisión del 12/11: el tope diario de pedidos solo cuenta
+// lo que sí gastó; un 503, una clave inválida, un corte de red o un error nuestro antes de llamar no se descuentan).
+// Por defecto NO: solo se marca `true` lo que ocurre DESPUÉS de que el proveedor respondió (JSON roto, bloqueada,
+// cortada, vacía), porque ahí el proveedor ya procesó el pedido aunque la respuesta no sirva.
+export class ErrorIA extends Error {
+  readonly consumio: boolean
+  constructor(mensaje: string, opciones: { consumio?: boolean } = {}) {
+    super(mensaje)
+    this.consumio = opciones.consumio ?? false
+  }
+}
 
 // ─── Validación del pedido de análisis (AUD04-B2) ───────────────────────────
 // Antes el cuerpo pasaba casi crudo: un valor mal formado terminaba en un 500 con el texto
@@ -385,7 +395,7 @@ export function interpretarRespuesta(
   } catch {
     // El texto de la respuesta va al log del servidor, no al error que lee el cliente (AUD04-B3).
     console.error('[analizar-ia] respuesta sin JSON:', respuesta.slice(0, 200))
-    throw new ErrorIA('La IA no devolvió JSON válido.')
+    throw new ErrorIA('La IA no devolvió JSON válido.', { consumio: true })
   }
 
   const porClausula = new Map<string, Record<string, unknown>>()
@@ -491,7 +501,7 @@ export function crearAnalizadorCompatibleOpenAI(config: {
       }
       const cuerpo = await respuesta.json() as { choices?: { message?: { content?: string } }[] }
       const texto = cuerpo.choices?.[0]?.message?.content
-      if (!texto) throw new ErrorIA('El proveedor de IA respondió sin contenido.')
+      if (!texto) throw new ErrorIA('El proveedor de IA respondió sin contenido.', { consumio: true })
       return texto
     },
   }

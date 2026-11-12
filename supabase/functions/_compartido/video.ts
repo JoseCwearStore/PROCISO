@@ -323,14 +323,14 @@ export function crearAnalizadorGemini(config: {
         try {
           datos = await respuesta.json()
         } catch {
-          throw new ErrorIA('El proveedor de análisis de video devolvió una respuesta no válida.')
+          throw new ErrorIA('El proveedor de análisis de video devolvió una respuesta no válida.', { consumio: true })
         }
-        if (datos.promptFeedback?.blockReason) throw new ErrorIA('El proveedor bloqueó el análisis del video por sus filtros de seguridad.')
+        if (datos.promptFeedback?.blockReason) throw new ErrorIA('El proveedor bloqueó el análisis del video por sus filtros de seguridad.', { consumio: true })
         const candidato = datos.candidates?.[0]
-        if (!candidato) throw new ErrorIA('El proveedor de análisis de video respondió sin contenido.')
-        if (candidato.finishReason === 'MAX_TOKENS') throw new ErrorIA('La respuesta del análisis se cortó por largo. Elige menos criterios e inténtalo de nuevo.')
+        if (!candidato) throw new ErrorIA('El proveedor de análisis de video respondió sin contenido.', { consumio: true })
+        if (candidato.finishReason === 'MAX_TOKENS') throw new ErrorIA('La respuesta del análisis se cortó por largo. Elige menos criterios e inténtalo de nuevo.', { consumio: true })
         const texto = (candidato.content?.parts ?? []).map((p) => p.text ?? '').join('')
-        if (!texto.trim()) throw new ErrorIA('El proveedor de análisis de video respondió sin contenido.')
+        if (!texto.trim()) throw new ErrorIA('El proveedor de análisis de video respondió sin contenido.', { consumio: true })
         return texto
       } finally {
         if (nombreArchivo) await borrar(nombreArchivo)

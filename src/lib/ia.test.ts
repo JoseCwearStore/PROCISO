@@ -2,8 +2,9 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, esAnalisisDeVideo, ETIQUETA_SUGERENCIA_IA, etiquetaSugerencia,
-  fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
+  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, detalleFalloAnalisis, esAnalisisDeVideo,
+  ETIQUETA_SUGERENCIA_IA, etiquetaSugerencia, fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
+  textoAvisoFallo,
 } from './ia'
 import type { CriterioEvaluacion } from '../types'
 
@@ -196,6 +197,55 @@ describe('análisis de video: avisos y etiquetas', () => {
     expect(limiteSubidaMb('Foto')).toBe(25)
     expect(limiteSubidaMb('Audio')).toBe(25)
     expect(limiteSubidaMb('Documento')).toBe(25)
+  })
+})
+
+// El aviso de un análisis que falló: visible junto a los botones y con el motivo real (decisión del 12/11).
+describe('detalleFalloAnalisis (qué se le dice a quien pidió un análisis que falló)', () => {
+  it('lleva el motivo real y un título fijo', () => {
+    const d = detalleFalloAnalisis({ errorDetalle: 'El modelo está saturado.', sinConsumo: true })
+    expect(d.titulo).toBe('El análisis no se pudo completar')
+    expect(d.motivo).toBe('El modelo está saturado.')
+  })
+
+  it('si no se registró el motivo, lo dice en vez de mostrar un hueco', () => {
+    expect(detalleFalloAnalisis({}).motivo).toMatch(/no se registró/i)
+    expect(detalleFalloAnalisis({ errorDetalle: '   ' }).motivo).toMatch(/no se registró/i)
+  })
+
+  it('sin gasto: avisa que NO se descontó del cupo diario', () => {
+    const d = detalleFalloAnalisis({ errorDetalle: 'x', sinConsumo: true })
+    expect(d.cupo).toMatch(/no se descontó de tu cupo diario/i)
+  })
+
+  it('con gasto: avisa que SÍ cuenta', () => {
+    const d = detalleFalloAnalisis({ errorDetalle: 'x', sinConsumo: false })
+    expect(d.cupo).toMatch(/sí cuenta/i)
+    expect(d.cupo).not.toMatch(/no se descontó/i)
+  })
+
+  it('si no se sabe (dato ausente), no afirma nada sobre el cupo', () => {
+    expect(detalleFalloAnalisis({ errorDetalle: 'x' }).cupo).toBeNull()
+  })
+
+  it('el texto del aviso pasajero lleva el título y el motivo', () => {
+    expect(textoAvisoFallo({ errorDetalle: 'El modelo está saturado.', sinConsumo: true }))
+      .toBe('El análisis no se pudo completar: El modelo está saturado.')
+  })
+})
+
+describe('cableado del aviso de fallo (no queda sin conectar)', () => {
+  const panel = readFileSync(resolve(__dirname, '../components/PanelAnalisisIA.tsx'), 'utf8')
+  const hook = readFileSync(resolve(__dirname, '../hooks/useAccionesIA.ts'), 'utf8')
+
+  it('el panel muestra el fallo como alerta visible, con el cupo, junto a los botones', () => {
+    expect(panel).toMatch(/detalleFalloAnalisis\(/)
+    expect(panel).toMatch(/role="alert"/)
+  })
+
+  it('el aviso pasajero lleva el motivo real y no un texto genérico', () => {
+    expect(hook).toMatch(/textoAvisoFallo\(/)
+    expect(hook).not.toMatch(/El motivo quedó registrado/)
   })
 })
 

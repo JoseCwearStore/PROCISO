@@ -463,6 +463,50 @@ describe('descargarAcotado (AUD09-M3)', () => {
   })
 })
 
+// Decisión del 12/11: el tope diario solo cuenta lo que gastó tokens. `consumio` dice si el proveedor llegó a procesar el pedido.
+describe('proveedor de texto · consumo de tokens (qué cuenta para el tope)', () => {
+  const config = { baseUrl: 'https://x.test/v1', apiKey: 'k', modelo: 'm' }
+  const falla = (respuesta: () => Response | Promise<Response>) =>
+    crearAnalizadorCompatibleOpenAI({ ...config, fetch: (async () => respuesta()) as typeof fetch })
+      .completar([]).catch((e: ErrorIA) => e)
+
+  it.each([400, 401, 402, 403, 404, 413, 429, 500, 503])('un %i del proveedor NO gastó tokens', async (estado) => {
+    const e = await falla(() => new Response('detalle', { status: estado }))
+    expect(e).toBeInstanceOf(ErrorIA)
+    expect(e.consumio).toBe(false)
+  })
+
+  it('un timeout o una falla de red NO gastaron tokens', async () => {
+    const colgado: typeof fetch = (_url, init) =>
+      new Promise((_resolve, reject) => { init?.signal?.addEventListener('abort', () => reject(new DOMException('a', 'AbortError'))) })
+    const timeout = await crearAnalizadorCompatibleOpenAI({ ...config, fetch: colgado, timeoutMs: 20 }).completar([]).catch((e: ErrorIA) => e)
+    expect(timeout.consumio).toBe(false)
+    const red = await falla(() => { throw new Error('ECONNRESET') })
+    expect(red.consumio).toBe(false)
+  })
+
+  it('si el proveedor RESPONDIÓ pero sin contenido, sí gastó tokens', async () => {
+    const e = await falla(() => new Response(JSON.stringify({ choices: [{ message: { content: '' } }] }), { status: 200 }))
+    expect(e.message).toMatch(/sin contenido/i)
+    expect(e.consumio).toBe(true)
+  })
+
+  it('una respuesta sin JSON válido es un pedido que SÍ gastó tokens', () => {
+    try {
+      interpretarRespuesta('texto sin llaves', [C521])
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(ErrorIA)
+      expect((e as ErrorIA).consumio).toBe(true)
+    }
+  })
+
+  it('los errores de la validación o de la descarga (antes de llamar a la IA) no gastan', () => {
+    expect(() => validarPedidoAnalisis(null)).toThrow(expect.objectContaining({ consumio: false }))
+    expect(() => verificarTamanoArchivo({ length: MAX_PDF_BYTES + 1 }, 'application/pdf')).toThrow(expect.objectContaining({ consumio: false }))
+  })
+})
+
 // AUD09-B5/B6: la rama de video abría el archivo con un fetch sin plazo y con el error crudo (trae la URL firmada).
 describe('abrirArchivoFirmado', () => {
   const URL_FIRMADA = 'https://storage.test/object/sign/evidencias/v.mp4?token=SECRETO456'

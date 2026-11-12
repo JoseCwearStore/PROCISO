@@ -188,6 +188,7 @@ interface RespuestaAnalisisIA {
   estado: AnalisisIA['estado']
   resumen?: string | null
   error?: string | null
+  sinConsumo?: boolean
   proveedor?: string | null
   modelo?: string | null
   resultados?: { criterio_id: string; estado: ResultadoAnalisisIA['estado']; hallazgos: string | null; sugerencias: string | null }[]
@@ -451,6 +452,7 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
           estado: r.estado,
           resumen: r.resumen ?? undefined,
           errorDetalle: r.error ?? undefined,
+          ...(typeof r.sinConsumo === 'boolean' ? { sinConsumo: r.sinConsumo } : {}),
           proveedor: r.proveedor ?? undefined,
           modelo: r.modelo ?? undefined,
           fecha,

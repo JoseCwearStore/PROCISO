@@ -466,6 +466,62 @@ describe('crearAnalizadorGemini · video grande (Files API)', () => {
   })
 })
 
+// Decisión del 12/11: el tope diario solo cuenta lo que gastó tokens. `consumio` dice si Google llegó a procesar el pedido.
+describe('crearAnalizadorGemini · consumo de tokens (qué cuenta para el tope)', () => {
+  const con = (r: () => Response | Promise<Response>) => adaptador(vi.fn(async () => r()) as unknown as typeof fetch)
+  const falla = (r: () => Response) => con(r).analizarVideo(MENSAJES, pequeno()).catch((e: ErrorIA) => e)
+
+  it.each([400, 401, 403, 404, 413, 429, 500, 502, 503])('un %i del proveedor NO gastó tokens', async (estado) => {
+    const e = await falla(() => error(estado))
+    expect(e).toBeInstanceOf(ErrorIA)
+    expect(e.consumio).toBe(false)
+  })
+
+  it('un timeout o una falla de red NO gastaron tokens', async () => {
+    const timeout = vi.fn(async () => { throw Object.assign(new Error('t'), { name: 'TimeoutError' }) }) as unknown as typeof fetch
+    expect((await adaptador(timeout, { timeoutMs: 5000 }).analizarVideo(MENSAJES, pequeno()).catch((x: ErrorIA) => x)).consumio).toBe(false)
+    expect((await falla(() => { throw new Error('ECONNRESET') })).consumio).toBe(false)
+  })
+
+  it('si el procesamiento del archivo en Google falla, no se llegó a generar nada', async () => {
+    const llamar = vi.fn(async (url: string) => {
+      if (url === `${BASE}/upload/v1beta/files`) return ok({}, { 'x-goog-upload-url': 'https://subida.test/s' })
+      if (url === 'https://subida.test/s') return ok({ file: { name: 'files/abc', uri: 'u', state: 'PROCESSING' } })
+      return ok({ state: 'FAILED' })
+    })
+    const e = await adaptador(llamar as unknown as typeof fetch)
+      .analizarVideo(MENSAJES, { mime: 'video/mp4', tamano: MAX_VIDEO_INLINE_BYTES + 1, cuerpo: new Uint8Array(4) })
+      .catch((x: ErrorIA) => x)
+    expect(e.message).toMatch(/no pudo procesar el video/i)
+    expect(e.consumio).toBe(false)
+  })
+
+  it('si Google RESPONDIÓ y la respuesta no sirvió (bloqueada, cortada, vacía, rota), sí gastó tokens', async () => {
+    const casos: [string, () => Response][] = [
+      ['bloqueada', () => ok({ promptFeedback: { blockReason: 'SAFETY' } })],
+      ['sin candidatos', () => ok({ candidates: [] })],
+      ['cortada por largo', () => ok({ candidates: [{ content: { parts: [{ text: '{"resumen":"cort' }] }, finishReason: 'MAX_TOKENS' }] })],
+      ['texto en blanco', () => ok({ candidates: [{ content: { parts: [{ text: '   ' }] }, finishReason: 'STOP' }] })],
+      ['cuerpo que no es JSON', () => new Response('no es json', { status: 200 })],
+    ]
+    for (const [nombre, respuesta] of casos) {
+      const e = await falla(respuesta)
+      expect(e, nombre).toBeInstanceOf(ErrorIA)
+      expect(e.consumio, nombre).toBe(true)
+    }
+  })
+
+  it('una respuesta que no es JSON de resultados es un pedido que SÍ gastó tokens', () => {
+    try {
+      interpretarRespuestaVideo('sin json', [C714])
+      expect.unreachable()
+    } catch (e) {
+      expect(e).toBeInstanceOf(ErrorIA)
+      expect((e as ErrorIA).consumio).toBe(true)
+    }
+  })
+})
+
 describe('crearAnalizadorGemini · errores', () => {
   const con = (r: () => Response | Promise<Response>) => adaptador(vi.fn(async () => r()) as unknown as typeof fetch)
   const mensajeDe = (r: () => Response) => con(r).analizarVideo(MENSAJES, pequeno()).catch((e: Error) => e)

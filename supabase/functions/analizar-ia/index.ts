@@ -48,7 +48,7 @@ import {
   interpretarRespuestaVideo,
   verificarTamanoVideo,
 } from '../_compartido/video.ts'
-import { crearCors, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
+import { crearCors, estadoDe, huboConsumo, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
 import { esMediaTranscribible, fuenteDeTranscripcion } from '../_compartido/transcripcion.ts'
 import { extraerArchivo, extraerDocumento } from './extractores.ts'
 
@@ -119,7 +119,10 @@ Deno.serve(async (req) => {
 
   let proveedor = Deno.env.get('IA_PROVEEDOR') ?? 'openai-compatible'
   let modelo = Deno.env.get('IA_MODELO') ?? ''
-  const registrar = (estado: 'Completado' | 'Error', datos: { resumen?: string | null; error?: string; resultados?: unknown[] }) =>
+  const registrar = (
+    estado: 'Completado' | 'Error',
+    datos: { resumen?: string | null; error?: string; resultados?: unknown[]; sinConsumo?: boolean },
+  ) =>
     conClaveSecreta.rpc('registrar_resultado_analisis', {
       p_analisis_id: analisis.id,
       p_estado: estado,
@@ -128,6 +131,8 @@ Deno.serve(async (req) => {
       p_proveedor: proveedor,
       p_modelo: modelo,
       p_resultados: datos.resultados ?? [],
+      // Un Error que no llegó a gastar tokens no se descuenta del cupo diario (decisión del 12/11).
+      p_sin_consumo: datos.sinConsumo ?? false,
     })
 
   try {
@@ -144,7 +149,8 @@ Deno.serve(async (req) => {
       const { error: errorRegistro } = await registrar('Completado', { resumen, resultados })
       if (errorRegistro) {
         console.error('[analizar-ia] no se pudo guardar el resultado:', errorRegistro)
-        throw new ErrorIA('No se pudo guardar el resultado.')
+        // Ya se gastaron los tokens: si no se pudo guardar, el pedido cuenta.
+        throw new ErrorIA('No se pudo guardar el resultado.', { consumio: true })
       }
       // Se devuelve el análisis completo: la pantalla lo muestra sin otra consulta.
       return responder(200, { id: analisis.id, estado: 'Completado', resumen, proveedor, modelo, resultados })
@@ -235,10 +241,13 @@ Deno.serve(async (req) => {
     // el detalle técnico real va solo al log del servidor.
     console.error('[analizar-ia] falló el análisis:', e)
     const motivo = motivoSaneado(e)
+    // ¿Llegó a gastar tokens? Si el proveedor nunca procesó el pedido (503, clave inválida, red, error nuestro
+    // antes de llamar), no se descuenta del cupo diario; cualquier otro error sí (huboConsumo).
+    const sinConsumo = !huboConsumo(e)
     // AUD09-B7: el RPC devuelve { error } y no lanza: si falla, el análisis queda Pendiente hasta el barrido
     // y la pantalla ya muestra "Error"; que al menos quede en el log del servidor.
-    const { error: errorRegistroError } = await registrar('Error', { error: motivo })
+    const { error: errorRegistroError } = await registrar('Error', { error: motivo, sinConsumo })
     if (errorRegistroError) console.error('[analizar-ia] no se pudo registrar el error del análisis:', errorRegistroError)
-    return responder(200, { id: analisis.id, estado: 'Error', error: motivo, proveedor, modelo, resultados: [] })
+    return responder(200, { id: analisis.id, estado: 'Error', error: motivo, sinConsumo, proveedor, modelo, resultados: [] })
   }
 })

@@ -77,6 +77,32 @@ export function etiquetaSugerencia(tipoEvidencia: string | null | undefined, ana
   return 'Sugerencia'
 }
 
+// ─── Un análisis que falló: qué se le dice a quien lo pidió ─────────────────
+// Decisión del 12/11: el aviso tiene que verse junto a los botones (no enterrado en el historial) y decir el motivo real
+// y si el intento se descontó del cupo diario: solo se descuenta lo que sí gastó tokens (`sinConsumo` lo decide la función).
+
+export interface DetalleFallo {
+  titulo: string
+  motivo: string
+  // null cuando no se sabe (la respuesta no trajo el dato): no se afirma nada.
+  cupo: string | null
+}
+
+export function detalleFalloAnalisis(a: { errorDetalle?: string; sinConsumo?: boolean }): DetalleFallo {
+  const motivo = a.errorDetalle?.trim() || 'No se registró el motivo.'
+  const cupo = a.sinConsumo === true
+    ? 'No se descontó de tu cupo diario: la IA no llegó a procesar el pedido.'
+    : a.sinConsumo === false
+      ? 'Este intento sí cuenta en tu cupo diario: la IA ya había procesado el pedido.'
+      : null
+  return { titulo: 'El análisis no se pudo completar', motivo, cupo }
+}
+
+export const textoAvisoFallo = (a: { errorDetalle?: string; sinConsumo?: boolean }): string => {
+  const { titulo, motivo } = detalleFalloAnalisis(a)
+  return `${titulo}: ${motivo}`
+}
+
 // Un video de ~10 minutos pesa decenas de MB; el resto de los archivos mantiene el tope de 25 MB.
 export const limiteSubidaMb = (tipo: string): number => (tipo === 'Video' ? 200 : 25)
 

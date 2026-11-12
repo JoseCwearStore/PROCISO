@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { ErrorIA } from './analisis.ts'
-import { crearCors, esUuid, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from './http.ts'
+import { crearCors, esUuid, estadoDe, huboConsumo, mensajeDeBD, motivoSaneado, responderCon } from './http.ts'
 
 describe('estadoDe (código de la BD → estado HTTP)', () => {
   it.each([
@@ -68,6 +68,25 @@ describe('motivoSaneado (lo que se guarda en error_detalle y lee el cliente)', (
 
   it('un valor que no es un Error tampoco se filtra', () => {
     expect(motivoSaneado('texto crudo con secreto')).not.toContain('secreto')
+  })
+})
+
+// Decisión del 12/11: el tope diario solo cuenta lo que gastó tokens. El pedido que no llegó a la IA no se descuenta.
+describe('huboConsumo (¿el pedido fallido llegó a gastar tokens en la IA?)', () => {
+  it('un ErrorIA no gasta por defecto (el proveedor nunca llegó a procesar el pedido)', () => {
+    expect(new ErrorIA('saturado').consumio).toBe(false)
+    expect(huboConsumo(new ErrorIA('saturado'))).toBe(false)
+  })
+
+  it('un ErrorIA marcado como consumido sí cuenta', () => {
+    expect(new ErrorIA('JSON roto', { consumio: true }).consumio).toBe(true)
+    expect(huboConsumo(new ErrorIA('JSON roto', { consumio: true }))).toBe(true)
+  })
+
+  it('cualquier otro error cuenta: no se sabe qué pasó, y descontar de más es lo conservador', () => {
+    expect(huboConsumo(new TypeError('x'))).toBe(true)
+    expect(huboConsumo('texto')).toBe(true)
+    expect(huboConsumo(undefined)).toBe(true)
   })
 })
 

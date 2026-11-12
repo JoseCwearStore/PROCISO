@@ -1371,6 +1371,27 @@ describe('analizarConIA', () => {
     expect(resultado).toEqual({ ok: true, valor: expect.objectContaining({ estado: 'Error', errorDetalle: 'El modelo configurado no acepta imágenes.', resultados: [] }) })
   })
 
+  // Decisión del 12/11: un fallo que no gastó tokens no se descuenta del cupo diario, y la pantalla lo dice.
+  it('un análisis que falló SIN gastar tokens vuelve marcado, para avisar que no se descontó del cupo', async () => {
+    const { cliente } = crearClienteDoble({}, { error: null }, {
+      data: { id: 'an-11', estado: 'Error', error: 'El modelo está saturado.', sinConsumo: true, proveedor: 'gemini', modelo: 'x', resultados: [] },
+      error: null,
+    })
+    const resultado = await crearServicioEscritura(cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')
+    expect(resultado).toEqual({ ok: true, valor: expect.objectContaining({ estado: 'Error', sinConsumo: true }) })
+  })
+
+  it('un fallo que SÍ gastó tokens vuelve con sinConsumo en falso, y una respuesta sin el dato lo deja sin definir', async () => {
+    const gasto = crearClienteDoble({}, { error: null }, {
+      data: { id: 'an-12', estado: 'Error', error: 'La IA no devolvió JSON válido.', sinConsumo: false, resultados: [] }, error: null,
+    })
+    const r1 = await crearServicioEscritura(gasto.cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')
+    expect(r1.ok && r1.valor.sinConsumo).toBe(false)
+    const sinDato = crearClienteDoble({}, { error: null }, { data: RESPUESTA, error: null })
+    const r2 = await crearServicioEscritura(sinDato.cliente).analizarConIA(PEDIDO, ROBERTO, '06/11/2026')
+    expect(r2.ok && r2.valor.sinConsumo).toBeUndefined()
+  })
+
   it('un pedido de análisis de video manda el modo a la función', async () => {
     const { cliente, llamadas } = crearClienteDoble({}, { error: null }, { data: RESPUESTA, error: null })
     const pedido = { ...PEDIDO, fuenteTipo: 'evidencia' as const, documentoId: undefined, evidenciaId: 'ev-1', modo: 'video' as const }

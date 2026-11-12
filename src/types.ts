@@ -331,6 +331,8 @@ export interface AnalisisIA {
   estado: EstadoAnalisisIA
   resumen?: string
   errorDetalle?: string
+  // Solo en la respuesta de la función al pedir el análisis: un Error que no llegó a gastar tokens no se descuenta del cupo.
+  sinConsumo?: boolean
   proveedor?: string
   modelo?: string
   fecha: string
