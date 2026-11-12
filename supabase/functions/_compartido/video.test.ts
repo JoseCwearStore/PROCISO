@@ -541,6 +541,19 @@ describe('crearAnalizadorGemini · errores', () => {
     expect(e.message).not.toContain('cuenta@x.com')
   })
 
+  // El log del servidor tiene que alcanzar para ver QUÉ cuota o detalle dijo Google (un 429 trae la métrica y el límite
+  // al final del cuerpo); al usuario nunca viaja.
+  it('el log del servidor conserva hasta 1000 caracteres del cuerpo del error del proveedor, y no más', async () => {
+    const cuerpo = `${'a'.repeat(600)}METRICA_DE_CUOTA${'b'.repeat(1500)}`
+    const registro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const e = await mensajeDe(() => error(429, cuerpo))
+    const logueado = registro.mock.calls.map((llamada) => llamada.map(String).join(' ')).join('\n')
+    registro.mockRestore()
+    expect(logueado).toContain('METRICA_DE_CUOTA')
+    expect(logueado).not.toContain('b'.repeat(1000))
+    expect(e.message).not.toContain('METRICA_DE_CUOTA')
+  })
+
   it('un 503 persistente dice que el modelo está saturado, tras reintentar', async () => {
     const llamar = vi.fn(async () => error(503))
     const e = await adaptador(llamar as unknown as typeof fetch).analizarVideo(MENSAJES, pequeno()).catch((x: Error) => x)

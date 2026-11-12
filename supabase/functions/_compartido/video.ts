@@ -205,7 +205,8 @@ export function crearAnalizadorGemini(config: {
   // El cuerpo del error del proveedor puede traer cuentas, URLs o cuotas: va al log del servidor, no al mensaje que lee el cliente.
   async function fallar(respuesta: Response, porDefecto: string): Promise<never> {
     const cuerpo = await respuesta.text().catch(() => '')
-    console.error(`[IA-video] el proveedor respondió ${respuesta.status}:`, cuerpo.slice(0, 200))
+    // 1000 caracteres: un 429 de Google trae la métrica de cuota y el límite al FINAL del cuerpo (con 200 se perdían).
+    console.error(`[IA-video] el proveedor respondió ${respuesta.status}:`, cuerpo.slice(0, 1000))
     const e = respuesta.status
     if (e === 401 || e === 403) throw new ErrorIA('La clave del análisis de video es inválida o no tiene permiso (revisa IA_VIDEO_API_KEY).')
     if (e === 404) throw new ErrorIA(`El modelo "${config.modelo}" no existe en el proveedor (revisa IA_VIDEO_MODELO).`)
