@@ -3,7 +3,7 @@ import { AlertTriangle, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { Button } from './ui/Button'
 import { IndicadorUsoIA } from './IndicadorUsoIA'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
-import { criteriosSugeridos, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from '../lib/ia'
+import { avisoTranscripcion, criteriosSugeridos, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from '../lib/ia'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
 
 const COLOR: Record<EstadoResultadoIA, string> = {
@@ -21,8 +21,13 @@ export const AVISO_PREEVALUACION =
   'con fines de demostración. Proyecto estudiantil con fines académicos: los criterios son propios y toman como base una edición anterior de la norma. ' +
   'Esto es una preevaluación generada con IA: requiere revisión humana y no constituye un dictamen de conformidad ni una certificación.'
 
-export function PanelAnalisisIA({ fuente, tipoDocumento = null }: { fuente: FuenteAnalisis; tipoDocumento?: Documento['tipo'] | null }) {
+export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null }: {
+  fuente: FuenteAnalisis
+  tipoDocumento?: Documento['tipo'] | null
+  tipoEvidencia?: string | null
+}) {
   const ia = useAccionesIA()
+  const aviso = avisoTranscripcion(tipoEvidencia)
   const [seleccion, setSeleccion] = useState<string[]>(() => criteriosSugeridos(tipoDocumento, ia.criterios))
   const [analizando, setAnalizando] = useState(false)
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
@@ -51,6 +56,12 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null }: { fuente: Fuen
 
       {ia.puedePedir && (
         <div className="mb-4 space-y-2">
+          {aviso && (
+            <p className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{aviso}</span>
+            </p>
+          )}
           <IndicadorUsoIA uso={ia.usoIA} estado={ia.estadoUsoIA} />
           <p className="text-xs font-medium text-slate-600">Cláusulas a evaluar {tipoDocumento ? '(sugeridas según el tipo; puedes cambiarlas)' : ''}</p>
           <div className="flex flex-wrap gap-1.5">

@@ -8,6 +8,20 @@ export const NOTA_CONTENIDO_NO_CONFIABLE =
   'La IA analizó contenido cargado en la plataforma, que puede venir de la empresa evaluada: ella tiene interés en el resultado y podría intentar influir en él. ' +
   'Por eso esta preevaluación no es un dictamen: revísala siempre contra el documento o la evidencia original antes de usarla.'
 
+// Para analizar un audio o un video se transcribe su audio con un servicio EXTERNO: el archivo sale de la plataforma.
+// Se avisa en el punto donde se pide el análisis. Del video no se analiza la imagen.
+export function avisoTranscripcion(tipoEvidencia: string | null | undefined): string | null {
+  if (tipoEvidencia === 'Audio') {
+    return 'Para analizar un audio se transcribe con un servicio externo: el archivo sale de la plataforma. ' +
+      'La transcripción es automática y puede tener errores; revísala contra el audio original.'
+  }
+  if (tipoEvidencia === 'Video') {
+    return 'Para analizar un video se transcribe su audio con un servicio externo: el archivo sale de la plataforma. ' +
+      'La transcripción es automática y puede tener errores, y no se analiza la imagen del video.'
+  }
+  return null
+}
+
 export function fuenteAnalizada(tipo: AnalisisIA['fuenteTipo']): string {
   return tipo === 'documento'
     ? 'Se analizó el contenido de un documento de la plataforma.'

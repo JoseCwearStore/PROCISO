@@ -16,6 +16,9 @@
 //   IA_MODELO=gpt-oss:120b-cloud
 //   IA_API_KEY=…                     (nunca en el repo ni en el navegador)
 //   IA_VISION=false                  (true si el modelo acepta imágenes)
+//   IA_STT_BASE_URL=https://api.groq.com/openai/v1   (transcripción de audio y video)
+//   IA_STT_MODELO=whisper-large-v3-turbo
+//   IA_STT_API_KEY=…                 (otra clave: la del servicio de transcripción)
 //   CORS_ORIGEN=https://…            (en producción; sin él queda `*`)
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
@@ -31,6 +34,7 @@ import {
   type FuenteIA,
 } from '../_compartido/analisis.ts'
 import { crearCors, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
+import { crearTranscriptorCompatibleOpenAI, esMediaTranscribible } from '../_compartido/transcripcion.ts'
 import { extraerArchivo, extraerDocumento } from './extractores.ts'
 
 const CORS = crearCors(Deno.env.get('CORS_ORIGEN'))
@@ -49,6 +53,15 @@ function crearAnalizador(): { analizador: AnalizadorIA; proveedor: string; model
       modelo,
     }),
   }
+}
+
+// Transcripción de audio y video (servicio compatible con OpenAI en /audio/transcriptions).
+function crearTranscriptor() {
+  return crearTranscriptorCompatibleOpenAI({
+    baseUrl: Deno.env.get('IA_STT_BASE_URL') ?? '',
+    apiKey: Deno.env.get('IA_STT_API_KEY') ?? '',
+    modelo: Deno.env.get('IA_STT_MODELO') ?? '',
+  })
 }
 
 Deno.serve(async (req) => {
@@ -136,7 +149,10 @@ Deno.serve(async (req) => {
       const mime = ev.archivo_mime || archivo.type || 'application/octet-stream'
       // AUD04-B5: se acota el tamaño ANTES de cargarlo en memoria y parsearlo.
       verificarTamanoArchivo({ length: archivo.size }, mime)
-      fuente = await extraerArchivo(new Uint8Array(await archivo.arrayBuffer()), mime, Deno.env.get('IA_VISION') === 'true')
+      // Solo el audio y el video necesitan el servicio de transcripción: los demás análisis no
+      // dependen de que esté configurado.
+      const transcriptor = esMediaTranscribible(mime) ? crearTranscriptor() : undefined
+      fuente = await extraerArchivo(new Uint8Array(await archivo.arrayBuffer()), mime, Deno.env.get('IA_VISION') === 'true', transcriptor)
     }
 
     // 3. Proveedor (puerto) → respuesta → resultados por criterio.

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { criteriosSugeridos, clausulasSugeridas, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from './ia'
+import { avisoTranscripcion, criteriosSugeridos, clausulasSugeridas, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from './ia'
 import type { CriterioEvaluacion } from '../types'
 
 // AUD04-M1 (c), L5f: lo que sube la empresa evaluada entra al prompt de la IA y esa empresa tiene interés en que
@@ -33,6 +33,44 @@ describe('nota sobre el contenido analizado (AUD04-M1 c)', () => {
     // Se exige el USO dentro del JSX (el nombre solo en el import no alcanza).
     expect(panel).toMatch(/\{NOTA_CONTENIDO_NO_CONFIABLE\}/)
     expect(panel).toMatch(/\{fuenteAnalizada\(/)
+  })
+})
+
+// Audio y video: para analizarlos se transcribe su audio con un servicio EXTERNO (el archivo sale de la
+// plataforma) y la transcripción puede tener errores. Se avisa en el punto donde se pide el análisis.
+describe('aviso de transcripción de audio y video', () => {
+  it('un audio avisa que sale a un servicio externo y que la transcripción puede tener errores', () => {
+    expect(avisoTranscripcion('Audio')).toMatch(/servicio externo/i)
+    expect(avisoTranscripcion('Audio')).toMatch(/sale de la plataforma/i)
+    expect(avisoTranscripcion('Audio')).toMatch(/errores/i)
+  })
+
+  it('un video aclara que solo se transcribe el audio y que no se analiza la imagen', () => {
+    expect(avisoTranscripcion('Video')).toMatch(/servicio externo/i)
+    expect(avisoTranscripcion('Video')).toMatch(/audio/i)
+    expect(avisoTranscripcion('Video')).toMatch(/no se analiza la imagen/i)
+  })
+
+  it('el aviso del audio y el del video son distintos', () => {
+    expect(avisoTranscripcion('Audio')).not.toBe(avisoTranscripcion('Video'))
+  })
+
+  it('los demás tipos no llevan aviso (no sale nada a un servicio externo)', () => {
+    for (const tipo of ['Foto', 'Documento', 'Formulario', '', null, undefined]) expect(avisoTranscripcion(tipo)).toBeNull()
+  })
+
+  it('el panel de IA muestra el aviso y Evidencias le pasa el tipo (no queda sin cablear)', () => {
+    const panel = readFileSync(resolve(__dirname, '..', 'components', 'PanelAnalisisIA.tsx'), 'utf8')
+    expect(panel).toMatch(/avisoTranscripcion\(/)
+    expect(panel).toMatch(/\{aviso\}/)
+    const evidencias = readFileSync(resolve(__dirname, '..', 'pages', 'Evidencias.tsx'), 'utf8')
+    expect(evidencias).toMatch(/tipoEvidencia=\{vistaPrevia\.tipo\}/)
+  })
+
+  it('Evidencias ya no ofrece un botón deshabilitado que dice que falta un servicio adicional', () => {
+    const evidencias = readFileSync(resolve(__dirname, '..', 'pages', 'Evidencias.tsx'), 'utf8')
+    expect(evidencias).not.toMatch(/requiere servicio adicional/i)
+    expect(evidencias).not.toMatch(/Integración opcional/i)
   })
 })
 

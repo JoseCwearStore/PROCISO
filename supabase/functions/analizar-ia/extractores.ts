@@ -2,10 +2,12 @@
 // Si una fuente no se puede analizar, lanzan ErrorIA con un motivo ACCIONABLE
 // (queda guardado en analisis_ia.error_detalle para poder actuar).
 //
-// Para sumar video o audio: un extractor de transcripción más, sin tocar lo demás.
+// Audio y video: se transcriben con un Transcriptor que se INYECTA (así los demás análisis no
+// dependen de que el servicio de transcripción esté configurado).
 
 import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1'
 import { ErrorIA, textoDeSecciones, type FuenteIA } from '../_compartido/analisis.ts'
+import { esMediaTranscribible, type Transcriptor } from '../_compartido/transcripcion.ts'
 
 const MAX_IMAGEN_BYTES = 5 * 1024 * 1024
 
@@ -24,7 +26,12 @@ export function extraerDocumento(secciones: unknown): FuenteIA {
   return { texto, imagenes: [] }
 }
 
-export async function extraerArchivo(bytes: Uint8Array, mime: string, aceptaImagenes: boolean): Promise<FuenteIA> {
+export async function extraerArchivo(
+  bytes: Uint8Array,
+  mime: string,
+  aceptaImagenes: boolean,
+  transcriptor?: Transcriptor,
+): Promise<FuenteIA> {
   if (mime === 'application/pdf') {
     const pdf = await getDocumentProxy(bytes)
     const { text } = await extractText(pdf, { mergePages: true })
@@ -43,8 +50,11 @@ export async function extraerArchivo(bytes: Uint8Array, mime: string, aceptaImag
     return { texto: '', imagenes: [{ mime, base64: aBase64(bytes) }] }
   }
 
-  if (mime.startsWith('video/') || mime.startsWith('audio/')) {
-    throw new ErrorIA('El análisis de video y audio todavía no está disponible (requiere transcripción).')
+  if (esMediaTranscribible(mime)) {
+    if (!transcriptor) throw new ErrorIA('La transcripción no está configurada: faltan IA_STT_BASE_URL, IA_STT_API_KEY o IA_STT_MODELO en el entorno de la función.')
+    const texto = await transcriptor.transcribir(bytes, mime)
+    // Del video solo se transcribe el audio: la imagen no se analiza.
+    return { texto, imagenes: [], origen: mime.startsWith('video/') ? 'transcripcion-video' : 'transcripcion-audio' }
   }
 
   if (mime.startsWith('text/')) return { texto: new TextDecoder().decode(bytes), imagenes: [] }

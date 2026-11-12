@@ -651,15 +651,13 @@ export default function Evidencias() {
               </Button>
             </div>
           )}
-          <Button
-            disabled
-            variant="outline"
-            className="w-full"
-            icon={<FileAudio className="h-4 w-4" />}
-          >
-            Transcripción automática y análisis de video · Integración opcional
-            – requiere servicio adicional
-          </Button>
+          <p className="flex items-start gap-2 rounded-lg border border-line bg-slate-50 p-3 text-xs text-slate-600">
+            <FileAudio className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>
+              Los audios y videos se pueden preevaluar con IA desde el detalle de la evidencia: se transcribe su audio con
+              un servicio externo, así que el archivo sale de la plataforma.
+            </span>
+          </p>
         </div>
       </Modal>
 
@@ -790,6 +788,7 @@ export default function Evidencias() {
             <PanelAnalisisIA
               key={vistaPrevia.id}
               fuente={{ tipo: "evidencia", id: vistaPrevia.id, proyectoId: vistaPrevia.proyectoId, nombre: vistaPrevia.nombre }}
+              tipoEvidencia={vistaPrevia.tipo}
             />
           </div>
         )}
