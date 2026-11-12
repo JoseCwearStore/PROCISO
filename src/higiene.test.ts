@@ -33,14 +33,10 @@ describe('higiene de src/', () => {
 // prototipo sin servidor ni ofrecer controles que no hacen nada ("Requiere integración").
 describe('textos de la interfaz (AUD07-M2)', () => {
   const fuentes = archivos(SRC).filter((f) => /\.(ts|tsx)$/.test(f) && !/\.test\.tsx?$/.test(f))
-  // Excepción TEMPORAL: Configuración es una maqueta que se rehace entera en L5c (AUD07-M3, D7);
-  // ese paso borra esta línea y el test vuelve a cubrir TODOS los archivos.
-  const PENDIENTE_L5C = ['pages/Configuracion.tsx']
   const conTexto = (patron: RegExp) =>
     fuentes
       .filter((f) => patron.test(readFileSync(f, 'utf8')))
       .map((f) => f.slice(SRC.length + 1).replace(/\\/g, '/'))
-      .filter((f) => !PENDIENTE_L5C.includes(f))
 
   it.each([
     ['dice que es un prototipo', /prototipo/i],
@@ -58,8 +54,16 @@ describe('textos de la interfaz (AUD07-M2)', () => {
     expect(existsSync(join(SRC, 'pages', 'PlaceholderPage.tsx'))).toBe(false)
   })
 
-  it('el pie del menú muestra la consultoría real, no el nombre fijo de otra', () => {
-    expect(readFileSync(join(SRC, 'components', 'layout', 'Sidebar.tsx'), 'utf8')).not.toMatch(/ConsultiCalidad/)
+  it('ninguna pantalla trae escrito el nombre de otra consultoría (ConsultiCalidad) ni un RFC de maqueta', () => {
+    expect(conTexto(/ConsultiCalidad|CCA210401HX7/)).toEqual([])
+  })
+
+  it('Configuración no tiene controles inertes (sesión inactiva, doble factor, "guardada durante esta sesión")', () => {
+    expect(conTexto(/Tiempo de sesión inactiva|Autenticación de dos factores|durante esta sesión/)).toEqual([])
+  })
+
+  it('la matriz de permisos no está escrita a mano en Usuarios (se deriva de permissions.ts)', () => {
+    expect(readFileSync(join(SRC, 'pages', 'Usuarios.tsx'), 'utf8')).not.toMatch(/const PERMISOS|const MODULOS/)
   })
 
   it('el estado de la app ya no guarda si se cerró el banner', () => {
