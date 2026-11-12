@@ -31,6 +31,7 @@ import {
   ErrorIA,
   interpretarRespuesta,
   limiteDeCaracteres,
+  sinSugerenciasEnNoEvaluables,
   validarPedidoAnalisis,
   verificarTamanoArchivo,
   type AnalizadorIA,
@@ -217,9 +218,11 @@ Deno.serve(async (req) => {
     proveedor = configurado.proveedor
     modelo = configurado.modelo
     const respuesta = await configurado.analizador.completar(armarMensajes(criterios as CriterioIA[], fuente, nombre, undefined, limiteDeCaracteres(Deno.env.get('IA_MAX_CARACTERES'))))
-    const { resumen, resultados } = interpretarRespuesta(respuesta, criterios as CriterioIA[])
+    const interpretado = interpretarRespuesta(respuesta, criterios as CriterioIA[])
+    // Audio y video (transcripción): una sugerencia en un criterio "No evaluable" no se apoya en nada dicho.
+    const resultados = fuente.origen ? sinSugerenciasEnNoEvaluables(interpretado.resultados) : interpretado.resultados
 
-    return await terminar(resumen, resultados)
+    return await terminar(interpretado.resumen, resultados)
   } catch (e) {
     // Cualquier falla queda registrada con un motivo SANEADO (lo lee el cliente, AUD04-B3);
     // el detalle técnico real va solo al log del servidor.

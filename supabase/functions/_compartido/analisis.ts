@@ -115,7 +115,9 @@ const NOTA_REVISADA = ' Una persona del equipo revisó y corrigió esta transcri
 // Misma idea que la regla de video (video.ts), donde "no lo veo" no es "no existe".
 const REGLA_LO_NO_MENCIONADO =
   ' Lo que no se mencione en el audio no prueba que no exista (la persona pudo no hablar de ello): si solo falta la mención, el estado es "No evaluable". ' +
-  'Usa "Hueco" solo si lo que se dice contradice el criterio, citando lo que se dijo.'
+  'Usa "Hueco" solo si lo que se dice contradice el criterio, citando lo que se dijo. ' +
+  'Las sugerencias solo se apoyan en lo que se dice: en un criterio "No evaluable" déjalas vacías. ' +
+  'El resumen debe ser coherente con los estados: solo los criterios marcados "Hueco" son huecos; no llames hueco a uno "No evaluable".'
 
 const NOTA_ORIGEN: Record<NonNullable<FuenteIA['origen']>, string> = {
   'transcripcion-audio':
@@ -298,6 +300,12 @@ export function interpretarRespuesta(
   })
 
   return { resumen: opcional(datos.resumen), resultados }
+}
+
+// Una sugerencia sin nada observado que la sostenga es un consejo genérico, no un hallazgo: en un criterio "No evaluable"
+// se descarta aunque el modelo la haya escrito (el prompt lo pide, pero un prompt no es una garantía). Se usa en audio y video.
+export function sinSugerenciasEnNoEvaluables(resultados: ResultadoCriterio[]): ResultadoCriterio[] {
+  return resultados.map((r) => (r.estado === 'No evaluable' ? { ...r, sugerencias: null } : r))
 }
 
 // ─── Adaptador compatible con OpenAI ───────────────────────────────────────

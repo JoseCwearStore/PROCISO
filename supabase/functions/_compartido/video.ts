@@ -18,6 +18,7 @@ import {
   interpretarRespuesta,
   neutralizar,
   nuevoNonce,
+  sinSugerenciasEnNoEvaluables,
   type CriterioIA,
   type MensajeIA,
   type ResultadoCriterio,
@@ -125,7 +126,7 @@ export function interpretarRespuestaVideo(
   const { resumen, resultados } = interpretarRespuesta(respuesta, criterios)
   return {
     resumen: marcar(resumen, new Set(criterios.map((c) => c.clausula))),
-    resultados: aplicarGuardasVideo(resultados, criterios),
+    resultados: sinSugerenciasEnNoEvaluables(aplicarGuardasVideo(resultados, criterios)),
   }
 }
 

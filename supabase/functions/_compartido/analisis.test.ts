@@ -12,7 +12,9 @@ import {
   verificarTamanoArchivo,
   MAX_PDF_BYTES,
   MAX_TEXTO_BYTES,
+  sinSugerenciasEnNoEvaluables,
   type CriterioIA,
+  type ResultadoCriterio,
 } from './analisis.ts'
 
 const C521: CriterioIA = {
@@ -238,6 +240,23 @@ describe('validarPedidoAnalisis (AUD04-B2: 400 claro en vez de 500 con detalle i
     ['criterioIds repetidos de más (63)', { ...PEDIDO_DOC, criterioIds: Array.from({ length: 63 }, () => UUID) }],
   ])('rechaza un pedido con %s', (_caso, entrada) => {
     expect(() => validarPedidoAnalisis(entrada)).toThrow(ErrorIA)
+  })
+})
+
+describe('sinSugerenciasEnNoEvaluables', () => {
+  const r = (estado: ResultadoCriterio['estado'], sugerencias: string | null): ResultadoCriterio => ({ criterio_id: 'c', estado, hallazgos: 'h', sugerencias })
+
+  it('quita la sugerencia de un criterio "No evaluable": no se apoya en nada observado', () => {
+    expect(sinSugerenciasEnNoEvaluables([r('No evaluable', 'Implementar trazabilidad.')])).toEqual([r('No evaluable', null)])
+  })
+
+  it.each(['Cubierto', 'Parcial', 'Hueco', 'No aplica'] as const)('deja la sugerencia de un criterio "%s"', (estado) => {
+    expect(sinSugerenciasEnNoEvaluables([r(estado, 'Mejorar.')])).toEqual([r(estado, 'Mejorar.')])
+  })
+
+  it('conserva el resto de los campos y el orden', () => {
+    const entrada = [r('Parcial', 'a'), r('No evaluable', 'b'), r('Hueco', 'c')]
+    expect(sinSugerenciasEnNoEvaluables(entrada).map((x) => x.sugerencias)).toEqual(['a', null, 'c'])
   })
 })
 

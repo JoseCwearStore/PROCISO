@@ -313,6 +313,18 @@ describe('armarMensajes con una transcripción', () => {
     },
   )
 
+  it.each(['transcripcion-audio', 'transcripcion-video'] as const)(
+    'en %s pide sugerencias apoyadas en lo dicho (vacías si es "No evaluable") y un resumen coherente con los estados, FUERA del bloque',
+    (origen) => {
+      const texto = contenido({ texto: 'las quejas se resuelven', imagenes: [], origen })
+      expect(texto).toMatch(/sugerencias solo se apoyan en lo que se dice/i)
+      expect(texto).toMatch(/"No evaluable".{0,60}vac[ií]as/i)
+      expect(texto).toMatch(/resumen.{0,40}coherente con los estados/i)
+      expect(texto).toMatch(/solo los criterios marcados "Hueco" son huecos/i)
+      expect(texto.indexOf('solo los criterios marcados')).toBeLessThan(texto.indexOf('<fuente-n0nce>'))
+    },
+  )
+
   it('sin origen no agrega la regla de lo no mencionado', () => {
     expect(contenido({ texto: 'hola', imagenes: [] })).not.toMatch(/no prueba que no exista/i)
   })

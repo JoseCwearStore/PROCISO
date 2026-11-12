@@ -179,6 +179,14 @@ describe('interpretarRespuestaVideo', () => {
     expect(resultados.map((r) => r.estado)).toEqual(['No evaluable', 'Parcial'])
   })
 
+  it('un criterio "No evaluable" no lleva sugerencias, ni el que bajó de "Hueco" por falta de marca', () => {
+    const { resultados } = interpretarRespuestaVideo(json([
+      { clausula: '7.1.4', estado: 'Hueco', hallazgos: 'No se ve EPP.', sugerencias: 'Exigir EPP.' },
+      { clausula: '8.5.1', estado: 'No evaluable', hallazgos: 'No se ve.', sugerencias: 'Implementar fichas.' },
+    ]), [C714, C851])
+    expect(resultados.map((r) => r.sugerencias)).toEqual([null, null])
+  })
+
   it('marca las cláusulas no pedidas también en el resumen', () => {
     const { resumen } = interpretarRespuestaVideo(json([], 'Se ve montaje. Aplica la cláusula 9.2.1.'), [C714])
     expect(resumen).toContain('cláusula 9.2.1 [no solicitada: verificar en el catálogo]')
