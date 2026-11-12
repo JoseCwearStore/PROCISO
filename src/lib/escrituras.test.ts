@@ -166,29 +166,23 @@ describe('archivarEmpresa', () => {
   })
 })
 
+// L5d (AUD05-M2): el proyecto y su consultor responsable se crean en UNA sola operación atómica de
+// la BD (antes eran dos escrituras y el resultado de la segunda se descartaba).
 describe('crearProyecto', () => {
-  it('inserta el proyecto y suma al consultor como miembro para que pueda verlo', async () => {
-    const { cliente, llamadas } = crearClienteDoble({ 'proyectos.insert': { data: FILA_PROYECTO, error: null } })
+  it('crea el proyecto con UNA sola llamada (crear_proyecto) y devuelve el proyecto traducido', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'crear_proyecto.rpc': { data: FILA_PROYECTO, error: null } })
     const escrituras = crearServicioEscritura(cliente)
 
     const resultado = await escrituras.crearProyecto(C1, NUEVO_PROYECTO)
 
     expect(llamadas).toEqual([
       {
-        tabla: 'proyectos',
-        operacion: 'insert',
-        datos: expect.objectContaining({
-          consultoria_id: C1,
-          empresa_id: E_NUEVA,
-          consultor_id: ROBERTO,
-          fecha_inicio: '2026-11-10',
-          alcance: null,
-        }),
-      },
-      {
-        tabla: 'proyecto_miembros',
-        operacion: 'insert',
-        datos: { proyecto_id: P_NUEVO, usuario_id: ROBERTO, consultoria_id: C1 },
+        tabla: 'crear_proyecto',
+        operacion: 'rpc',
+        datos: {
+          p_empresa_id: E_NUEVA, p_consultor_id: ROBERTO, p_nombre: 'SGC La Espiga', p_objetivo: 'Certificar', p_alcance: null,
+          p_edicion_norma: 'ISO 9001:2026', p_fecha_inicio: '2026-11-10', p_fecha_fin_estimada: '2027-05-31',
+        },
       },
     ])
     expect(resultado).toEqual({
@@ -197,12 +191,64 @@ describe('crearProyecto', () => {
     })
   })
 
-  it('no suma miembros si el proyecto no se pudo crear', async () => {
-    const { cliente, llamadas } = crearClienteDoble({ 'proyectos.insert': { data: null, error: ERROR_RLS } })
-    const escrituras = crearServicioEscritura(cliente)
+  it('sin responsable elegido manda null (se asigna después)', async () => {
+    const { cliente, llamadas } = crearClienteDoble({ 'crear_proyecto.rpc': { data: { ...FILA_PROYECTO, consultor_id: null }, error: null } })
+    const resultado = await crearServicioEscritura(cliente).crearProyecto(C1, { ...NUEVO_PROYECTO, consultorId: '' })
 
-    expect(await escrituras.crearProyecto(C1, NUEVO_PROYECTO)).toEqual({ ok: false, error: 'sin_permiso' })
-    expect(llamadas.map((l) => l.tabla)).toEqual(['proyectos'])
+    expect(llamadas[0].datos).toMatchObject({ p_consultor_id: null })
+    expect(resultado).toMatchObject({ ok: true, valor: { consultorId: '', equipoIds: [] } })
+  })
+
+  it('no llama a la BD si el usuario no pertenece a una consultoría', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    expect(await crearServicioEscritura(cliente).crearProyecto(null, NUEVO_PROYECTO)).toEqual({ ok: false, error: 'sin_consultoria' })
+    expect(llamadas).toEqual([])
+  })
+
+  it.each([
+    ['42501', 'Solo el administrador de la consultoría crea proyectos.', 'sin_permiso'],
+    ['22023', 'La empresa está archivada: no se le pueden crear proyectos.', 'empresa_archivada'],
+    ['22023', 'La persona no existe, está suspendida o no es del equipo de la consultoría.', 'datos_invalidos'],
+    ['XX000', 'Failed to fetch', 'servicio'],
+  ])('traduce el error %s "%s" a "%s"', async (code, message, esperado) => {
+    const { cliente } = crearClienteDoble({ 'crear_proyecto.rpc': { data: null, error: { code, message } } })
+    expect(await crearServicioEscritura(cliente).crearProyecto(C1, NUEVO_PROYECTO)).toEqual({ ok: false, error: esperado })
+  })
+})
+
+describe('equipo del proyecto (L5d, D8)', () => {
+  it.each([
+    ['agregarMiembroProyecto', 'agregar_miembro_proyecto', { p_proyecto_id: P_NUEVO, p_usuario_id: ROBERTO }],
+    ['quitarMiembroProyecto', 'quitar_miembro_proyecto', { p_proyecto_id: P_NUEVO, p_usuario_id: ROBERTO }],
+    ['cambiarConsultorProyecto', 'cambiar_consultor_proyecto', { p_proyecto_id: P_NUEVO, p_consultor_id: ROBERTO }],
+  ] as const)('%s llama a %s con los argumentos correctos', async (metodo, funcion, args) => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const resultado = await crearServicioEscritura(cliente)[metodo](P_NUEVO, ROBERTO)
+
+    expect(resultado).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([{ tabla: funcion, operacion: 'rpc', datos: args }])
+  })
+
+  it.each([
+    ['42501', 'Solo el administrador de la consultoría arma el equipo del proyecto.', 'sin_permiso'],
+    ['22023', 'Ya es parte del equipo del proyecto.', 'ya_es_miembro'],
+    ['22023', 'Es el consultor responsable: cámbialo antes de quitarlo del equipo.', 'miembro_responsable'],
+    ['22023', 'Tiene tareas abiertas en este proyecto: reasígnalas antes de quitarlo.', 'miembro_tareas_abiertas'],
+    ['22023', 'Ya es el consultor responsable del proyecto.', 'ya_es_responsable'],
+    ['22023', 'Proyecto no encontrado.', 'datos_invalidos'],
+    ['22023', 'La persona no existe, está suspendida o no es del equipo de la consultoría.', 'datos_invalidos'],
+    ['XX000', 'Failed to fetch', 'servicio'],
+  ])('traduce el error %s "%s" a "%s"', async (code, message, esperado) => {
+    const { cliente } = crearClienteDoble({ 'agregar_miembro_proyecto.rpc': { data: null, error: { code, message } } })
+    expect(await crearServicioEscritura(cliente).agregarMiembroProyecto(P_NUEVO, ROBERTO)).toEqual({ ok: false, error: esperado })
+  })
+
+  it('cada error específico tiene un mensaje que le dice al usuario qué hacer', () => {
+    expect(MENSAJES_ERROR_ESCRITURA.empresa_archivada).toMatch(/archivada/i)
+    expect(MENSAJES_ERROR_ESCRITURA.ya_es_miembro).toMatch(/ya es parte del equipo/i)
+    expect(MENSAJES_ERROR_ESCRITURA.miembro_responsable).toMatch(/cámbialo/i)
+    expect(MENSAJES_ERROR_ESCRITURA.miembro_tareas_abiertas).toMatch(/reasígnalas/i)
+    expect(MENSAJES_ERROR_ESCRITURA.ya_es_responsable).toMatch(/ya es el consultor responsable/i)
   })
 })
 

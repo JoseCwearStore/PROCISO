@@ -65,6 +65,12 @@ export type ErrorEscritura =
   | 'version_desactualizada'
   | 'limite_ia'
   | 'limite_reportes'
+  // Mensajes que la BD escribe a propósito en las operaciones del equipo de un proyecto (L5d).
+  | 'empresa_archivada'
+  | 'ya_es_miembro'
+  | 'ya_es_responsable'
+  | 'miembro_responsable'
+  | 'miembro_tareas_abiertas'
   | 'servicio'
 
 // Status HTTP de las Edge Functions de IA → error de la app. 429 = tope diario de pedidos.
@@ -100,7 +106,11 @@ export interface ClienteEscritura {
       | 'decidir_entregable'
       | 'marcar_notificaciones_leidas'
       | 'cambiar_estado_consultoria'
-      | 'administrar_usuario',
+      | 'administrar_usuario'
+      | 'crear_proyecto'
+      | 'agregar_miembro_proyecto'
+      | 'quitar_miembro_proyecto'
+      | 'cambiar_consultor_proyecto',
     args: Record<string, unknown>,
   ): PromiseLike<{ data?: unknown; error: ErrorBD | null }>
   // Edge Functions. El error trae el status HTTP de la respuesta de la función.
@@ -331,6 +341,12 @@ function traducirError(error: ErrorBD): ErrorEscritura {
   if (error.code === '22023' && /cambió desde que lo abriste/i.test(error.message)) return 'version_desactualizada'
   if (error.code === '42501' && /está en revisión/i.test(error.message)) return 'documento_en_revision'
   if (error.code === '42501' && /ya se envió a revisión/i.test(error.message)) return 'version_ya_enviada'
+  // Equipo del proyecto (L5d): cada regla de la BD tiene su mensaje.
+  if (error.code === '22023' && /empresa está archivada/i.test(error.message)) return 'empresa_archivada'
+  if (error.code === '22023' && /ya es parte del equipo/i.test(error.message)) return 'ya_es_miembro'
+  if (error.code === '22023' && /ya es el consultor responsable/i.test(error.message)) return 'ya_es_responsable'
+  if (error.code === '22023' && /es el consultor responsable: cámbialo/i.test(error.message)) return 'miembro_responsable'
+  if (error.code === '22023' && /tiene tareas abiertas/i.test(error.message)) return 'miembro_tareas_abiertas'
   if (error.code === '22023' || error.code === '23514' || error.code === '23503') return 'datos_invalidos'
   return error.code === '42501' || error.code === 'PGRST116' ? 'sin_permiso' : 'servicio'
 }
@@ -507,34 +523,33 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
       return actualizar('empresas', id, { activa: false })
     },
 
+    // L5d (AUD05-M2): el proyecto y su consultor responsable se crean en UNA operación atómica de la BD
+    // (crear_proyecto). Antes eran dos escrituras y la segunda se descartaba: si fallaba, el consultor
+    // asignado no veía su propio proyecto. La consultoría la decide la BD, no el navegador.
     async crearProyecto(consultoriaId: string | null, datos: NuevoProyecto): Promise<ResultadoEscritura<Proyecto>> {
       if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
 
-      const resultado = await insertar<FilaProyecto>('proyectos', {
-        consultoria_id: consultoriaId,
-        empresa_id: datos.empresaId,
-        consultor_id: nulo(datos.consultorId),
-        nombre: datos.nombre.trim(),
-        objetivo: nulo(datos.objetivo),
-        alcance: nulo(datos.alcance),
-        edicion_norma: datos.edicionNorma,
-        fecha_inicio: nulo(datos.fechaInicio),
-        fecha_fin_estimada: nulo(datos.fechaFinEstimada),
+      const { data, error } = await cliente.rpc('crear_proyecto', {
+        p_empresa_id: datos.empresaId,
+        p_consultor_id: nulo(datos.consultorId),
+        p_nombre: datos.nombre.trim(),
+        p_objetivo: nulo(datos.objetivo),
+        p_alcance: nulo(datos.alcance),
+        p_edicion_norma: datos.edicionNorma,
+        p_fecha_inicio: nulo(datos.fechaInicio),
+        p_fecha_fin_estimada: nulo(datos.fechaFinEstimada),
       })
-      if (!resultado.ok) return resultado
-
-      const proyecto = resultado.valor
-      // Sin esto, el consultor asignado no vería su propio proyecto (el RLS mira proyecto_miembros).
-      // Si falla, el proyecto igual existe y el admin puede asignarlo después.
-      if (proyecto.consultor_id) {
-        await insertar('proyecto_miembros', {
-          proyecto_id: proyecto.id,
-          usuario_id: proyecto.consultor_id,
-          consultoria_id: consultoriaId,
-        })
-      }
-      return { ok: true, valor: traducirProyecto(proyecto, [], []) }
+      if (error) return { ok: false, error: traducirError(error) }
+      return { ok: true, valor: traducirProyecto(data as FilaProyecto, [], []) }
     },
+
+    // Equipo del proyecto (solo el Admin de la consultoría; lo decide la BD).
+    agregarMiembroProyecto: (proyectoId: string, usuarioId: string) =>
+      llamar('agregar_miembro_proyecto', { p_proyecto_id: proyectoId, p_usuario_id: usuarioId }),
+    quitarMiembroProyecto: (proyectoId: string, usuarioId: string) =>
+      llamar('quitar_miembro_proyecto', { p_proyecto_id: proyectoId, p_usuario_id: usuarioId }),
+    cambiarConsultorProyecto: (proyectoId: string, consultorId: string) =>
+      llamar('cambiar_consultor_proyecto', { p_proyecto_id: proyectoId, p_consultor_id: consultorId }),
 
     // Proceso y actividades viajan juntos: la función de la BD los guarda en una transacción.
     async guardarProceso(proceso: Proceso): Promise<ResultadoEscritura<void>> {
@@ -918,5 +933,10 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   tipo_no_permitido: 'Ese tipo de archivo no está permitido. Usa imagen, video, audio, PDF, Word o Excel.',
   limite_ia: 'Se alcanzó el tope diario de pedidos a la IA. Inténtalo mañana o continúa sin IA.',
   limite_reportes: 'Alcanzaste el máximo de reportes de soporte por día. Inténtalo mañana.',
+  empresa_archivada: 'La empresa está archivada: no se le pueden crear proyectos.',
+  ya_es_miembro: 'Esa persona ya es parte del equipo del proyecto.',
+  ya_es_responsable: 'Esa persona ya es el consultor responsable del proyecto.',
+  miembro_responsable: 'Es el consultor responsable: cámbialo antes de quitarlo del equipo.',
+  miembro_tareas_abiertas: 'Tiene tareas abiertas en este proyecto: reasígnalas antes de quitarlo.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',
 }

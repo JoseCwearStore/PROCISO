@@ -14,7 +14,6 @@ import {
   FileText,
   ClipboardList,
   ArrowLeft,
-  Users,
   Package,
   Info,
   ChevronRight,
@@ -32,6 +31,7 @@ import { servicioEscritura } from '../lib/servicios'
 import { MENSAJES_ERROR_ESCRITURA, type NuevoEntregable, type NuevoProyecto } from '../lib/escrituras'
 import { useAccionesEntregable } from '../hooks/useAccionesEntregable'
 import { useAccionesGestion } from '../hooks/useAccionesGestion'
+import { EquipoProyecto } from '../components/EquipoProyecto'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -711,8 +711,9 @@ export function Proyectos() {
       <NuevoProyectoModal
         open={createOpen}
         onClose={() => setCreateOpen(false)}
-        empresas={state.empresas}
-        consultores={consultores}
+        // Solo empresas activas y consultores activos: la BD rechaza las archivadas y a los suspendidos.
+        empresas={state.empresas.filter((e) => e.activa)}
+        consultores={consultores.filter((u) => u.activo)}
         onCreated={handleCreated} />
     </div>
   )
@@ -1008,43 +1009,6 @@ function TabDocumentos({ documentos }: { documentos: Documento[] }) {
   )
 }
 
-function TabEquipo({ equipo }: { equipo: (Usuario | undefined)[] }) {
-  const members = equipo.filter(Boolean) as Usuario[]
-  const rolColor: Record<string, string> = {
-    'Admin PROCISO': 'bg-purple-100 text-purple-700',
-    'Admin Consultoría': 'bg-blue-100 text-blue-700',
-    Consultor: 'bg-indigo-100 text-indigo-700',
-    'Usuario Cliente': 'bg-slate-100 text-slate-600',
-  }
-
-  if (members.length === 0) {
-    return (
-      <div className="text-center py-12 bg-white rounded-xl border border-slate-200">
-        <Users className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-        <p className="text-sm text-slate-500">Sin miembros de equipo registrados.</p>
-      </div>
-    )
-  }
-
-  return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-      {members.map((u) => (
-        <div key={u.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center gap-3">
-          <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
-            {u.nombre.split(' ').map((n) => n[0]).slice(0, 2).join('')}
-          </div>
-          <div className="flex-1 min-w-0">
-            <p className="font-medium text-slate-800 text-sm truncate">{u.nombre}</p>
-            <p className="text-xs text-slate-500 truncate">{u.cargo}</p>
-          </div>
-          <span className={`text-xs font-medium px-2 py-0.5 rounded-full flex-shrink-0 ${rolColor[u.rol] ?? 'bg-slate-100 text-slate-600'}`}>
-            {u.rol}
-          </span>
-        </div>
-      ))}
-    </div>
-  )
-}
 
 // ─── ProyectoDetalle Page Export ──────────────────────────────────────────────
 
@@ -1156,7 +1120,7 @@ export function ProyectoDetalle() {
             {tab === 'tareas' && <TabTareas tareas={tareas} getUsuario={getUsuario} navigate={navigate} />}
             {tab === 'entregables' && <TabEntregables proyectoId={proyecto.id} entregables={entregables} documentos={documentos} />}
             {tab === 'documentos' && <TabDocumentos documentos={documentos} />}
-            {tab === 'equipo' && <TabEquipo equipo={equipo} />}
+            {tab === 'equipo' && <EquipoProyecto proyecto={proyecto} />}
           </>
         )}
       </Tabs>
