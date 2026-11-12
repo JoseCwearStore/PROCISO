@@ -23,6 +23,8 @@ export interface PedidoAnalisis {
   documentoId: string | null
   evidenciaId: string | null
   criterioIds: string[]
+  // "video": el modelo de video nativo mira el video; solo para una evidencia.
+  modo: 'texto' | 'video'
 }
 
 // El catálogo tiene 62 criterios: pedir más de los que existen no tiene sentido.
@@ -42,7 +44,12 @@ export function validarPedidoAnalisis(entrada: unknown): PedidoAnalisis {
   if (e.criterioIds.length > MAX_CRITERIOS) throw new ErrorIA(`Se pidieron demasiados criterios (máximo ${MAX_CRITERIOS}).`)
   if (!e.criterioIds.every(esUuid)) throw new ErrorIA('Hay un criterio con un identificador inválido.')
 
+  const modo = e.modo ?? 'texto'
+  if (modo !== 'texto' && modo !== 'video') throw new ErrorIA('modo debe ser "texto" o "video".')
+  if (modo === 'video' && e.fuenteTipo !== 'evidencia') throw new ErrorIA('El análisis de video solo se pide para una evidencia.')
+
   return {
+    modo,
     consultoriaId: e.consultoriaId,
     proyectoId: e.proyectoId,
     fuenteTipo: e.fuenteTipo,
@@ -191,7 +198,7 @@ Reglas:
 - Responde SOLO con JSON, sin texto adicional, con esta forma:
 {"resumen": "...", "resultados": [{"clausula": "5.2.1", "estado": "Parcial", "hallazgos": "...", "sugerencias": "..."}]}`
 
-function describirCriterio(c: CriterioIA): string {
+export function describirCriterio(c: CriterioIA): string {
   const lista = (titulo: string, xs: string[]) => (xs.length ? `${titulo}:\n${xs.map((x) => `  - ${x}`).join('\n')}` : '')
   return [
     `### ${c.clausula} · ${c.titulo}`,

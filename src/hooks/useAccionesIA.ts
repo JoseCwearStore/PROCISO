@@ -27,7 +27,7 @@ export function useAccionesIA() {
     analisisDe: (fuente: FuenteAnalisis): AnalisisIA[] =>
       state.analisisIA.filter((a) => (fuente.tipo === 'documento' ? a.documentoId : a.evidenciaId) === fuente.id),
 
-    async analizar(fuente: FuenteAnalisis, criterioIds: string[]): Promise<AnalisisIA | null> {
+    async analizar(fuente: FuenteAnalisis, criterioIds: string[], modo: 'texto' | 'video' = 'texto'): Promise<AnalisisIA | null> {
       if (!state.currentUser) return null
       const resultado = await servicioEscritura.analizarConIA(
         {
@@ -37,6 +37,7 @@ export function useAccionesIA() {
           documentoId: fuente.tipo === 'documento' ? fuente.id : undefined,
           evidenciaId: fuente.tipo === 'evidencia' ? fuente.id : undefined,
           criterioIds,
+          ...(modo === 'video' ? { modo } : {}),
         },
         state.currentUser.id,
         formatearFecha(new Date().toISOString()),

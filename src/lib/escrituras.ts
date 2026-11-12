@@ -162,6 +162,8 @@ export interface PedidoAnalisisIA {
   documentoId?: string
   evidenciaId?: string
   criterioIds: string[]
+  // 'video': un modelo de video nativo mira el video (solo evidencias de tipo Video).
+  modo?: 'texto' | 'video'
 }
 
 // Resultado de pedirle a la IA que redacte partes de un borrador. Una IA que falla NO es una
@@ -949,7 +951,7 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   sin_permiso: 'No tienes permiso para realizar esta acción.',
   sin_consultoria: 'Tu usuario no pertenece a una consultoría.',
   datos_invalidos: 'La operación no es válida en el estado actual. Revisa la información e intenta de nuevo.',
-  archivo_grande: 'El archivo supera el límite de 25 MB.',
+  archivo_grande: 'El archivo supera el límite de tamaño (25 MB; 200 MB para videos).',
   documento_en_revision: 'El documento está en revisión y no se puede modificar. Retíralo de la revisión para editarlo.',
   version_ya_enviada: 'Esa versión ya se envió a revisión. Crea una versión nueva para reenviar.',
   version_desactualizada: 'El documento cambió desde que lo abriste. Recarga la página para ver la versión actual.',

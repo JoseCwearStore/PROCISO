@@ -241,6 +241,31 @@ describe('validarPedidoAnalisis (AUD04-B2: 400 claro en vez de 500 con detalle i
   })
 })
 
+describe('validarPedidoAnalisis · modo video', () => {
+  const EV = { ...PEDIDO_DOC, fuenteTipo: 'evidencia', documentoId: undefined, evidenciaId: UUID }
+
+  it('sin modo, el modo es "texto"', () => {
+    expect(validarPedidoAnalisis(EV).modo).toBe('texto')
+    expect(validarPedidoAnalisis(PEDIDO_DOC).modo).toBe('texto')
+  })
+
+  it('acepta modo "video" para una evidencia', () => {
+    expect(validarPedidoAnalisis({ ...EV, modo: 'video' })).toMatchObject({ fuenteTipo: 'evidencia', modo: 'video' })
+  })
+
+  it('acepta modo "texto" explícito', () => {
+    expect(validarPedidoAnalisis({ ...EV, modo: 'texto' }).modo).toBe('texto')
+  })
+
+  it.each([
+    ['modo desconocido', { ...EV, modo: 'imagen' }],
+    ['modo que no es texto', { ...EV, modo: 5 }],
+    ['modo video con un documento', { ...PEDIDO_DOC, modo: 'video' }],
+  ])('rechaza %s', (_n, entrada) => {
+    expect(() => validarPedidoAnalisis(entrada)).toThrow(ErrorIA)
+  })
+})
+
 describe('errores sin detalle técnico (AUD04-B3: los lee el cliente)', () => {
   it('un 500 del proveedor no copia el cuerpo de su respuesta al mensaje', async () => {
     const a = crearAnalizadorCompatibleOpenAI({

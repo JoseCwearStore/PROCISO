@@ -1371,6 +1371,15 @@ describe('analizarConIA', () => {
     expect(resultado).toEqual({ ok: true, valor: expect.objectContaining({ estado: 'Error', errorDetalle: 'El modelo configurado no acepta imágenes.', resultados: [] }) })
   })
 
+  it('un pedido de análisis de video manda el modo a la función', async () => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error: null }, { data: RESPUESTA, error: null })
+    const pedido = { ...PEDIDO, fuenteTipo: 'evidencia' as const, documentoId: undefined, evidenciaId: 'ev-1', modo: 'video' as const }
+
+    await crearServicioEscritura(cliente).analizarConIA(pedido, ROBERTO, '06/11/2026')
+
+    expect(llamadas).toEqual([{ tabla: 'analizar-ia', operacion: 'invoke', datos: pedido }])
+  })
+
   it('sin criterios no llama a la función', async () => {
     const { cliente, llamadas } = crearClienteDoble()
 

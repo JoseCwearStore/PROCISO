@@ -56,3 +56,34 @@ export function criteriosSugeridos(tipo: Documento['tipo'] | null, catalogo: Cri
   const clausulas = new Set(clausulasSugeridas(tipo))
   return [...catalogo].sort((a, b) => a.orden - b.orden).filter((c) => clausulas.has(c.clausula)).map((c) => c.id)
 }
+
+// ─── Análisis de video nativo (un modelo de video de Google mira la imagen y oye el audio) ──────────────────
+
+export const AVISO_VIDEO_NATIVO =
+  'Al analizar el video, el archivo sale de la plataforma hacia un proveedor externo de IA, que mira la imagen y oye el audio. ' +
+  'Lo que no se ve en el video (equipo de protección, controles, registros) figura como "No evaluable": no se toma como un incumplimiento. ' +
+  'Una persona debe revisar el resultado contra el video antes de usarlo.'
+
+export const ETIQUETA_SUGERENCIA_IA = 'Sugerencia de la IA: verificar con el video'
+
+// El análisis de video queda registrado con el proveedor "gemini" (ver analizar-ia): así se distingue del de texto.
+export const esAnalisisDeVideo = (a: { proveedor?: string | null }): boolean => a.proveedor === 'gemini'
+
+// Un video de ~10 minutos pesa decenas de MB; el resto de los archivos mantiene el tope de 25 MB.
+export const limiteSubidaMb = (tipo: string): number => (tipo === 'Video' ? 200 : 25)
+
+// MM:SS (o M:SS), igual que la guarda de supabase/functions/_compartido/video.ts.
+const MARCA_TIEMPO = /(?<![\d:.])\d{1,2}:[0-5]\d(?!\d)/g
+
+// Parte un texto en tramos para resaltar las marcas de tiempo; la unión de los tramos es el texto original.
+export function partirMarcasDeTiempo(texto: string): { texto: string; marca: boolean }[] {
+  const tramos: { texto: string; marca: boolean }[] = []
+  let desde = 0
+  for (const m of texto.matchAll(MARCA_TIEMPO)) {
+    if (m.index > desde) tramos.push({ texto: texto.slice(desde, m.index), marca: false })
+    tramos.push({ texto: m[0], marca: true })
+    desde = m.index + m[0].length
+  }
+  if (desde < texto.length) tramos.push({ texto: texto.slice(desde), marca: false })
+  return tramos
+}

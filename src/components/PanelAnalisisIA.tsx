@@ -1,11 +1,14 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, Clapperboard, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { Button } from './ui/Button'
 import { IndicadorUsoIA } from './IndicadorUsoIA'
 import { TranscripcionEvidencia } from './TranscripcionEvidencia'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
-import { avisoTranscripcion, criteriosSugeridos, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from '../lib/ia'
+import {
+  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, esAnalisisDeVideo, ETIQUETA_SUGERENCIA_IA, fuenteAnalizada,
+  NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
+} from '../lib/ia'
 import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
 
@@ -44,6 +47,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const puedeAnalizar = puedeAnalizarConTranscripcion(estadoTr)
   const motivoBloqueo = tipoMedia && !tr.cargado ? null : mensajeDeEstado(estadoTr)
   const [analizando, setAnalizando] = useState(false)
+  const [analizandoVideo, setAnalizandoVideo] = useState(false)
+  const esVideo = tipoEvidencia === 'Video'
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
   const historial = ia.analisisDe(fuente)
 
@@ -51,6 +56,13 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
     setAnalizando(true)
     await ia.analizar(fuente, seleccion)
     setAnalizando(false)
+  }
+
+  // Video nativo: el modelo mira la imagen y oye el audio; no depende de la transcripción.
+  async function analizarVideo() {
+    setAnalizandoVideo(true)
+    await ia.analizar(fuente, seleccion, 'video')
+    setAnalizandoVideo(false)
   }
 
   return (
@@ -74,6 +86,12 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
 
       {ia.puedePedir && (
         <div className="mb-4 space-y-2">
+          {esVideo && (
+            <p className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+              <Clapperboard className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{AVISO_VIDEO_NATIVO}</span>
+            </p>
+          )}
           {aviso && (
             <p className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
@@ -105,16 +123,28 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
                 <option key={c.id} value={c.id}>{c.clausula} · {c.titulo}</option>
               ))}
             </select>
+            {esVideo && (
+              <Button
+                onClick={() => void analizarVideo()}
+                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado}
+                title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : undefined}
+                icon={analizandoVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
+              >
+                {analizandoVideo ? 'Analizando video…' : 'Analizar video'}
+              </Button>
+            )}
             <Button
               onClick={() => void analizar()}
-              disabled={analizando || !seleccion.length || !!ia.estadoUsoIA?.agotado || !puedeAnalizar}
+              disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado || !puedeAnalizar}
               title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : undefined}
               icon={analizando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
             >
-              {analizando ? 'Analizando…' : 'Analizar con IA'}
+              {analizando ? 'Analizando…' : esVideo ? 'Analizar transcripción' : 'Analizar con IA'}
             </Button>
           </div>
-          {motivoBloqueo && <p className="text-xs text-amber-700">{motivoBloqueo}</p>}
+          {motivoBloqueo && (
+            <p className="text-xs text-amber-700">{esVideo ? <strong>Solo para «Analizar transcripción»: </strong> : null}{motivoBloqueo}</p>
+          )}
         </div>
       )}
 
@@ -127,7 +157,19 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   )
 }
 
+// Resalta las marcas de tiempo MM:SS de un hallazgo de video para ir a verlas.
+function TextoConMarcas({ texto }: { texto: string }) {
+  return (
+    <>
+      {partirMarcasDeTiempo(texto).map((t, i) =>
+        t.marca ? <code key={i} className="rounded bg-violet-100 px-1 font-mono text-[0.85em] text-violet-800">{t.texto}</code> : <span key={i}>{t.texto}</span>,
+      )}
+    </>
+  )
+}
+
 function TarjetaAnalisis({ analisis, porId }: { analisis: AnalisisIA; porId: Map<string, { clausula: string; titulo: string }> }) {
+  const video = esAnalisisDeVideo(analisis)
   return (
     <article className="rounded-lg border border-line p-3">
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2 text-xs text-slate-400">
@@ -137,18 +179,27 @@ function TarjetaAnalisis({ analisis, porId }: { analisis: AnalisisIA; porId: Map
         </span>
       </div>
       <p className="mb-2 text-xs text-slate-500">{fuenteAnalizada(analisis.fuenteTipo)}</p>
+      {video && (
+        <p className="mb-2 text-xs text-slate-500">
+          Se analizó el video (imagen y audio) con un proveedor externo de IA. Las marcas de tiempo (MM:SS) indican dónde verlo.
+        </p>
+      )}
       {analisis.estado === 'Error' && (
         <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{analisis.errorDetalle}</p>
       )}
-      {analisis.resumen && <p className="mb-2 text-sm text-slate-700">{analisis.resumen}</p>}
+      {analisis.resumen && <p className="mb-2 text-sm text-slate-700">{video ? <TextoConMarcas texto={analisis.resumen} /> : analisis.resumen}</p>}
       {analisis.resultados.map((r) => (
         <div key={r.criterioId} className="border-t border-line py-2 first:border-t-0">
           <div className="flex flex-wrap items-center gap-2">
             <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${COLOR[r.estado]}`}>{r.estado}</span>
             <span className="text-sm font-medium text-slate-800">{porId.get(r.criterioId)?.clausula} · {porId.get(r.criterioId)?.titulo}</span>
           </div>
-          {r.hallazgos && <p className="mt-1 text-sm text-slate-600">{r.hallazgos}</p>}
-          {r.sugerencias && <p className="mt-1 text-xs text-violet-700"><strong>Sugerencia:</strong> {r.sugerencias}</p>}
+          {r.hallazgos && <p className="mt-1 text-sm text-slate-600">{video ? <TextoConMarcas texto={r.hallazgos} /> : r.hallazgos}</p>}
+          {r.sugerencias && (
+            <p className="mt-1 text-xs text-violet-700">
+              <strong>{video ? ETIQUETA_SUGERENCIA_IA : 'Sugerencia'}:</strong> {video ? <TextoConMarcas texto={r.sugerencias} /> : r.sugerencias}
+            </p>
+          )}
         </div>
       ))}
     </article>

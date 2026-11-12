@@ -19,6 +19,9 @@
 //   IA_MAX_CARACTERES=18000          (opcional: recorta el documento; por defecto 60000. Para un proveedor con tope
 //                                     de tokens por pedido, p. ej. plan gratis de Groq (8000 por pedido), 18000 es lo seguro)
 //   (La transcripción de audio y video la hace transcribir-evidencia; acá se analiza el texto guardado.)
+//   Análisis de VIDEO nativo (pedido con modo "video": un modelo de Google mira la imagen y oye el audio):
+//   IA_VIDEO_API_KEY=…               (clave de Google AI con plan de pago: en el gratis Google usa los datos)
+//   IA_VIDEO_MODELO=gemini-…         (el modelo rota rápido: va en variable)
 //   CORS_ORIGEN=https://…            (en producción; sin él queda `*`)
 
 import { createClient } from 'npm:@supabase/supabase-js@2.49.4'
@@ -33,7 +36,15 @@ import {
   type AnalizadorIA,
   type CriterioIA,
   type FuenteIA,
+  type ResultadoCriterio,
 } from '../_compartido/analisis.ts'
+import {
+  armarMensajesVideo,
+  crearAnalizadorGemini,
+  esVideoAnalizable,
+  interpretarRespuestaVideo,
+  verificarTamanoVideo,
+} from '../_compartido/video.ts'
 import { crearCors, estadoDe, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
 import { esMediaTranscribible, fuenteDeTranscripcion } from '../_compartido/transcripcion.ts'
 import { extraerArchivo, extraerDocumento } from './extractores.ts'
@@ -123,6 +134,53 @@ Deno.serve(async (req) => {
       .order('orden')
     if (errorCriterios || !criterios?.length) throw new ErrorIA('No se pudieron leer los criterios pedidos.')
 
+    // 4. Registrar (lo comparten el análisis de texto y el de video).
+    const terminar = async (resumen: string | null, resultados: ResultadoCriterio[]) => {
+      const { error: errorRegistro } = await registrar('Completado', { resumen, resultados })
+      if (errorRegistro) {
+        console.error('[analizar-ia] no se pudo guardar el resultado:', errorRegistro)
+        throw new ErrorIA('No se pudo guardar el resultado.')
+      }
+      // Se devuelve el análisis completo: la pantalla lo muestra sin otra consulta.
+      return responder(200, { id: analisis.id, estado: 'Completado', resumen, proveedor, modelo, resultados })
+    }
+
+    if (pedido.modo === 'video') {
+      // Video nativo: el modelo mira el video. Se manda por flujo (URL firmada de Storage → proveedor): un video de
+      // 10 minutos pesa decenas de MB y no se carga entero en la memoria de la función.
+      const { data: ev, error } = await comoUsuario
+        .from('evidencias').select('nombre, tipo, archivo_ruta, archivo_mime').eq('id', pedido.evidenciaId).single()
+      if (error || !ev) throw new ErrorIA('No se pudo leer la evidencia.')
+      if (!ev.archivo_ruta) throw new ErrorIA('La evidencia no tiene archivo adjunto.')
+      const mime = ev.archivo_mime ?? ''
+      if (ev.tipo !== 'Video' || !esVideoAnalizable(mime)) throw new ErrorIA('La evidencia no es un video en un formato que se pueda analizar.')
+
+      const { data: firmada, error: errorFirma } = await comoUsuario.storage.from('evidencias').createSignedUrl(ev.archivo_ruta, 300)
+      if (errorFirma || !firmada) throw new ErrorIA('No se pudo acceder al archivo de la evidencia.')
+      const archivo = await fetch(firmada.signedUrl)
+      const tamano = Number(archivo.headers.get('content-length'))
+      if (!archivo.ok || !archivo.body || !Number.isFinite(tamano)) {
+        await archivo.body?.cancel()
+        throw new ErrorIA('No se pudo descargar el archivo de la evidencia.')
+      }
+      try {
+        verificarTamanoVideo(tamano)
+      } catch (e) {
+        await archivo.body.cancel()
+        throw e
+      }
+
+      proveedor = 'gemini'
+      modelo = Deno.env.get('IA_VIDEO_MODELO') ?? ''
+      const analizadorVideo = crearAnalizadorGemini({ apiKey: Deno.env.get('IA_VIDEO_API_KEY') ?? '', modelo })
+      const respuestaVideo = await analizadorVideo.analizarVideo(
+        armarMensajesVideo(criterios as CriterioIA[], ev.nombre),
+        { mime, tamano, cuerpo: archivo.body },
+      )
+      const interpretado = interpretarRespuestaVideo(respuestaVideo, criterios as CriterioIA[])
+      return await terminar(interpretado.resumen, interpretado.resultados)
+    }
+
     let fuente: FuenteIA
     let nombre: string
     if (pedido.fuenteTipo === 'documento') {
@@ -161,14 +219,7 @@ Deno.serve(async (req) => {
     const respuesta = await configurado.analizador.completar(armarMensajes(criterios as CriterioIA[], fuente, nombre, undefined, limiteDeCaracteres(Deno.env.get('IA_MAX_CARACTERES'))))
     const { resumen, resultados } = interpretarRespuesta(respuesta, criterios as CriterioIA[])
 
-    // 4. Registrar.
-    const { error: errorRegistro } = await registrar('Completado', { resumen, resultados })
-    if (errorRegistro) {
-      console.error('[analizar-ia] no se pudo guardar el resultado:', errorRegistro)
-      throw new ErrorIA('No se pudo guardar el resultado.')
-    }
-    // Se devuelve el análisis completo: la pantalla lo muestra sin otra consulta.
-    return responder(200, { id: analisis.id, estado: 'Completado', resumen, proveedor, modelo, resultados })
+    return await terminar(resumen, resultados)
   } catch (e) {
     // Cualquier falla queda registrada con un motivo SANEADO (lo lee el cliente, AUD04-B3);
     // el detalle técnico real va solo al log del servidor.

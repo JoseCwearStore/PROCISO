@@ -1,7 +1,10 @@
 import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { avisoTranscripcion, criteriosSugeridos, clausulasSugeridas, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from './ia'
+import {
+  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, esAnalisisDeVideo, ETIQUETA_SUGERENCIA_IA,
+  fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
+} from './ia'
 import type { CriterioEvaluacion } from '../types'
 
 // AUD04-M1 (c), L5f: lo que sube la empresa evaluada entra al prompt de la IA y esa empresa tiene interés en que
@@ -107,5 +110,94 @@ describe('criteriosSugeridos', () => {
 
   it('ignora una cláusula sugerida que el catálogo no tenga (no rompe si el Excel cambia)', () => {
     expect(criteriosSugeridos('Política', [criterio('5.2.1', 7)])).toEqual(['c-5.2.1'])
+  })
+})
+
+// ─── Análisis de video nativo ──────────────────────────────────────────────
+
+describe('partirMarcasDeTiempo', () => {
+  it('separa las marcas MM:SS para resaltarlas y conserva el texto', () => {
+    expect(partirMarcasDeTiempo('En 00:05 se ve el montaje y de 1:12 a 1:30 la prueba.')).toEqual([
+      { texto: 'En ', marca: false },
+      { texto: '00:05', marca: true },
+      { texto: ' se ve el montaje y de ', marca: false },
+      { texto: '1:12', marca: true },
+      { texto: ' a ', marca: false },
+      { texto: '1:30', marca: true },
+      { texto: ' la prueba.', marca: false },
+    ])
+  })
+
+  it('una marca al principio no deja un tramo vacío antes', () => {
+    expect(partirMarcasDeTiempo('00:05 inicio')).toEqual([{ texto: '00:05', marca: true }, { texto: ' inicio', marca: false }])
+  })
+
+  it('un texto sin marcas es un solo tramo', () => {
+    expect(partirMarcasDeTiempo('No se ve el equipo.')).toEqual([{ texto: 'No se ve el equipo.', marca: false }])
+  })
+
+  it('una marca sola, y el texto vacío, no dejan tramos vacíos', () => {
+    expect(partirMarcasDeTiempo('[01:12]')).toEqual([{ texto: '[', marca: false }, { texto: '01:12', marca: true }, { texto: ']', marca: false }])
+    expect(partirMarcasDeTiempo('')).toEqual([])
+  })
+
+  it('no toma una proporción ni una escala como marca', () => {
+    expect(partirMarcasDeTiempo('escala 1:100 y 3:75 y 100:50')).toEqual([{ texto: 'escala 1:100 y 3:75 y 100:50', marca: false }])
+  })
+
+  it('la unión de los tramos da el texto original', () => {
+    const t = 'a 10:00, luego 02:30-02:45 y 9:59.'
+    expect(partirMarcasDeTiempo(t).map((x) => x.texto).join('')).toBe(t)
+  })
+})
+
+describe('análisis de video: avisos y etiquetas', () => {
+  it('avisa que el video sale de la plataforma a un proveedor externo, que se ve la imagen y que lo revisa una persona', () => {
+    expect(AVISO_VIDEO_NATIVO).toMatch(/proveedor externo/i)
+    expect(AVISO_VIDEO_NATIVO).toMatch(/sale de la plataforma/i)
+    expect(AVISO_VIDEO_NATIVO).toMatch(/imagen/i)
+    expect(AVISO_VIDEO_NATIVO).toMatch(/revis/i)
+  })
+
+  it('la etiqueta de sugerencia dice que es de la IA y que se verifica con el video', () => {
+    expect(ETIQUETA_SUGERENCIA_IA).toMatch(/IA/)
+    expect(ETIQUETA_SUGERENCIA_IA).toMatch(/verificar con el video/i)
+  })
+
+  it('reconoce un análisis hecho por el modelo de video por su proveedor', () => {
+    expect(esAnalisisDeVideo({ proveedor: 'gemini' })).toBe(true)
+    expect(esAnalisisDeVideo({ proveedor: 'openai-compatible' })).toBe(false)
+    expect(esAnalisisDeVideo({})).toBe(false)
+  })
+
+  it('el límite de subida es 200 MB para un video y 25 MB para lo demás', () => {
+    expect(limiteSubidaMb('Video')).toBe(200)
+    expect(limiteSubidaMb('Foto')).toBe(25)
+    expect(limiteSubidaMb('Audio')).toBe(25)
+    expect(limiteSubidaMb('Documento')).toBe(25)
+  })
+})
+
+describe('cableado del análisis de video (no queda sin conectar)', () => {
+  const leer = (...partes: string[]) => readFileSync(resolve(__dirname, '..', ...partes), 'utf8')
+
+  it('el panel ofrece "Analizar video", muestra el aviso, resalta las marcas y etiqueta la sugerencia', () => {
+    const panel = leer('components', 'PanelAnalisisIA.tsx')
+    expect(panel).toContain('Analizar video')
+    expect(panel).toMatch(/\{AVISO_VIDEO_NATIVO\}/)
+    expect(panel).toMatch(/\{video \? ETIQUETA_SUGERENCIA_IA/)
+    expect(panel).toMatch(/partirMarcasDeTiempo\(/)
+    expect(panel).toMatch(/ia\.analizar\(fuente, seleccion, 'video'\)/)
+    // El aviso de "transcribe primero" aplica solo al botón de transcripción: en video se aclara.
+    expect(panel).toContain('Solo para «Analizar transcripción»')
+  })
+
+  it('el hook manda el modo "video" a la función y no manda nada en el análisis de texto', () => {
+    const hook = leer('hooks', 'useAccionesIA.ts')
+    expect(hook).toMatch(/modo === 'video' \? \{ modo \} : \{\}/)
+  })
+
+  it('la pantalla de evidencias usa el límite por tipo', () => {
+    expect(leer('pages', 'Evidencias.tsx')).toMatch(/limiteSubidaMb\(tipoArchivo\(archivo\)\)/)
   })
 })

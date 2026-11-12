@@ -19,6 +19,7 @@ import { useApp } from "../context/AppContext"
 import { servicioArchivos, servicioEscritura } from "../lib/servicios"
 import { mensajeDeError } from "../lib/escrituras"
 import { formatearFecha } from "../lib/datos"
+import { limiteSubidaMb } from "../lib/ia"
 import { Button } from "../components/ui/Button"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
@@ -156,9 +157,10 @@ export default function Evidencias() {
       return
     }
     // Aviso rápido en el navegador; el límite real lo aplica el bucket en el servidor.
-    if (archivo.size > 25 * 1024 * 1024) {
+    const limiteMb = limiteSubidaMb(tipoArchivo(archivo))
+    if (archivo.size > limiteMb * 1024 * 1024) {
       setErrorCarga(
-        "El archivo supera el límite de 25 MB. Selecciona uno más pequeño e intenta de nuevo.",
+        `El archivo supera el límite de ${limiteMb} MB. Selecciona uno más pequeño e intenta de nuevo.`,
       )
       setEstadoCarga("error")
       return
