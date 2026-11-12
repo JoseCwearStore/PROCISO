@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, esAnalisisDeVideo, ETIQUETA_SUGERENCIA_IA,
+  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, esAnalisisDeVideo, ETIQUETA_SUGERENCIA_IA, etiquetaSugerencia,
   fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
 } from './ia'
 import type { CriterioEvaluacion } from '../types'
@@ -170,6 +170,20 @@ describe('análisis de video: avisos y etiquetas', () => {
     expect(esAnalisisDeVideo({})).toBe(false)
   })
 
+  describe('etiquetaSugerencia', () => {
+    it('un análisis del modelo de video se verifica con el video', () => {
+      expect(etiquetaSugerencia('Video', { proveedor: 'gemini' })).toBe(ETIQUETA_SUGERENCIA_IA)
+    })
+    it('un análisis de audio, o de la transcripción de un video, se verifica con el audio', () => {
+      expect(etiquetaSugerencia('Audio', { proveedor: 'openai-compatible' })).toBe('Sugerencia de la IA: verificar con el audio')
+      expect(etiquetaSugerencia('Video', { proveedor: 'openai-compatible' })).toBe('Sugerencia de la IA: verificar con el audio')
+    })
+    it('otras fuentes mantienen "Sugerencia"', () => {
+      expect(etiquetaSugerencia('Documento', {})).toBe('Sugerencia')
+      expect(etiquetaSugerencia(null, {})).toBe('Sugerencia')
+    })
+  })
+
   it('el límite de subida es 200 MB para un video y 25 MB para lo demás', () => {
     expect(limiteSubidaMb('Video')).toBe(200)
     expect(limiteSubidaMb('Foto')).toBe(25)
@@ -185,7 +199,7 @@ describe('cableado del análisis de video (no queda sin conectar)', () => {
     const panel = leer('components', 'PanelAnalisisIA.tsx')
     expect(panel).toContain('Analizar video')
     expect(panel).toMatch(/\{AVISO_VIDEO_NATIVO\}/)
-    expect(panel).toMatch(/\{video \? ETIQUETA_SUGERENCIA_IA/)
+    expect(panel).toMatch(/\{etiquetaSugerencia\(tipoEvidencia, analisis\)\}/)
     expect(panel).toMatch(/partirMarcasDeTiempo\(/)
     expect(panel).toMatch(/ia\.analizar\(fuente, seleccion, 'video'\)/)
     // El aviso de "transcribe primero" aplica solo al botón de transcripción: en video se aclara.

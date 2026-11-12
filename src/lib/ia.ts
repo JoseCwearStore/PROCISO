@@ -69,6 +69,14 @@ export const ETIQUETA_SUGERENCIA_IA = 'Sugerencia de la IA: verificar con el vid
 // El análisis de video queda registrado con el proveedor "gemini" (ver analizar-ia): así se distingue del de texto.
 export const esAnalisisDeVideo = (a: { proveedor?: string | null }): boolean => a.proveedor === 'gemini'
 
+// Etiqueta de la sugerencia de un análisis: dice contra qué se verifica. Video nativo → el video;
+// audio (o la transcripción del audio de un video) → el audio; el resto mantiene "Sugerencia".
+export function etiquetaSugerencia(tipoEvidencia: string | null | undefined, analisis: { proveedor?: string | null }): string {
+  if (esAnalisisDeVideo(analisis)) return ETIQUETA_SUGERENCIA_IA
+  if (tipoEvidencia === 'Audio' || tipoEvidencia === 'Video') return 'Sugerencia de la IA: verificar con el audio'
+  return 'Sugerencia'
+}
+
 // Un video de ~10 minutos pesa decenas de MB; el resto de los archivos mantiene el tope de 25 MB.
 export const limiteSubidaMb = (tipo: string): number => (tipo === 'Video' ? 200 : 25)
 

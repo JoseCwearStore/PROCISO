@@ -301,6 +301,22 @@ describe('armarMensajes con una transcripción', () => {
     expect(contenido({ texto: 'hola', imagenes: [], revisada: true })).not.toMatch(/revisó y corrigió/i)
   })
 
+  it.each(['transcripcion-audio', 'transcripcion-video'] as const)(
+    'en %s dice que lo no mencionado no prueba que no exista y que Hueco es solo si lo dicho lo contradice, FUERA del bloque',
+    (origen) => {
+      const texto = contenido({ texto: 'las quejas se resuelven', imagenes: [], origen })
+      expect(texto).toMatch(/lo que no se mencione/i)
+      expect(texto).toMatch(/no prueba que no exista/i)
+      expect(texto).toMatch(/"No evaluable"/)
+      expect(texto).toMatch(/"Hueco" solo si lo que se dice contradice/i)
+      expect(texto.indexOf('no prueba que no exista')).toBeLessThan(texto.indexOf('<fuente-n0nce>'))
+    },
+  )
+
+  it('sin origen no agrega la regla de lo no mencionado', () => {
+    expect(contenido({ texto: 'hola', imagenes: [] })).not.toMatch(/no prueba que no exista/i)
+  })
+
   it('sin origen no agrega ninguna nota', () => {
     expect(contenido({ texto: 'hola', imagenes: [] })).not.toMatch(/transcripción automática/i)
   })

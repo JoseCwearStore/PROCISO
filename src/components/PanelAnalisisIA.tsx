@@ -6,7 +6,7 @@ import { TranscripcionEvidencia } from './TranscripcionEvidencia'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
 import {
-  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, esAnalisisDeVideo, ETIQUETA_SUGERENCIA_IA, fuenteAnalizada,
+  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, esAnalisisDeVideo, etiquetaSugerencia, fuenteAnalizada,
   NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
 } from '../lib/ia'
 import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
@@ -151,7 +151,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
       {!historial.length ? (
         <p className="text-sm text-slate-400">Todavía no hay preevaluaciones de esta fuente.</p>
       ) : (
-        <div className="space-y-3">{historial.map((a) => <TarjetaAnalisis key={a.id} analisis={a} porId={porId} />)}</div>
+        <div className="space-y-3">{historial.map((a) => <TarjetaAnalisis key={a.id} analisis={a} porId={porId} tipoEvidencia={tipoEvidencia} />)}</div>
       )}
     </section>
   )
@@ -168,7 +168,7 @@ function TextoConMarcas({ texto }: { texto: string }) {
   )
 }
 
-function TarjetaAnalisis({ analisis, porId }: { analisis: AnalisisIA; porId: Map<string, { clausula: string; titulo: string }> }) {
+function TarjetaAnalisis({ analisis, porId, tipoEvidencia }: { analisis: AnalisisIA; porId: Map<string, { clausula: string; titulo: string }>; tipoEvidencia: string | null }) {
   const video = esAnalisisDeVideo(analisis)
   return (
     <article className="rounded-lg border border-line p-3">
@@ -197,7 +197,7 @@ function TarjetaAnalisis({ analisis, porId }: { analisis: AnalisisIA; porId: Map
           {r.hallazgos && <p className="mt-1 text-sm text-slate-600">{video ? <TextoConMarcas texto={r.hallazgos} /> : r.hallazgos}</p>}
           {r.sugerencias && (
             <p className="mt-1 text-xs text-violet-700">
-              <strong>{video ? ETIQUETA_SUGERENCIA_IA : 'Sugerencia'}:</strong> {video ? <TextoConMarcas texto={r.sugerencias} /> : r.sugerencias}
+              <strong>{etiquetaSugerencia(tipoEvidencia, analisis)}:</strong> {video ? <TextoConMarcas texto={r.sugerencias} /> : r.sugerencias}
             </p>
           )}
         </div>

@@ -111,11 +111,17 @@ export interface FuenteIA {
 
 const NOTA_REVISADA = ' Una persona del equipo revisó y corrigió esta transcripción antes del análisis.'
 
+// Un audio suele ser una entrevista o una explicación PARCIAL: que algo no se diga no prueba que no exista.
+// Misma idea que la regla de video (video.ts), donde "no lo veo" no es "no existe".
+const REGLA_LO_NO_MENCIONADO =
+  ' Lo que no se mencione en el audio no prueba que no exista (la persona pudo no hablar de ello): si solo falta la mención, el estado es "No evaluable". ' +
+  'Usa "Hueco" solo si lo que se dice contradice el criterio, citando lo que se dijo.'
+
 const NOTA_ORIGEN: Record<NonNullable<FuenteIA['origen']>, string> = {
   'transcripcion-audio':
-    'Nota sobre la fuente: el contenido es una transcripción automática de un audio y puede tener errores de reconocimiento de voz (palabras, nombres o códigos mal transcritos). Si una conclusión depende de una palabra dudosa, dilo en el hallazgo.',
+    'Nota sobre la fuente: el contenido es una transcripción automática de un audio y puede tener errores de reconocimiento de voz (palabras, nombres o códigos mal transcritos). Si una conclusión depende de una palabra dudosa, dilo en el hallazgo.' + REGLA_LO_NO_MENCIONADO,
   'transcripcion-video':
-    'Nota sobre la fuente: el contenido es una transcripción automática del audio del video y puede tener errores de reconocimiento de voz; no se analizó la imagen del video. Si una conclusión depende de una palabra dudosa, dilo en el hallazgo.',
+    'Nota sobre la fuente: el contenido es una transcripción automática del audio del video y puede tener errores de reconocimiento de voz; no se analizó la imagen del video. Si una conclusión depende de una palabra dudosa, dilo en el hallazgo.' + REGLA_LO_NO_MENCIONADO,
 }
 
 type Parte = { type: 'text'; text: string } | { type: 'image_url'; image_url: { url: string } }
