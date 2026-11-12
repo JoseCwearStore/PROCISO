@@ -1,9 +1,9 @@
 import { useState } from 'react'
-import { AlertTriangle, Loader2, Sparkles, X } from 'lucide-react'
+import { AlertTriangle, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { Button } from './ui/Button'
 import { IndicadorUsoIA } from './IndicadorUsoIA'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
-import { criteriosSugeridos } from '../lib/ia'
+import { criteriosSugeridos, fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE } from '../lib/ia'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
 
 const COLOR: Record<EstadoResultadoIA, string> = {
@@ -43,6 +43,10 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null }: { fuente: Fuen
       <p className="mb-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>Matriz presentada como <strong>{AVISO_EDICION}</strong> {AVISO_PREEVALUACION}</span>
+      </p>
+      <p className="mb-4 flex gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-xs text-violet-900">
+        <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" />
+        <span>{NOTA_CONTENIDO_NO_CONFIABLE}</span>
       </p>
 
       {ia.puedePedir && (
@@ -102,6 +106,7 @@ function TarjetaAnalisis({ analisis, porId }: { analisis: AnalisisIA; porId: Map
           {analisis.estado}
         </span>
       </div>
+      <p className="mb-2 text-xs text-slate-500">{fuenteAnalizada(analisis.fuenteTipo)}</p>
       {analisis.estado === 'Error' && (
         <p className="rounded-md bg-red-50 p-2 text-sm text-red-700">{analisis.errorDetalle}</p>
       )}

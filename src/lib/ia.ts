@@ -1,4 +1,18 @@
-import type { CriterioEvaluacion, Documento } from '../types'
+import type { AnalisisIA, CriterioEvaluacion, Documento } from '../types'
+
+// AUD04-M1 (c), L5f. El contenido que se analiza (un documento o un archivo de evidencia) lo carga la propia
+// empresa evaluada, que tiene interés en que el resultado sea "Cubierto" y podría intentar influir en la IA. La
+// defensa técnica vive en las Edge Functions (L4: delimitador con nonce y "datos no confiables"); esta nota le
+// dice a quien lee el resultado —equipo o cliente— de dónde sale lo que se analizó.
+export const NOTA_CONTENIDO_NO_CONFIABLE =
+  'La IA analizó contenido cargado en la plataforma, que puede venir de la empresa evaluada: ella tiene interés en el resultado y podría intentar influir en él. ' +
+  'Por eso esta preevaluación no es un dictamen: revísala siempre contra el documento o la evidencia original antes de usarla.'
+
+export function fuenteAnalizada(tipo: AnalisisIA['fuenteTipo']): string {
+  return tipo === 'documento'
+    ? 'Se analizó el contenido de un documento de la plataforma.'
+    : 'Se analizó un archivo cargado como evidencia, que puede venir de la empresa evaluada.'
+}
 
 // Cláusulas que conviene revisar según el tipo de documento (sugerencia editable:
 // el consultor agrega o quita). Para una evidencia no se adivina: elige el consultor.
