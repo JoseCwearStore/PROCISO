@@ -81,7 +81,7 @@ export function etiquetaSugerencia(tipoEvidencia: string | null | undefined, ana
 export const limiteSubidaMb = (tipo: string): number => (tipo === 'Video' ? 200 : 25)
 
 // MM:SS (o M:SS), igual que la guarda de supabase/functions/_compartido/video.ts.
-const MARCA_TIEMPO = /(?<![\d:.])\d{1,2}:[0-5]\d(?!\d)/g
+const MARCA_TIEMPO = /(?<![\d:.])[0-5]?\d:[0-5]\d(?!\d|:\d)/g
 
 // Parte un texto en tramos para resaltar las marcas de tiempo; la unión de los tramos es el texto original.
 export function partirMarcasDeTiempo(texto: string): { texto: string; marca: boolean }[] {

@@ -57,6 +57,17 @@ describe('tieneMarcaDeTiempo', () => {
   it.each([null, '', 'no se ve el equipo', 'a las 5 de la tarde', 'relación 1:100', 'escala 3:75', 'cifra 100:50', 'razón 1.5:30'])('no detecta marca en %s', (t) => {
     expect(tieneMarcaDeTiempo(t)).toBe(false)
   })
+  // AUD09-M1: los minutos de una marca MM:SS van de 0 a 59; "99:59" y "60:00" no son un punto del video.
+  it.each(['00:00', '59:59', 'de 05:10 a 09:59'])('acepta el borde válido en "%s"', (t) => {
+    expect(tieneMarcaDeTiempo(t)).toBe(true)
+  })
+  it.each(['falla en 99:59', 'a las 60:00', 'cifra 75:30'])('rechaza minutos fuera de rango en "%s"', (t) => {
+    expect(tieneMarcaDeTiempo(t)).toBe(false)
+  })
+  // Una hora con segundos (H:MM:SS) no es MM:SS: el prompt pide MM:SS y no hay videos de horas en la prueba.
+  it.each(['a la 1:05:00', 'reloj 10:30:15'])('no toma una hora H:MM:SS como marca en "%s"', (t) => {
+    expect(tieneMarcaDeTiempo(t)).toBe(false)
+  })
 })
 
 describe('armarMensajesVideo', () => {
@@ -137,9 +148,37 @@ describe('aplicarGuardasVideo', () => {
     expect(r.hallazgos).toBe('En 00:42 un operario manipula sin guantes.')
   })
 
-  it.each(['Cubierto', 'Parcial', 'No evaluable', 'No aplica'] as const)('no toca un resultado %s', (estado) => {
+  it.each(['No evaluable', 'No aplica'] as const)('no toca un resultado %s (no afirma nada que haya que respaldar)', (estado) => {
     const original = resultado({ estado, hallazgos: 'sin marca' })
     expect(aplicarGuardasVideo([original], [C714])).toEqual([original])
+  })
+
+  // AUD09-M1: el auditado también tiene interés en un "Cubierto"; sin marca no hay nada observable que lo apoye.
+  it.each(['Cubierto', 'Parcial'] as const)('baja a "No evaluable" un %s sin marca de tiempo y lo explica con su estado', (estado) => {
+    const [r] = aplicarGuardasVideo([resultado({ estado, hallazgos: 'Todo en orden.', sugerencias: 'Seguir así.' })], [C714])
+    expect(r.estado).toBe('No evaluable')
+    expect(r.hallazgos).toContain('Todo en orden.')
+    expect(r.hallazgos).toContain(`"${estado}"`)
+    expect(r.hallazgos).toMatch(/sin marca de tiempo/i)
+  })
+
+  it.each(['Cubierto', 'Parcial'] as const)('mantiene un %s apoyado en una marca de tiempo', (estado) => {
+    const original = resultado({ estado, hallazgos: 'En 00:05 se ve el montaje.' })
+    expect(aplicarGuardasVideo([original], [C714])).toEqual([original])
+  })
+
+  it('un Cubierto cuya única "marca" es una hora fuera de rango también baja', () => {
+    const [r] = aplicarGuardasVideo([resultado({ estado: 'Cubierto', hallazgos: 'Perfecto en 99:59.' })], [C714])
+    expect(r.estado).toBe('No evaluable')
+  })
+
+  it('marca también el numeral, la sección, el inciso y el artículo que no se pidieron', () => {
+    const [r] = aplicarGuardasVideo([resultado({
+      hallazgos: 'En 00:05 incumple el numeral 6.1.2, la sección 9.9, el inciso 8.7 y el artículo 4.4.',
+    })], [C714])
+    for (const cita of ['numeral 6.1.2', 'sección 9.9', 'inciso 8.7', 'artículo 4.4']) {
+      expect(r.hallazgos, cita).toContain(`${cita} [no solicitada: verificar en el catálogo]`)
+    }
   })
 
   it('marca una cláusula que no se pidió, en hallazgos y sugerencias', () => {
@@ -162,7 +201,7 @@ describe('aplicarGuardasVideo', () => {
   })
 
   it('no inventa campos cuando no hay nada que ajustar', () => {
-    const original = resultado({ hallazgos: null, sugerencias: null })
+    const original = resultado({ estado: 'No evaluable', hallazgos: null, sugerencias: null })
     expect(aplicarGuardasVideo([original], [C714])).toEqual([original])
   })
 })
@@ -175,8 +214,33 @@ describe('interpretarRespuestaVideo', () => {
       { clausula: '7.1.4', estado: 'Hueco', hallazgos: 'No se ve EPP.', sugerencias: 'Exigir EPP.' },
       { clausula: '8.5.1', estado: 'Parcial', hallazgos: 'En 00:10 se ve el montaje.', sugerencias: null },
     ]), [C714, C851])
-    expect(resumen).toBe('Línea de montaje.')
+    // Un criterio cambió de estado por la guarda: el resumen del modelo (que puede seguir diciendo "hueco") lleva el aviso.
+    expect(resumen).toContain('Línea de montaje.')
+    expect(resumen).toMatch(/Ajustado automáticamente: 1 criterio/)
     expect(resultados.map((r) => r.estado)).toEqual(['No evaluable', 'Parcial'])
+  })
+
+  it('sin ajustes el resumen queda tal cual (sin aviso)', () => {
+    const { resumen } = interpretarRespuestaVideo(json([
+      { clausula: '7.1.4', estado: 'Hueco', hallazgos: 'En 00:42 se manipula sin guantes.', sugerencias: null },
+      { clausula: '8.5.1', estado: 'Parcial', hallazgos: 'En 00:10 se ve el montaje.', sugerencias: null },
+    ], 'Hay un hueco en seguridad.'), [C714, C851])
+    expect(resumen).toBe('Hay un hueco en seguridad.')
+  })
+
+  it('cuenta cuántos criterios ajustó la guarda', () => {
+    const { resumen } = interpretarRespuestaVideo(json([
+      { clausula: '7.1.4', estado: 'Hueco', hallazgos: 'No se ve EPP.', sugerencias: null },
+      { clausula: '8.5.1', estado: 'Cubierto', hallazgos: 'Todo bien.', sugerencias: null },
+    ]), [C714, C851])
+    expect(resumen).toMatch(/Ajustado automáticamente: 2 criterios/)
+  })
+
+  it('un resumen vacío con ajustes igual deja el aviso (nadie debe leer los estados sin saber que se ajustaron)', () => {
+    const { resumen } = interpretarRespuestaVideo(json([
+      { clausula: '7.1.4', estado: 'Hueco', hallazgos: 'No se ve EPP.', sugerencias: null },
+    ], ''), [C714])
+    expect(resumen).toMatch(/Ajustado automáticamente: 1 criterio/)
   })
 
   it('un criterio "No evaluable" no lleva sugerencias, ni el que bajó de "Hueco" por falta de marca', () => {

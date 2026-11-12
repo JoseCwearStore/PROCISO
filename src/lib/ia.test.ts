@@ -145,6 +145,13 @@ describe('partirMarcasDeTiempo', () => {
     expect(partirMarcasDeTiempo('escala 1:100 y 3:75 y 100:50')).toEqual([{ texto: 'escala 1:100 y 3:75 y 100:50', marca: false }])
   })
 
+  // Misma regla que la guarda del servidor (AUD09-M1): minutos de 0 a 59 y no una hora H:MM:SS.
+  it('no resalta minutos fuera de rango ni una hora H:MM:SS, igual que la guarda del servidor', () => {
+    expect(partirMarcasDeTiempo('falla en 99:59')).toEqual([{ texto: 'falla en 99:59', marca: false }])
+    expect(partirMarcasDeTiempo('a la 1:05:00')).toEqual([{ texto: 'a la 1:05:00', marca: false }])
+    expect(partirMarcasDeTiempo('en 59:59').filter((x) => x.marca).map((x) => x.texto)).toEqual(['59:59'])
+  })
+
   it('la unión de los tramos da el texto original', () => {
     const t = 'a 10:00, luego 02:30-02:45 y 9:59.'
     expect(partirMarcasDeTiempo(t).map((x) => x.texto).join('')).toBe(t)

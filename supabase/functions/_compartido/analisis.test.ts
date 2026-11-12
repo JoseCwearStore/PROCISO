@@ -9,6 +9,7 @@ import {
   interpretarRespuesta,
   limiteDeBytes,
   limiteDeCaracteres,
+  resumenConAvisos,
   textoDeSecciones,
   validarPedidoAnalisis,
   verificarTamanoArchivo,
@@ -317,6 +318,38 @@ describe('verificarTamanoArchivo (AUD04-B5: se acota ANTES de parsear)', () => {
 
   it('el texto plano también tiene tope (no se decodifica un archivo enorme)', () => {
     expect(() => verificarTamanoArchivo(new Uint8Array(MAX_TEXTO_BYTES + 1), 'text/plain')).toThrow(/supera/i)
+  })
+})
+
+// AUD09-M2: el resumen lo escribe el modelo y no se corrige solo; si no cuadra con los estados, se avisa.
+describe('resumenConAvisos', () => {
+  const r = (estado: ResultadoCriterio['estado']): ResultadoCriterio => ({ criterio_id: 'x', estado, hallazgos: null, sugerencias: null })
+
+  it('deja el resumen igual cuando coincide con los estados', () => {
+    expect(resumenConAvisos('Hay un hueco en seguridad.', [r('Hueco'), r('Cubierto')])).toBe('Hay un hueco en seguridad.')
+    expect(resumenConAvisos('Todo cubierto.', [r('Cubierto')])).toBe('Todo cubierto.')
+  })
+
+  it.each(['Hay huecos en trazabilidad.', 'Se detectó un Hueco grave.', 'HUECOS: ninguno cierra.'])('avisa si el resumen habla de huecos y ningún criterio quedó en "Hueco" (%s)', (resumen) => {
+    const salida = resumenConAvisos(resumen, [r('No evaluable'), r('Parcial')])
+    expect(salida).toContain(resumen)
+    expect(salida).toMatch(/ningún criterio quedó en "Hueco"/)
+  })
+
+  it('no confunde una palabra que solo contiene "hueco"', () => {
+    expect(resumenConAvisos('El operario ahueco la pieza y desahuecos no hay.', [r('No evaluable')])).toBe('El operario ahueco la pieza y desahuecos no hay.')
+  })
+
+  it('si una guarda ajustó estados, avisa del ajuste (con la cantidad) y no repite el otro aviso', () => {
+    const uno = resumenConAvisos('Hay huecos.', [r('No evaluable')], 1)
+    expect(uno).toMatch(/Ajustado automáticamente: 1 criterio /)
+    expect(uno).not.toMatch(/ningún criterio quedó/)
+    expect(resumenConAvisos('Resumen.', [r('No evaluable'), r('No evaluable')], 2)).toMatch(/Ajustado automáticamente: 2 criterios /)
+  })
+
+  it('sin resumen: queda null salvo que haya ajustes (entonces queda solo el aviso)', () => {
+    expect(resumenConAvisos(null, [r('Cubierto')])).toBeNull()
+    expect(resumenConAvisos(null, [r('No evaluable')], 1)).toMatch(/^\[Ajustado automáticamente: 1 criterio/)
   })
 })
 

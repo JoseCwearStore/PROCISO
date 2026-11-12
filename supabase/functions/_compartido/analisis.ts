@@ -397,6 +397,23 @@ export function sinSugerenciasEnNoEvaluables(resultados: ResultadoCriterio[]): R
   return resultados.map((r) => (r.estado === 'No evaluable' ? { ...r, sugerencias: null } : r))
 }
 
+// AUD09-M2: el resumen lo escribe el modelo y nada lo corrige cuando un estado cambia (o cuando el propio modelo no
+// es coherente: medido en vivo, un resumen que hablaba de "huecos en trazabilidad" con ese criterio en "No evaluable").
+// No se reescribe su texto (sería inventar): se le agrega un aviso para que nadie lea el resumen sin saberlo.
+//   · `ajustados` > 0: una guarda del código cambió esa cantidad de estados.
+//   · si no, y el resumen habla de "hueco(s)" sin que ningún criterio sea "Hueco": incoherencia del modelo.
+export function resumenConAvisos(resumen: string | null, resultados: ResultadoCriterio[], ajustados = 0): string | null {
+  let aviso: string | null = null
+  if (ajustados > 0) {
+    aviso = `[Ajustado automáticamente: ${ajustados} ${ajustados === 1 ? 'criterio pasó' : 'criterios pasaron'} a "No evaluable" porque la IA no los respaldó con una marca de tiempo. ` +
+      'El resumen de la IA puede seguir hablando de ellos como huecos o cumplimientos: guíate por el estado de cada criterio.]'
+  } else if (resumen && /\bhuecos?\b/i.test(resumen) && !resultados.some((r) => r.estado === 'Hueco')) {
+    aviso = '[Aviso automático: el resumen de la IA menciona huecos, pero ningún criterio quedó en "Hueco". Guíate por el estado de cada criterio.]'
+  }
+  if (!aviso) return resumen
+  return resumen ? `${resumen} ${aviso}` : aviso
+}
+
 // ─── Adaptador compatible con OpenAI ───────────────────────────────────────
 
 // Debe quedar por debajo del límite de tiempo del runtime de la función.

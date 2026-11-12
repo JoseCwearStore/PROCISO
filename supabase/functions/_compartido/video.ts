@@ -18,6 +18,7 @@ import {
   interpretarRespuesta,
   neutralizar,
   nuevoNonce,
+  resumenConAvisos,
   sinSugerenciasEnNoEvaluables,
   type CriterioIA,
   type MensajeIA,
@@ -50,8 +51,10 @@ export function verificarTamanoVideo(bytes: number): void {
 
 // ─── Marcas de tiempo ───────────────────────────────────────────────────────
 
-// MM:SS (o M:SS). No confunde "1:100" ni "3:75" (escalas, proporciones).
-const MARCA = /(?<![\d:.])\d{1,2}:[0-5]\d(?!\d)/
+// MM:SS (o M:SS) con minutos de 0 a 59 (AUD09-M1: "99:59" no es un punto del video). No confunde "1:100" ni
+// "3:75" (escalas, proporciones) ni una hora H:MM:SS ("1:05:00"). Un reloj o cartel en pantalla ("10:30") sí pasa:
+// con un regex no se distingue de una marca; por eso el resultado siempre lo revisa una persona contra el video.
+const MARCA = /(?<![\d:.])[0-5]?\d:[0-5]\d(?!\d|:\d)/
 
 export const tieneMarcaDeTiempo = (texto: string | null | undefined): boolean => MARCA.test(texto ?? '')
 
@@ -86,14 +89,23 @@ export function armarMensajesVideo(criterios: CriterioIA[], nombreFuente: string
 
 // ─── Guardas sobre la respuesta ─────────────────────────────────────────────
 
-const AVISO_SIN_MARCA =
-  '[Ajustado automáticamente: la IA marcó "Hueco" sin marca de tiempo que lo apoye. Que algo no se vea en el video no prueba que no exista; revísalo en el video.]'
+// AUD09-M1: el auditado tiene interés en un "Cubierto"; una afirmación (Hueco, Cubierto o Parcial) sin nada observable
+// que la apoye (una marca de tiempo) no se deja como está. "No evaluable" y "No aplica" no afirman nada.
+const ESTADOS_QUE_AFIRMAN = new Set<ResultadoCriterio['estado']>(['Hueco', 'Cubierto', 'Parcial'])
+
+const avisoSinMarca = (estado: ResultadoCriterio['estado']): string =>
+  estado === 'Hueco'
+    ? '[Ajustado automáticamente: la IA marcó "Hueco" sin marca de tiempo que lo apoye. Que algo no se vea en el video no prueba que no exista; revísalo en el video.]'
+    : `[Ajustado automáticamente: la IA marcó "${estado}" sin marca de tiempo que lo apoye: sin algo observable en el video no se puede respaldar. Revísalo en el video.]`
 const ETIQUETA_NO_SOLICITADA = '[no solicitada: verificar en el catálogo]'
 
-// "cláusula 6.1.2", "cláusulas 7.1.4 y 9.1.3", "requisito 8.7", "apartado 4.4".
+// "cláusula 6.1.2", "cláusulas 7.1.4 y 9.1.3", "requisito 8.7", "apartado 4.4", "numeral", "sección", "inciso", "artículo".
 // Deliberadamente solo con una palabra clave delante: "1.5 m" o "punto 2.3 del video" no son cláusulas.
 const NUMERO = String.raw`\d{1,2}(?:\.\d{1,2}){0,3}`
-const CITA = new RegExp(String.raw`\b(cl[aá]usulas?|apartados?|requisitos?)(\s+)(${NUMERO}(?:(?:\s*,\s*|\s+[yeo]\s+)${NUMERO})*)`, 'gi')
+const CITA = new RegExp(
+  String.raw`\b(cl[aá]usulas?|apartados?|requisitos?|numeral(?:es)?|secci(?:[oó]n|ones)|incisos?|art[ií]culos?)(\s+)(${NUMERO}(?:(?:\s*,\s*|\s+[yeo]\s+)${NUMERO})*)`,
+  'gi',
+)
 
 function marcarClausulasNoPedidas(texto: string, permitidas: Set<string>): string {
   return texto.replace(CITA, (cita, _palabra: string, _espacio: string, lista: string) => {
@@ -108,11 +120,11 @@ const marcar = (texto: string | null, permitidas: Set<string>): string | null =>
 export function aplicarGuardasVideo(resultados: ResultadoCriterio[], criterios: CriterioIA[]): ResultadoCriterio[] {
   const permitidas = new Set(criterios.map((c) => c.clausula))
   return resultados.map((r) => {
-    const hueco = r.estado === 'Hueco' && !tieneMarcaDeTiempo(r.hallazgos)
-    const hallazgos = hueco ? [r.hallazgos, AVISO_SIN_MARCA].filter(Boolean).join(' ') : r.hallazgos
+    const sinRespaldo = ESTADOS_QUE_AFIRMAN.has(r.estado) && !tieneMarcaDeTiempo(r.hallazgos)
+    const hallazgos = sinRespaldo ? [r.hallazgos, avisoSinMarca(r.estado)].filter(Boolean).join(' ') : r.hallazgos
     return {
       ...r,
-      estado: hueco ? 'No evaluable' : r.estado,
+      estado: sinRespaldo ? 'No evaluable' : r.estado,
       hallazgos: marcar(hallazgos, permitidas),
       sugerencias: marcar(r.sugerencias, permitidas),
     }
@@ -124,9 +136,13 @@ export function interpretarRespuestaVideo(
   criterios: CriterioIA[],
 ): { resumen: string | null; resultados: ResultadoCriterio[] } {
   const { resumen, resultados } = interpretarRespuesta(respuesta, criterios)
+  const guardados = aplicarGuardasVideo(resultados, criterios)
+  const ajustados = guardados.filter((r, i) => r.estado !== resultados[i].estado).length
+  const finales = sinSugerenciasEnNoEvaluables(guardados)
   return {
-    resumen: marcar(resumen, new Set(criterios.map((c) => c.clausula))),
-    resultados: sinSugerenciasEnNoEvaluables(aplicarGuardasVideo(resultados, criterios)),
+    // AUD09-M2: si una guarda cambió estados, el resumen del modelo (que no cambia) lleva el aviso.
+    resumen: resumenConAvisos(marcar(resumen, new Set(criterios.map((c) => c.clausula))), finales, ajustados),
+    resultados: finales,
   }
 }
 
