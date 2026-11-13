@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  avanceLevantamiento,
   BORRADOR_VACIO,
   borradorAProceso,
+  marcaDeSeccion,
   primerPasoIncompleto,
   procesoABorrador,
   puedeRetomarse,
@@ -180,6 +182,60 @@ describe('seccionCompleta (misma regla que tenía el asistente)', () => {
   it('la revisión final exige todos los pasos anteriores', () => {
     expect(seccionCompleta(8, COMPLETO)).toBe(true)
     expect(seccionCompleta(8, { ...COMPLETO, actividades: [] })).toBe(false)
+  })
+})
+
+// O8: el levantamiento arrancaba en 11 % sin escribir nada, porque "Observaciones y mejoras" (opcional) cuenta como
+// completo y la "Revisión final" depende de los demás. El avance mide solo lo que HAY que llenar.
+describe('avanceLevantamiento (la barra de avance, O8)', () => {
+  it('sin escribir nada: 0 de 7 y 0 %', () => {
+    expect(avanceLevantamiento(BORRADOR_VACIO)).toEqual({ completas: 0, total: 7, porcentaje: 0 })
+  })
+
+  it('con todo lleno: 7 de 7 y 100 %', () => {
+    expect(avanceLevantamiento(COMPLETO)).toEqual({ completas: 7, total: 7, porcentaje: 100 })
+  })
+
+  it('el paso opcional (observaciones y mejoras) no suma ni resta', () => {
+    expect(avanceLevantamiento({ ...COMPLETO, observaciones: '', mejoras: '' }).porcentaje).toBe(100)
+    expect(avanceLevantamiento({ ...BORRADOR_VACIO, observaciones: 'algo', mejoras: 'algo' }).porcentaje).toBe(0)
+  })
+
+  it('cada paso obligatorio completo suma 1 de 7 (redondeado)', () => {
+    const soloIdentificacion = { ...BORRADOR_VACIO, nombre: 'N', objetivo: 'O', alcance: 'A', responsableId: 'u', puestoResponsable: 'P', personalInvolucrado: 'X' }
+    expect(avanceLevantamiento(soloIdentificacion)).toEqual({ completas: 1, total: 7, porcentaje: 14 })
+    expect(avanceLevantamiento({ ...COMPLETO, actividades: [] })).toEqual({ completas: 6, total: 7, porcentaje: 86 })
+  })
+
+  it('un paso "no aplica" con su justificación cuenta como completo', () => {
+    const b = { ...BORRADOR_VACIO, noAplica: { recursos: 'No aplica', controles: 'No aplica', indicadores: 'No aplica', riesgos: 'No aplica' } }
+    expect(avanceLevantamiento(b).completas).toBe(4)
+  })
+
+  it('la revisión final no es un paso más: no entra en el total', () => {
+    expect(avanceLevantamiento(COMPLETO).total).toBe(7)
+  })
+})
+
+describe('marcaDeSeccion (la marca verde de cada paso en la lista lateral, O8)', () => {
+  it('un paso obligatorio se marca cuando está completo', () => {
+    expect(marcaDeSeccion(0, COMPLETO)).toBe(true)
+    expect(marcaDeSeccion(0, BORRADOR_VACIO)).toBe(false)
+    expect(marcaDeSeccion(7, { ...COMPLETO, actividades: [] })).toBe(false)
+  })
+
+  it('el opcional solo se marca si la persona escribió algo (antes salía marcado sin tocarlo)', () => {
+    expect(marcaDeSeccion(6, BORRADOR_VACIO)).toBe(false)
+    expect(marcaDeSeccion(6, { ...BORRADOR_VACIO, observaciones: '  ' })).toBe(false)
+    expect(marcaDeSeccion(6, { ...BORRADOR_VACIO, observaciones: 'algo' })).toBe(true)
+    expect(marcaDeSeccion(6, { ...BORRADOR_VACIO, mejoras: 'algo' })).toBe(true)
+    expect(marcaDeSeccion(6, { ...BORRADOR_VACIO, mejoras: '   ' })).toBe(false)
+    expect(marcaDeSeccion(6, { ...BORRADOR_VACIO, observaciones: '  ', mejoras: '  ' })).toBe(false)
+  })
+
+  it('la revisión final se marca cuando todo lo anterior está completo', () => {
+    expect(marcaDeSeccion(8, COMPLETO)).toBe(true)
+    expect(marcaDeSeccion(8, BORRADOR_VACIO)).toBe(false)
   })
 })
 

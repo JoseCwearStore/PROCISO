@@ -28,6 +28,7 @@ import { Tabs } from '../components/ui/Tabs'
 import type { Column } from '../components/ui/DataTable'
 import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId, Usuario } from '../types'
 import { servicioEscritura } from '../lib/servicios'
+import { estaVencida, hoyLocal, ordenarTareasDeProyecto } from '../lib/tareas'
 import { type NuevoEntregable, type NuevoProyecto, mensajeDeError } from '../lib/escrituras'
 import { useAccionesEntregable } from '../hooks/useAccionesEntregable'
 import { useAccionesGestion } from '../hooks/useAccionesGestion'
@@ -821,6 +822,7 @@ function TabTareas({ tareas, getUsuario, navigate }: {
   getUsuario: (id: string) => Usuario | undefined
   navigate: (page: PageId, params?: NavParams) => void
 }) {
+  const hoy = hoyLocal()
   const prioridadColor: Record<string, string> = {
     Alta: 'text-red-600 bg-red-50',
     Media: 'text-amber-600 bg-amber-50',
@@ -842,8 +844,9 @@ function TabTareas({ tareas, getUsuario, navigate }: {
         </div>
       ) : (
         <div className="space-y-2">
-          {tareas.map((t) => {
+          {ordenarTareasDeProyecto(tareas).map((t) => {
             const asignado = getUsuario(t.asignadoAId)
+            const vencida = estaVencida(t, hoy)
             return (
               <div key={t.id} className="bg-white rounded-xl border border-slate-200 p-4 flex items-center justify-between gap-4">
                 <div className="flex-1 min-w-0">
@@ -858,6 +861,7 @@ function TabTareas({ tareas, getUsuario, navigate }: {
                     <span className="text-xs text-slate-400 flex items-center gap-1">
                       <Clock className="w-3 h-3" />Vence: {t.fechaVencimiento}
                     </span>
+                    {vencida && <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-50 text-red-600">Vencida</span>}
                   </div>
                 </div>
                 <StatusBadge status={t.estado} size="sm" />

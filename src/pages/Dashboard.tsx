@@ -34,6 +34,7 @@ import { Button } from '../components/ui/Button'
 import type { PageId } from '../types'
 import { evolucionAvance } from '../lib/avance'
 import { destinoDeEntidad, destinoDeTarjeta } from '../lib/destinosInicio'
+import { responsablesDeProyectos } from '../lib/responsables'
 import { estaVencida, fechaISO, hoyLocal } from '../lib/tareas'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -202,9 +203,10 @@ export function Dashboard() {
 
   // ── Filter options ────────────────────────────────────────────────────────
 
+  // O1: solo quienes son responsables de algún proyecto (antes, todos los consultores y administradores).
   const consultores = useMemo(
-    () => state.usuarios.filter((u) => u.rol === 'Consultor' || u.rol === 'Admin Consultoría'),
-    [state.usuarios]
+    () => responsablesDeProyectos(proyectos, state.usuarios),
+    [proyectos, state.usuarios]
   )
 
   const periodosDisponibles = useMemo(() => {

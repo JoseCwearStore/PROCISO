@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -20,6 +20,7 @@ import { servicioEscritura } from '../lib/servicios'
 import { mensajeDeError } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
 import { codigoEnUso, recalcularCodigo, sugerirCodigo } from '../lib/codigosDocumento'
+import { AVISO_CAMBIOS_SIN_GUARDAR, firmaDeContenido, hayCambiosSinGuardar } from '../lib/cambiosDocumento'
 import {
   contenidoEditable,
   documentoVisibleParaRol,
@@ -96,6 +97,8 @@ export default function Documentacion() {
   const { state, dispatch, getEmpresa, getProyecto, getUsuario, showToast } = useApp()
   const [vista, setVista] = useState<'lista' | 'editor'>('lista')
   const [documentoId, setDocumentoId] = useState<string | null>(null)
+  // O17: lo último que se GUARDÓ de cada documento (firma del contenido). La IA analiza eso, no lo que se está escribiendo.
+  const firmasGuardadas = useRef<Record<string, string>>({})
   const [generadorOpen, setGeneradorOpen] = useState(false)
   const [generador, setGenerador] = useState<Generador>(GENERADOR_VACIO)
   const [generandoIA, setGenerandoIA] = useState(false)
@@ -255,6 +258,7 @@ export default function Documentacion() {
       showToast(mensajeDeError(resultado), 'error')
       return false
     }
+    firmasGuardadas.current[doc.id] = firmaDeContenido(doc.secciones)
     const evento = {
       id: crypto.randomUUID(),
       fecha: formatearFecha(new Date().toISOString()),
@@ -406,10 +410,21 @@ export default function Documentacion() {
       historial: item.historial || [],
       bloqueado: item.bloqueado ?? item.estado === 'Aprobado',
     }
+    // La primera vez que se abre, lo que hay es lo que está en la BD. Si ya se había abierto, se conserva lo guardado
+    // (lo del estado puede traer cambios sin guardar de una apertura anterior).
+    if (!(item.id in firmasGuardadas.current)) firmasGuardadas.current[item.id] = firmaDeContenido(normalizado.secciones)
     dispatch({ type: 'UPSERT_DOCUMENTO', documento: normalizado })
     setDocumentoId(item.id)
     setVista('editor')
   }
+
+  // O3: desde otra pantalla (la ficha de una empresa, un evento del historial) se puede llegar directo a un documento.
+  useEffect(() => {
+    const pedido = state.navParams.id ? state.documentos.find((item) => item.id === state.navParams.id) : undefined
+    if (pedido) abrirDocumento(pedido)
+    // Solo al entrar a la pantalla: abrirDocumento no debe volver a correr con cada cambio del estado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   async function exportar(formato: 'pdf' | 'word') {
     if (!documento) return
@@ -440,6 +455,7 @@ export default function Documentacion() {
         retirar={retirarRevision}
         nuevaVersion={nuevaVersion}
         errores={errores}
+        cambiosSinGuardar={hayCambiosSinGuardar(firmasGuardadas.current[documento.id], firmaDeContenido(documento.secciones))}
         evidencias={state.evidencias.filter((item) => item.proyectoId === documento.proyectoId)}
         usuarioId={state.currentUser?.id ?? ''}
         comentarioSeccion={comentarioSeccion}
@@ -573,6 +589,8 @@ interface EditorProps {
   retirar: () => void
   nuevaVersion: () => void
   errores: string[]
+  // O17: hay cambios en pantalla que todavía no se guardaron (la IA analiza lo guardado).
+  cambiosSinGuardar: boolean
   evidencias: ReturnType<typeof useApp>['state']['evidencias']
   usuarioId: string
   comentarioSeccion: string
@@ -646,9 +664,9 @@ function EditorDocumento(props: EditorProps) {
       {props.errores.length > 0 && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p className="font-semibold">No se puede enviar a revisión:</p><p>{props.errores.join(', ')}.</p></div>}
       {/* La IA lee el documento desde la BD: analiza la última versión GUARDADA. */}
       <details className="mb-5">
-        <summary className="cursor-pointer text-sm font-medium text-violet-700">Preevaluación con IA · analiza la última versión guardada</summary>
+        <summary className="cursor-pointer text-sm font-medium text-violet-700">Preevaluación con IA · analiza la última versión guardada{props.cambiosSinGuardar && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Cambios sin guardar</span>}</summary>
         <div className="mt-3">
-          <PanelAnalisisIA key={documento.id} fuente={{ tipo: 'documento', id: documento.id, proyectoId: documento.proyectoId, nombre: documento.nombre }} tipoDocumento={documento.tipo} />
+          <PanelAnalisisIA key={documento.id} fuente={{ tipo: 'documento', id: documento.id, proyectoId: documento.proyectoId, nombre: documento.nombre }} tipoDocumento={documento.tipo} avisoPrevio={props.cambiosSinGuardar ? AVISO_CAMBIOS_SIN_GUARDAR : null} />
         </div>
       </details>
       <div className="mb-5 grid gap-4 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-3">

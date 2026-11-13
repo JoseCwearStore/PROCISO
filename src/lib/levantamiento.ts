@@ -174,6 +174,24 @@ export function seccionCompleta(index: number, data: Borrador): boolean {
   return [0, 1, 2, 3, 4, 5, 6, 7].every((paso) => seccionCompleta(paso, data))
 }
 
+// El avance mide solo lo que HAY que llenar (O8). "Observaciones y mejoras" (paso 6) es opcional y siempre cuenta como
+// completo para poder terminar, así que sumarlo hacía arrancar la barra en 11 % sin escribir nada; y la "Revisión
+// final" (paso 8) no es un paso más: depende de que los demás estén completos.
+const PASOS_OBLIGATORIOS = [0, 1, 2, 3, 4, 5, 7]
+
+export function avanceLevantamiento(data: Borrador): { completas: number; total: number; porcentaje: number } {
+  const completas = PASOS_OBLIGATORIOS.filter((paso) => seccionCompleta(paso, data)).length
+  const total = PASOS_OBLIGATORIOS.length
+  return { completas, total, porcentaje: Math.round((completas / total) * 100) }
+}
+
+// La marca verde de un paso en la lista lateral: lo que la persona realmente llenó. El paso opcional no sale marcado
+// hasta que escribe algo (antes salía marcado sin tocarlo).
+export function marcaDeSeccion(index: number, data: Borrador): boolean {
+  if (index === 6) return !!(data.observaciones.trim() || data.mejoras.trim())
+  return seccionCompleta(index, data)
+}
+
 // El paso en que se abre un levantamiento retomado: el primero que falta (o la revisión final si no falta ninguno).
 const PASO_REVISION_FINAL = 8
 

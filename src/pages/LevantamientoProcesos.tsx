@@ -22,8 +22,10 @@ import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
 import { avisoDelPaso, faltantesVisibles, type AvisoPaso } from "../lib/avisoLevantamiento"
 import {
+  avanceLevantamiento,
   BORRADOR_VACIO,
   borradorAProceso,
+  marcaDeSeccion,
   primerPasoIncompleto,
   procesoABorrador,
   puedeRetomarse,
@@ -179,9 +181,9 @@ export default function LevantamientoProcesos() {
   )
   const faltantesAviso = faltantesVisibles(aviso, paso)
   const completos = PASOS.map((_, index) => seccionCompleta(index, borrador))
-  const avance = Math.round(
-    (completos.filter(Boolean).length / PASOS.length) * 100,
-  )
+  // O8: el avance cuenta solo lo obligatorio, y la marca lateral lo que la persona realmente llenó.
+  const avance = avanceLevantamiento(borrador)
+  const marcas = PASOS.map((_, index) => marcaDeSeccion(index, borrador))
 
   function set<K extends keyof Borrador>(key: K, value: Borrador[K]) {
     setBorrador((actual) => ({ ...actual, [key]: value }))
@@ -448,11 +450,11 @@ export default function LevantamientoProcesos() {
             Avance del levantamiento
           </span>
           <span className="text-slate-500">
-            {completos.filter(Boolean).length} de {PASOS.length} secciones
+            {avance.completas} de {avance.total} secciones obligatorias
             completas
           </span>
         </div>
-        <ProgressBar value={avance} showLabel size="md" />
+        <ProgressBar value={avance.porcentaje} showLabel size="md" />
       </div>
 
       <div className="grid gap-5 lg:grid-cols-[240px_minmax(0,1fr)]">
@@ -467,7 +469,7 @@ export default function LevantamientoProcesos() {
                   : "text-slate-600 hover:bg-slate-50"
               }`}
             >
-              {completos[index] ? (
+              {marcas[index] ? (
                 <CheckCircle2 className="h-4 w-4 text-emerald-500" />
               ) : (
                 <Circle className="h-4 w-4 text-slate-300" />

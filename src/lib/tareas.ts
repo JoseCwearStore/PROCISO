@@ -24,6 +24,16 @@ export function estaVencida(tarea: Pick<Tarea, 'estado' | 'fechaVencimiento'>, h
   return tarea.estado !== 'Completada' && !!tarea.fechaVencimiento && fechaISO(tarea.fechaVencimiento) < hoy
 }
 
+// El orden de la lista de tareas de un proyecto (O7): primero lo que urge. Las abiertas por fecha de vencimiento (las
+// que no tienen fecha, al final) y las completadas al final de todo, también por fecha. Como una tarea vencida es una
+// abierta con fecha ANTERIOR a hoy, al ordenar por fecha las vencidas salen primero y la más atrasada de todas. Con la
+// misma fecha conserva el orden en que venían (el orden de Array.sort es estable). No modifica la lista original.
+export function ordenarTareasDeProyecto<T extends { estado: Tarea['estado']; fechaVencimiento?: string }>(tareas: T[]): T[] {
+  const grupo = (t: T) => (t.estado === 'Completada' ? 1 : 0)
+  const fecha = (t: T) => (t.fechaVencimiento ? fechaISO(t.fechaVencimiento) : '9999-12-31')
+  return [...tareas].sort((a, b) => grupo(a) - grupo(b) || fecha(a).localeCompare(fecha(b)))
+}
+
 // Espejo de cambiar_estado_tarea: el equipo mueve a cualquier estado; el asignado
 // solo avanza su trabajo (cerrar o devolver es del equipo).
 export function transicionesPermitidas(

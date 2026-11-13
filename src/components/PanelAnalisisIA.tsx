@@ -28,10 +28,12 @@ export const AVISO_PREEVALUACION =
   'con fines de demostración. Proyecto estudiantil con fines académicos: los criterios son propios y toman como base una edición anterior de la norma. ' +
   'Esto es una preevaluación generada con IA: requiere revisión humana y no constituye un dictamen de conformidad ni una certificación.'
 
-export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null, tieneArchivo = true }: {
+export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null, tieneArchivo = true, avisoPrevio = null }: {
   fuente: FuenteAnalisis
   tipoDocumento?: Documento['tipo'] | null
   tipoEvidencia?: string | null
+  // Un aviso de la pantalla que se muestra arriba de todo (p. ej. "hay cambios sin guardar", O17).
+  avisoPrevio?: string | null
   // Solo importa para audio y video: sin archivo no se puede transcribir ni analizar el video (E8).
   tieneArchivo?: boolean
 }) {
@@ -83,6 +85,12 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
         <Sparkles className="h-4 w-4 text-violet-600" />
         <h3 className="text-sm font-semibold text-slate-800">Preevaluación con IA</h3>
       </div>
+      {avisoPrevio && (
+        <p role="status" className="mb-4 flex gap-2 rounded-lg border border-amber-300 bg-amber-100 p-3 text-xs font-medium text-amber-900">
+          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+          <span>{avisoPrevio}</span>
+        </p>
+      )}
       <p className="mb-4 flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-800">
         <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
         <span>Matriz presentada como <strong>{AVISO_EDICION}</strong> {AVISO_PREEVALUACION}</span>

@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { historialParaMostrar, mensajeAprobacion, reemplazadosAlAprobar, textosDeDecision, type DocumentoAprobable } from './aprobacion'
+import {
+  filtrarBandeja, historialParaMostrar, mensajeAprobacion, mensajeSinDecision, puedeDecidir, reemplazadosAlAprobar, textosDeDecision,
+  type DocumentoAprobable,
+} from './aprobacion'
 
 let n = 0
 const doc = (cambios: Partial<DocumentoAprobable> = {}): DocumentoAprobable => ({
@@ -92,6 +95,103 @@ describe('mensajeAprobacion (lo que dice el diálogo antes de aprobar)', () => {
   it('un documento sin código se nombra por su título', () => {
     const m = mensajeAprobacion(d, [doc({ codigo: undefined, nombre: 'Manual viejo', version: '0.9' })])
     expect(m).toContain('Manual viejo versión 0.9')
+  })
+})
+
+// O21 y O25: la bandeja de Revisiones se puede mirar por estado (pendientes, en corrección, aprobados) y filtrar.
+describe('filtrarBandeja (la lista de Revisiones, O21 y O25)', () => {
+  type D = { id: string; estado: string; proyectoId: string; texto: string }
+  const d = (id: string, estado: string, proyectoId = 'p-1', texto = id): D => ({ id, estado, proyectoId, texto })
+  const DOCS = [
+    d('a', 'Pendiente de revisión', 'p-1', 'Procedimiento de compras PRO-COM-001 Marketino Roberto'),
+    d('b', 'En corrección', 'p-1', 'Política de calidad SGC-POL-001 Marketino Ana'),
+    d('c', 'Aprobado', 'p-2', 'Manual del SGC MAN-001 JAZA María'),
+    d('d', 'Pendiente de revisión', 'p-2', 'Instrucción de revisión IT-009 JAZA Roberto'),
+    d('e', 'Borrador', 'p-1', 'Borrador cualquiera'),
+  ]
+  const sin = { texto: '', proyectoId: '' }
+  const ids = (docs: D[]) => docs.map((x) => x.id)
+  const textoDe = (x: D) => x.texto
+
+  it('cada vista muestra solo los documentos de su estado', () => {
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', sin, textoDe))).toEqual(['a', 'd'])
+    expect(ids(filtrarBandeja(DOCS, 'correccion', sin, textoDe))).toEqual(['b'])
+    expect(ids(filtrarBandeja(DOCS, 'aprobados', sin, textoDe))).toEqual(['c'])
+  })
+
+  it('un borrador no aparece en ninguna vista (todavía no se envió a revisión)', () => {
+    for (const vista of ['pendientes', 'correccion', 'aprobados'] as const) {
+      expect(ids(filtrarBandeja(DOCS, vista, sin, textoDe)), vista).not.toContain('e')
+    }
+  })
+
+  it('el filtro de proyecto deja solo los de ese proyecto', () => {
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: '', proyectoId: 'p-2' }, textoDe))).toEqual(['d'])
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: '', proyectoId: 'p-9' }, textoDe))).toEqual([])
+  })
+
+  it('la búsqueda de texto no distingue mayúsculas, acentos ni espacios alrededor', () => {
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: '  REVISION ', proyectoId: '' }, textoDe))).toEqual(['d'])
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: 'instruccion', proyectoId: '' }, textoDe))).toEqual(['d'])
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: 'pro-com', proyectoId: '' }, textoDe))).toEqual(['a'])
+  })
+
+  it('busca en todo lo que le dé textoDe (empresa, proyecto, elaborador…)', () => {
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: 'jaza', proyectoId: '' }, textoDe))).toEqual(['d'])
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: 'roberto', proyectoId: '' }, textoDe))).toEqual(['a', 'd'])
+  })
+
+  it('un texto en blanco no filtra', () => {
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: '   ', proyectoId: '' }, textoDe))).toEqual(['a', 'd'])
+  })
+
+  it('texto y proyecto se combinan (los dos tienen que cumplirse)', () => {
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: 'roberto', proyectoId: 'p-1' }, textoDe))).toEqual(['a'])
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', { texto: 'marketino', proyectoId: 'p-2' }, textoDe))).toEqual([])
+  })
+
+  it('conserva el orden recibido y no modifica la lista original', () => {
+    const copia = [...DOCS]
+    expect(ids(filtrarBandeja(DOCS, 'pendientes', sin, textoDe))).toEqual(['a', 'd'])
+    expect(DOCS).toEqual(copia)
+  })
+})
+
+describe('puedeDecidir (¿tiene una decisión pendiente? O21)', () => {
+  it('solo un documento "Pendiente de revisión"', () => {
+    expect(puedeDecidir({ estado: 'Pendiente de revisión' })).toBe(true)
+  })
+
+  it('uno en corrección, aprobado o en cualquier otro estado se puede mirar, pero no decidir', () => {
+    for (const estado of ['Borrador', 'En elaboración', 'En corrección', 'Aprobado', 'Rechazado', 'Obsoleto'] as const) {
+      expect(puedeDecidir({ estado }), estado).toBe(false)
+    }
+  })
+})
+
+describe('mensajeSinDecision (qué se le dice a quien abre un documento que ya no está pendiente, O21)', () => {
+  it('en corrección: espera que el equipo lo corrija y lo reenvíe', () => {
+    const m = mensajeSinDecision('En corrección')
+    expect(m).toMatch(/en corrección/i)
+    expect(m).toMatch(/corrij/i)
+    expect(m).toMatch(/reenv/i)
+  })
+
+  it('aprobado: la versión está bloqueada y para cambiarla hay que crear una nueva', () => {
+    const m = mensajeSinDecision('Aprobado')
+    expect(m).toMatch(/aprobado/i)
+    expect(m).toMatch(/bloquead/i)
+    expect(m).toMatch(/versión nueva/i)
+  })
+
+  it('cualquier otro estado dice cuál es y que no hay decisión pendiente', () => {
+    expect(mensajeSinDecision('Obsoleto')).toBe('Este documento está obsoleto: se puede leer, pero no hay una decisión pendiente.')
+  })
+
+  it('ninguno promete una decisión que el usuario pueda tomar ahí', () => {
+    for (const estado of ['En corrección', 'Aprobado', 'Obsoleto', 'Borrador']) {
+      expect(mensajeSinDecision(estado), estado).not.toMatch(/aprueba|rechaza|solicita/i)
+    }
   })
 })
 

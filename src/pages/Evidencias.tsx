@@ -1,4 +1,4 @@
-import { useRef, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   Camera,
   File,
@@ -110,6 +110,14 @@ export default function Evidencias() {
   const procesoSeleccionado = state.procesos.find(
     (proceso) => proceso.id === form.procesoId,
   )
+
+  // O3: desde otra pantalla (la ficha de una empresa, un evento del historial) se puede llegar directo a una evidencia.
+  useEffect(() => {
+    const pedida = state.navParams.id ? state.evidencias.find((item) => item.id === state.navParams.id) : undefined
+    if (pedida) setVistaPrevia(pedida)
+    // Solo al entrar a la pantalla.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const hayFiltros = hayFiltrosActivos({ busqueda, tipo: filtroTipo, estado: filtroEstado, proyecto: filtroProyecto })
   const evidencias = state.evidencias.filter((evidencia) => {

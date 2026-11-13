@@ -432,13 +432,13 @@ export function EmpresaDetalle() {
                 {procesos.length === 0 ? (
                   <div className="text-center py-12"><FolderOpen className="w-10 h-10 text-fg/20 mx-auto mb-2" /><p className="text-fg/40 text-sm">Sin procesos registrados</p></div>
                 ) : procesos.map((proc) => (
-                  <div key={proc.id} className="bg-white border border-line rounded-xl p-4 flex items-center justify-between">
+                  <button key={proc.id} type="button" onClick={() => navigate('procesos', { id: proc.id })} className="w-full text-left bg-white border border-line rounded-xl p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div>
                       <p className="text-sm font-medium text-fg">{proc.nombre}</p>
                       <p className="text-xs text-fg/50 mt-0.5">{proc.descripcion}</p>
                     </div>
                     <StatusBadge status={proc.estado} size="sm" />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -448,13 +448,13 @@ export function EmpresaDetalle() {
                 {documentos.length === 0 ? (
                   <div className="text-center py-12"><FileText className="w-10 h-10 text-fg/20 mx-auto mb-2" /><p className="text-fg/40 text-sm">Sin documentos</p></div>
                 ) : documentos.map((doc) => (
-                  <div key={doc.id} className="bg-white border border-line rounded-xl p-4 flex items-center justify-between">
+                  <button key={doc.id} type="button" onClick={() => navigate('documentacion', { id: doc.id })} className="w-full text-left bg-white border border-line rounded-xl p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div>
                       <p className="text-sm font-medium text-fg">{doc.nombre}</p>
                       <p className="text-xs text-fg/50 mt-0.5">{doc.tipo} · v{doc.version} · {doc.fechaModificacion}</p>
                     </div>
                     <StatusBadge status={doc.estado} size="sm" />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
@@ -464,13 +464,13 @@ export function EmpresaDetalle() {
                 {evidenciasEmpresa.length === 0 ? (
                   <div className="text-center py-12"><Eye className="w-10 h-10 text-fg/20 mx-auto mb-2" /><p className="text-fg/40 text-sm">Sin evidencias cargadas</p></div>
                 ) : evidenciasEmpresa.map((ev) => (
-                  <div key={ev.id} className="bg-white border border-line rounded-xl p-4 flex items-center justify-between">
+                  <button key={ev.id} type="button" onClick={() => navigate('evidencias', { id: ev.id })} className="w-full text-left bg-white border border-line rounded-xl p-4 flex items-center justify-between hover:bg-slate-50 transition-colors">
                     <div>
                       <p className="text-sm font-medium text-fg">{ev.nombre}</p>
                       <p className="text-xs text-fg/50 mt-0.5">{ev.tipo} {ev.fechaCarga ? `· ${ev.fechaCarga}` : ''}</p>
                     </div>
                     <StatusBadge status={ev.estado} size="sm" />
-                  </div>
+                  </button>
                 ))}
               </div>
             )}
