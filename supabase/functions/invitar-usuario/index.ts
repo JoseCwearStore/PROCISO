@@ -61,19 +61,9 @@ Deno.serve(async (req) => {
   // 2. Invitar: Supabase crea el usuario y manda el correo con el enlace.
   const email = datos.email.toLowerCase()
 
-  // AUD10-M7: un intento anterior pudo morir entre inviteUserByEmail y registrar_invitado y dejar un usuario de Auth sin
-  // perfil. La BD ya autorizó este email (autorizar_invitacion no cuenta a un huérfano como "ya tiene usuario"): se borra
-  // el huérfano para poder invitar de nuevo. Si no se puede borrar, se corta acá con un mensaje claro.
-  const { data: huerfanoId } = await conClaveSecreta.rpc('huerfano_de_invitacion', { p_email: email })
-  if (huerfanoId) {
-    const { error: errorHuerfano } = await conClaveSecreta.auth.admin.deleteUser(huerfanoId)
-    if (errorHuerfano) {
-      console.error(`[invitar-usuario] no se pudo limpiar al usuario huérfano de Auth (${huerfanoId}, ${email}):`, errorHuerfano)
-      return responder(500, { error: 'Ese correo quedó a medias de una invitación anterior y no se pudo limpiar; avisa a un administrador.' })
-    }
-    console.warn(`[invitar-usuario] se limpió un usuario huérfano de Auth antes de re-invitar (${huerfanoId}, ${email})`)
-  }
-
+  // AUD10-M7: si un intento anterior murió entre inviteUserByEmail y registrar_invitado, quedó un usuario de Auth sin perfil y
+  // sin confirmar. La BD ya lo deja pasar (autorizar_invitacion no lo cuenta como "ya tiene usuario") y Supabase, al
+  // invitar de nuevo a un usuario sin confirmar, reutiliza ese mismo usuario y le reenvía el correo: no hay que borrarlo.
   const { data: invitado, error: errorInvitacion } = await conClaveSecreta.auth.admin.inviteUserByEmail(email, {
     redirectTo: datos.redirectTo,
   })

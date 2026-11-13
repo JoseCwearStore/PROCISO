@@ -3,12 +3,13 @@
 --     tope diario de invitaciones por administrador (el correo de invitación es un gasto y un riesgo de spam).
 --   · Una invitación que moría entre `inviteUserByEmail` y `registrar_invitado` dejaba un usuario HUÉRFANO en Auth y el
 --     reintento se rechazaba con "ese email ya tiene un usuario": se arreglaba a mano. Ahora un usuario de Auth sin perfil,
---     sin confirmar, sin haber entrado nunca y de hace más de 5 minutos se reconoce como huérfano y se puede re-invitar.
+--     sin confirmar, sin haber entrado nunca y de hace más de 5 minutos se reconoce como huérfano y se puede re-invitar
+--     (Supabase reutiliza al usuario sin confirmar y le reenvía el correo).
 
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(23);
+select plan(18);
 
 -- A1 admin de C1 (límite 4) · A2 admin de C2 (sin límite) · A3 admin de C3 (límite 50) · Z admin PROCISO
 insert into auth.users (id, email, aud, role) values
@@ -120,17 +121,6 @@ select throws_ok(
   $$ select public.autorizar_invitacion('confirmado@lim.test', 'consultor', '49494949-0000-0000-0001-000000000002', null) $$,
   '22023', null, 'Uno ya confirmado no es huérfano aunque no tenga perfil');
 reset role;
-set local role service_role;
-select is(public.huerfano_de_invitacion(' Huerfano@LIM.test '), '49494949-0000-0000-0000-0000000000e1'::uuid,
-  'La clave secreta encuentra al huérfano por su email (sin importar mayúsculas)');
-select is(public.huerfano_de_invitacion('reciente@lim.test'), null, 'No devuelve al recién creado');
-select is(public.huerfano_de_invitacion('confirmado@lim.test'), null, 'No devuelve al confirmado');
-select is(public.huerfano_de_invitacion('a1@lim.test'), null, 'No devuelve a alguien que tiene perfil');
-reset role;
-select ok(
-  not has_function_privilege('authenticated', 'public.huerfano_de_invitacion(text)', 'execute')
-  and not has_function_privilege('anon', 'public.huerfano_de_invitacion(text)', 'execute'),
-  'Solo la clave secreta ejecuta huerfano_de_invitacion (ningún usuario de la app)');
 select ok(not has_table_privilege('authenticated', 'private.pedidos_invitacion', 'select, insert, update, delete'),
   'Un usuario autenticado no toca la tabla de pedidos de invitación');
 
