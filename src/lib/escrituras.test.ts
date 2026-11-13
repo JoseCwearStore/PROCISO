@@ -614,6 +614,40 @@ describe('guardarDocumento: mensajes del congelado en revisión (AUD02-H1)', () 
   })
 })
 
+// E9: el índice documentos_codigo_version_unico rechaza (proyecto, código, versión) repetidos con un 23505.
+describe('guardarDocumento: código repetido (E9)', () => {
+  const DOCUMENTO = { id: '66666666-0000-0000-0000-000000000001', proyectoId: P_NUEVO, version: '0.1' } as Documento
+  const guardarConError = (error: { code: string; message: string }) => {
+    const { cliente } = crearClienteDoble({ 'guardar_documento.rpc': { data: null, error } })
+    return crearServicioEscritura(cliente).guardarDocumento(DOCUMENTO)
+  }
+
+  it('el 23505 del índice del código se traduce a su propio error, sin mostrar el texto de Postgres', async () => {
+    const r = await guardarConError({
+      code: '23505',
+      message: 'duplicate key value violates unique constraint "documentos_codigo_version_unico"',
+    })
+    expect(r).toEqual({ ok: false, error: 'codigo_documento_repetido' })
+    expect('detalle' in r).toBe(false)
+  })
+
+  it('cualquier otro 23505 sigue siendo un error del servicio (no se confunde)', async () => {
+    const r = await guardarConError({ code: '23505', message: 'duplicate key value violates unique constraint "otra_cosa"' })
+    expect(r).toEqual({ ok: false, error: 'servicio' })
+  })
+
+  it('el mismo texto con otro código de error no se toma por el de este índice', async () => {
+    const r = await guardarConError({ code: '42501', message: 'documentos_codigo_version_unico' })
+    expect(r).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+
+  it('el mensaje le dice al usuario qué hacer: usar otro código o crear una versión nueva', () => {
+    expect(MENSAJES_ERROR_ESCRITURA.codigo_documento_repetido).toMatch(/ya existe un documento con ese código/i)
+    expect(MENSAJES_ERROR_ESCRITURA.codigo_documento_repetido).toMatch(/otro código/i)
+    expect(MENSAJES_ERROR_ESCRITURA.codigo_documento_repetido).toMatch(/versión nueva/i)
+  })
+})
+
 describe('comentarDocumento', () => {
   const DOC = { id: '66666666-0000-0000-0000-000000000001', proyectoId: P_NUEVO } as Documento
 

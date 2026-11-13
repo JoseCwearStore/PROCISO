@@ -19,6 +19,7 @@ import { useApp } from '../context/AppContext'
 import { servicioEscritura } from '../lib/servicios'
 import { mensajeDeError } from '../lib/escrituras'
 import { formatearFecha } from '../lib/datos'
+import { codigoEnUso, recalcularCodigo, sugerirCodigo } from '../lib/codigosDocumento'
 import {
   contenidoEditable,
   documentoVisibleParaRol,
@@ -129,11 +130,16 @@ export default function Documentacion() {
   const proyectosGenerador = proyectosDisponibles.filter((item) => !generador.empresaId || item.empresaId === generador.empresaId)
   const procesosGenerador = state.procesos.filter((item) => !generador.proyectoId || item.proyectoId === generador.proyectoId)
   const plantillaElegida = plantillaPorId(generador.plantilla)
-  // Al cambiar de plantilla se sugiere su código, salvo que el usuario ya haya escrito uno propio.
+  // E9: los códigos ya usados en el proyecto elegido (de todas las versiones). Un código no se repite: la BD lo
+  // rechaza, y aquí se avisa antes de generar (que puede gastar un pedido de IA).
+  const codigosDe = (proyectoId: string) => state.documentos.filter((item) => item.proyectoId === proyectoId).map((item) => item.codigo)
+  const codigosDelProyecto = codigosDe(generador.proyectoId)
+  const codigoOcupado = !!generador.proyectoId && codigoEnUso(generador.codigo, codigosDelProyecto)
+  // Al cambiar de plantilla se sugiere su código (el siguiente libre del proyecto), salvo que la persona ya haya escrito uno propio.
   function elegirPlantilla(id: string) {
     const nueva = plantillaPorId(id)
-    const codigoSugerido = !generador.codigo || generador.codigo === plantillaElegida?.codigoBase
-    setGenerador({ ...generador, plantilla: id, procesoId: '', respuestas: {}, codigo: codigoSugerido ? nueva?.codigoBase ?? '' : generador.codigo })
+    const codigo = recalcularCodigo(generador.codigo, plantillaElegida?.codigoBase ?? '', codigosDelProyecto, nueva?.codigoBase ?? '', codigosDelProyecto)
+    setGenerador({ ...generador, plantilla: id, procesoId: '', respuestas: {}, codigo })
   }
 
   const documentos = useMemo(() => documentosDisponibles.filter((item) => {
@@ -154,6 +160,8 @@ export default function Documentacion() {
     const proceso = plantilla?.requiereProceso ? state.procesos.find((item) => item.id === generador.procesoId) : undefined
     if (!plantilla || (plantilla.requiereProceso && !proceso)) return
     if (!generador.empresaId || !generador.proyectoId || !generador.titulo.trim() || !generador.codigo.trim()) return
+    // Antes de la IA: con un código ocupado no se gasta un pedido para después fallar al guardar.
+    if (codigoOcupado) return
     const empresa = state.empresas.find((item) => item.id === generador.empresaId)
     const procesosDelProyecto = state.procesos.filter((item) => item.proyectoId === generador.proyectoId)
     const organizacion = empresa?.nombreComercial || empresa?.nombre
@@ -504,15 +512,15 @@ export default function Documentacion() {
         </table>
       </div>
 
-      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={generandoIA || !generador.empresaId || !generador.proyectoId || (plantillaElegida?.requiereProceso && !generador.procesoId) || !generador.codigo.trim() || !generador.titulo.trim()}>{generandoIA ? 'Redactando con IA…' : 'Generar borrador'}</Button></>}>
+      <Modal open={generadorOpen} onClose={() => setGeneradorOpen(false)} title="Generar borrador documental" size="lg" footer={<><Button variant="outline" onClick={() => setGeneradorOpen(false)}>Cancelar</Button><Button onClick={generar} disabled={generandoIA || !generador.empresaId || !generador.proyectoId || (plantillaElegida?.requiereProceso && !generador.procesoId) || !generador.codigo.trim() || codigoOcupado || !generador.titulo.trim()}>{generandoIA ? 'Redactando con IA…' : 'Generar borrador'}</Button></>}>
         <div className="grid gap-4 sm:grid-cols-2">
           <label><span className={labelClass}>Empresa *</span><select className={inputClass} value={generador.empresaId} onChange={(event) => setGenerador({ ...GENERADOR_VACIO, empresaId: event.target.value })}><option value="">Selecciona</option>{state.empresas.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
-          <label><span className={labelClass}>Proyecto *</span><select className={inputClass} value={generador.proyectoId} disabled={!generador.empresaId} onChange={(event) => { const proyecto = state.proyectos.find((item) => item.id === event.target.value); setGenerador({ ...generador, proyectoId: event.target.value, procesoId: '', edicionNorma: proyecto?.edicionNorma || 'ISO 9001:2026' }) }}><option value="">Selecciona</option>{proyectosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
+          <label><span className={labelClass}>Proyecto *</span><select className={inputClass} value={generador.proyectoId} disabled={!generador.empresaId} onChange={(event) => { const proyecto = state.proyectos.find((item) => item.id === event.target.value); setGenerador({ ...generador, proyectoId: event.target.value, procesoId: '', edicionNorma: proyecto?.edicionNorma || 'ISO 9001:2026', codigo: recalcularCodigo(generador.codigo, plantillaElegida?.codigoBase ?? '', codigosDelProyecto, plantillaElegida?.codigoBase ?? '', codigosDe(event.target.value)) }) }}><option value="">Selecciona</option>{proyectosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
           <label><span className={labelClass}>Referencia normativa *</span><select className={inputClass} value={generador.edicionNorma} disabled={Boolean(generador.proyectoId)} onChange={(event) => setGenerador({ ...generador, edicionNorma: event.target.value as Generador['edicionNorma'] })}><option value="ISO 9001:2026">ISO 9001:2026 (vigente)</option><option value="ISO 9001:2015">ISO 9001:2015 (en transición)</option></select></label>
           <label><span className={labelClass}>Plantilla *</span><select className={inputClass} value={generador.plantilla} onChange={(event) => elegirPlantilla(event.target.value)}>{PLANTILLAS.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>
           <label><span className={labelClass}>Tipo de documento</span><input className={inputClass} value={plantillaElegida?.tipoDocumento ?? ''} disabled readOnly /></label>
           {plantillaElegida?.requiereProceso && <label><span className={labelClass}>Proceso *</span><select className={inputClass} value={generador.procesoId} disabled={!generador.proyectoId} onChange={(event) => setGenerador({ ...generador, procesoId: event.target.value })}><option value="">Selecciona</option>{procesosGenerador.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select></label>}
-          <label><span className={labelClass}>Código *</span><input className={inputClass} value={generador.codigo} onChange={(event) => setGenerador({ ...generador, codigo: event.target.value })} placeholder={`Ej. ${plantillaElegida?.codigoBase ?? 'PR-COM-01'}`} /></label>
+          <label><span className={labelClass}>Código *</span><input className={inputClass} value={generador.codigo} onChange={(event) => setGenerador({ ...generador, codigo: event.target.value })} placeholder={`Ej. ${plantillaElegida?.codigoBase ?? 'PR-COM-01'}`} aria-invalid={codigoOcupado} />{codigoOcupado && <span role="alert" className="mt-1 block text-xs text-red-600">Ya existe un documento con ese código en este proyecto. Prueba con {sugerirCodigo(generador.codigo, codigosDelProyecto)}.</span>}</label>
           <label className="sm:col-span-2"><span className={labelClass}>Título *</span><input className={inputClass} value={generador.titulo} onChange={(event) => setGenerador({ ...generador, titulo: event.target.value })} /></label>
           {generador.edicionNorma === 'ISO 9001:2015' && <p className="sm:col-span-2 text-xs text-amber-700">Este proyecto usa la edición ISO 9001:2015 (en transición).</p>}
           {plantillaElegida?.preguntas && (

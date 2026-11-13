@@ -15,6 +15,8 @@ import {
 import { useApp } from "../context/AppContext"
 import { Button } from "../components/ui/Button"
 import { StatusBadge } from "../components/ui/StatusBadge"
+import { canAccess } from "../config/permissions"
+import { puedeRetomarse } from "../lib/levantamiento"
 import type { ActividadProceso, Proceso } from "../types"
 
 const inputClass =
@@ -215,9 +217,16 @@ export default function Procesos() {
               {empresa?.nombre} · {proyecto?.nombre}
             </p>
           </div>
-          <Button variant="outline" onClick={() => navigate("levantamiento")}>
-            Nuevo levantamiento
-          </Button>
+          <div className="flex flex-wrap gap-2">
+            {puedeRetomarse(proceso) && canAccess("levantamiento", state.currentRole) && (
+              <Button onClick={() => navigate("levantamiento", { id: proceso.id })}>
+                Continuar levantamiento
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => navigate("levantamiento")}>
+              Nuevo levantamiento
+            </Button>
+          </div>
         </div>
       </div>
 

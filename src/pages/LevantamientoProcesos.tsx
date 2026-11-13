@@ -21,7 +21,16 @@ import { ConfirmDialog } from "../components/ui/ConfirmDialog"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
 import { avisoDelPaso, faltantesVisibles, type AvisoPaso } from "../lib/avisoLevantamiento"
-import type { ActividadProceso, Proceso, TipoActividad, TipoProceso } from "../types"
+import {
+  BORRADOR_VACIO,
+  borradorAProceso,
+  primerPasoIncompleto,
+  procesoABorrador,
+  puedeRetomarse,
+  seccionCompleta,
+  type Borrador,
+} from "../lib/levantamiento"
+import type { ActividadProceso, Proceso, TipoActividad } from "../types"
 
 const PASOS = [
   "Identificación",
@@ -35,78 +44,9 @@ const PASOS = [
   "Revisión final",
 ]
 
-interface Borrador {
-  id: string
-  empresaId: string
-  proyectoId: string
-  nombre: string
-  tipo: "" | TipoProceso // opcional: clasifica el proceso en el Mapa de procesos
-  objetivo: string
-  alcance: string
-  responsableId: string
-  puestoResponsable: string
-  personalInvolucrado: string
-  entradas: string
-  salidas: string
-  tieneProveedores: boolean
-  proveedores: string
-  clientes: string
-  recursosMateriales: string
-  equipos: string
-  usaSistemas: boolean
-  sistemas: string
-  controles: string
-  registros: string
-  indicadores: string
-  riesgos: string
-  problemas: string
-  observaciones: string
-  mejoras: string
-  noAplica: Record<string, string>
-  actividades: ActividadProceso[]
-}
-
-const VACIO: Borrador = {
-  id: "",
-  empresaId: "",
-  proyectoId: "",
-  nombre: "",
-  tipo: "",
-  objetivo: "",
-  alcance: "",
-  responsableId: "",
-  puestoResponsable: "",
-  personalInvolucrado: "",
-  entradas: "",
-  salidas: "",
-  tieneProveedores: true,
-  proveedores: "",
-  clientes: "",
-  recursosMateriales: "",
-  equipos: "",
-  usaSistemas: true,
-  sistemas: "",
-  controles: "",
-  registros: "",
-  indicadores: "",
-  riesgos: "",
-  problemas: "",
-  observaciones: "",
-  mejoras: "",
-  noAplica: {},
-  actividades: [],
-}
-
 const inputClass =
   "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-fg focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100"
 const labelClass = "mb-1.5 block text-sm font-medium text-fg"
-
-function lista(valor: string) {
-  return valor
-    .split("\n")
-    .map((item) => item.trim())
-    .filter(Boolean)
-}
 
 function Campo({
   label,
@@ -215,9 +155,17 @@ const ACTIVIDAD_VACIA: Omit<ActividadProceso, "id" | "orden"> = {
 
 export default function LevantamientoProcesos() {
   const { state, dispatch, showToast, navigate, getUsuario } = useApp()
-  const [iniciado, setIniciado] = useState(false)
-  const [paso, setPaso] = useState(0)
-  const [borrador, setBorrador] = useState<Borrador>(VACIO)
+  // E7: desde Procesos se puede continuar un levantamiento a medias (navParams.id). Solo uno que siga "En
+  // levantamiento": uno ya documentado no se reabre acá (guardar lo devolvería a borrador).
+  const procesoARetomar = state.navParams.id
+    ? state.procesos.find((p) => p.id === state.navParams.id && puedeRetomarse(p))
+    : undefined
+  const empresaDelProceso = state.proyectos.find((p) => p.id === procesoARetomar?.proyectoId)?.empresaId ?? ""
+  const [borrador, setBorrador] = useState<Borrador>(() =>
+    procesoARetomar && empresaDelProceso ? procesoABorrador(procesoARetomar, empresaDelProceso) : BORRADOR_VACIO,
+  )
+  const [iniciado, setIniciado] = useState(() => !!procesoARetomar && !!empresaDelProceso)
+  const [paso, setPaso] = useState(() => (procesoARetomar && empresaDelProceso ? primerPasoIncompleto(borrador) : 0))
   const [aviso, setAviso] = useState<AvisoPaso | null>(null)
   const [actividad, setActividad] =
     useState<Omit<ActividadProceso, "id" | "orden">>(ACTIVIDAD_VACIA)
@@ -306,41 +254,15 @@ export default function LevantamientoProcesos() {
   async function guardar(esFinal = false) {
     // UUID desde el navegador: el mismo id sirve para crear y para volver a guardar (upsert).
     const id = borrador.id || crypto.randomUUID()
-    const proceso: Proceso = {
+    const proceso: Proceso = borradorAProceso(borrador, {
       id,
-      nombre: borrador.nombre,
-      proyectoId: borrador.proyectoId,
-      responsableId: borrador.responsableId,
       estado: esFinal ? "Documentado" : "En levantamiento",
-      tipo: borrador.tipo || undefined,
-      descripcion: borrador.objetivo,
       // Igual que la BD (current_date, en UTC) y con el formato del resto de la app.
       fechaLevantamiento: formatearFecha(new Date().toISOString()),
       evidenciasIds: state.evidencias
         .filter((evidencia) => evidencia.procesoId === id)
         .map((evidencia) => evidencia.id),
-      documentosIds: [],
-      entradas: lista(borrador.entradas),
-      salidas: lista(borrador.salidas),
-      objetivo: borrador.objetivo,
-      alcance: borrador.alcance,
-      puestoResponsable: borrador.puestoResponsable,
-      personalInvolucrado: borrador.personalInvolucrado,
-      proveedores: lista(borrador.proveedores),
-      clientes: lista(borrador.clientes),
-      recursosMateriales: lista(borrador.recursosMateriales),
-      equipos: lista(borrador.equipos),
-      sistemas: lista(borrador.sistemas),
-      controles: lista(borrador.controles),
-      registros: lista(borrador.registros),
-      indicadores: lista(borrador.indicadores),
-      riesgos: lista(borrador.riesgos),
-      problemas: lista(borrador.problemas),
-      observaciones: borrador.observaciones,
-      mejoras: borrador.mejoras,
-      noAplica: borrador.noAplica,
-      actividades: borrador.actividades,
-    }
+    })
     const resultado = await servicioEscritura.guardarProceso(proceso)
     if (!resultado.ok) {
       showToast(mensajeDeError(resultado), "error")
@@ -445,7 +367,7 @@ export default function LevantamientoProcesos() {
                 className={inputClass}
                 value={borrador.empresaId}
                 onChange={(event) =>
-                  setBorrador({ ...VACIO, empresaId: event.target.value })
+                  setBorrador({ ...BORRADOR_VACIO, empresaId: event.target.value })
                 }
               >
                 <option value="">Selecciona una empresa</option>
@@ -1121,48 +1043,4 @@ export default function LevantamientoProcesos() {
       />
     </div>
   )
-}
-
-function seccionCompleta(index: number, data: Borrador): boolean {
-  const conJustificacion = (key: string) =>
-    Object.prototype.hasOwnProperty.call(data.noAplica, key) &&
-    !!data.noAplica[key].trim()
-  if (index === 0)
-    return [
-      data.nombre,
-      data.objetivo,
-      data.alcance,
-      data.responsableId,
-      data.puestoResponsable,
-      data.personalInvolucrado,
-    ].every((value) => value.trim())
-  if (index === 1)
-    return (
-      !!data.entradas.trim() &&
-      !!data.salidas.trim() &&
-      !!data.clientes.trim() &&
-      (!data.tieneProveedores || !!data.proveedores.trim())
-    )
-  if (index === 2)
-    return (
-      conJustificacion("recursos") ||
-      (!!data.recursosMateriales.trim() &&
-        !!data.equipos.trim() &&
-        (!data.usaSistemas || !!data.sistemas.trim()))
-    )
-  if (index === 3)
-    return (
-      conJustificacion("controles") ||
-      (!!data.controles.trim() && !!data.registros.trim())
-    )
-  if (index === 4)
-    return conJustificacion("indicadores") || !!data.indicadores.trim()
-  if (index === 5)
-    return (
-      conJustificacion("riesgos") ||
-      (!!data.riesgos.trim() && !!data.problemas.trim())
-    )
-  if (index === 6) return true
-  if (index === 7) return data.actividades.length > 0
-  return PASOS.slice(0, -1).every((_, paso) => seccionCompleta(paso, data))
 }

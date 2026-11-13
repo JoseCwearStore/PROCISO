@@ -72,6 +72,8 @@ export type ErrorEscritura =
   | 'ya_es_responsable'
   | 'miembro_responsable'
   | 'miembro_tareas_abiertas'
+  // E9: el índice documentos_codigo_version_unico (proyecto, código, versión).
+  | 'codigo_documento_repetido'
   | 'servicio'
 
 // Status HTTP de las Edge Functions de IA → error de la app. 429 = tope diario de pedidos.
@@ -357,6 +359,8 @@ function traducirError(error: ErrorBD): ErrorEscritura {
   if (error.code === '22023' && /ya es el consultor responsable/i.test(error.message)) return 'ya_es_responsable'
   if (error.code === '22023' && /es el consultor responsable: cámbialo/i.test(error.message)) return 'miembro_responsable'
   if (error.code === '22023' && /tiene tareas abiertas/i.test(error.message)) return 'miembro_tareas_abiertas'
+  // E9: un código documental repetido (el nombre del índice solo sirve para reconocerlo: no se le muestra al usuario).
+  if (error.code === '23505' && /documentos_codigo_version_unico/.test(error.message)) return 'codigo_documento_repetido'
   if (error.code === '22023' || error.code === '23514' || error.code === '23503') return 'datos_invalidos'
   return error.code === '42501' || error.code === 'PGRST116' ? 'sin_permiso' : 'servicio'
 }
@@ -966,5 +970,6 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   ya_es_responsable: 'Esa persona ya es el consultor responsable del proyecto.',
   miembro_responsable: 'Es el consultor responsable: cámbialo antes de quitarlo del equipo.',
   miembro_tareas_abiertas: 'Tiene tareas abiertas en este proyecto: reasígnalas antes de quitarlo.',
+  codigo_documento_repetido: 'Ya existe un documento con ese código y esa versión en este proyecto. Usa otro código o crea una versión nueva del documento existente.',
   servicio: 'No pudimos guardar los cambios. Intenta de nuevo en unos momentos.',
 }
