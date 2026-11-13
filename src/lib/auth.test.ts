@@ -19,6 +19,7 @@ interface OpcionesDoble {
   errorRecuperacion?: { code?: string; message: string }
   errorCambio?: { code?: string; message: string }
   errorRpc?: { message: string }
+  errorPerfil?: { message: string }
 }
 
 // Doble del cliente de Supabase: solo implementa lo que usa el servicio.
@@ -29,8 +30,13 @@ function crearClienteDoble({
   errorRecuperacion,
   errorCambio,
   errorRpc,
+  errorPerfil,
 }: OpcionesDoble = {}) {
   const consultasPerfil: string[] = []
+  // Los avisos de Supabase sobre la sesión (AUD10-M8): el doble los reparte como lo hace el cliente real, y
+  // `signOut` avisa SIGNED_OUT antes de terminar.
+  const oyentes = new Set<(evento: string, sesion: { user: { id: string } } | null) => void>()
+  const emitir = (evento: string, sesion: { user: { id: string } } | null) => oyentes.forEach((oyente) => oyente(evento, sesion))
 
   const cliente = {
     auth: {
@@ -39,7 +45,14 @@ function crearClienteDoble({
           ? { data: { user: null }, error: errorLogin }
           : { data: { user: { id: perfil?.id ?? 'sin-perfil' } }, error: null },
       ),
-      signOut: vi.fn(async () => ({ error: null })),
+      signOut: vi.fn(async () => {
+        emitir('SIGNED_OUT', null)
+        return { error: null }
+      }),
+      onAuthStateChange: vi.fn((oyente: (evento: string, sesion: { user: { id: string } } | null) => void) => {
+        oyentes.add(oyente)
+        return { data: { subscription: { unsubscribe: () => void oyentes.delete(oyente) } } }
+      }),
       getSession: vi.fn(async () => ({
         data: { session: sesionUsuarioId ? { user: { id: sesionUsuarioId } } : null },
       })),
@@ -54,14 +67,14 @@ function crearClienteDoble({
         eq: (_columna: 'id', valor: string) => ({
           maybeSingle: async () => {
             consultasPerfil.push(valor)
-            return { data: perfil, error: null }
+            return errorPerfil ? { data: null, error: errorPerfil } : { data: perfil, error: null }
           },
         }),
       }),
     })),
   } satisfies ClienteAuth
 
-  return { cliente, consultasPerfil }
+  return { cliente, consultasPerfil, emitir }
 }
 
 describe('mapearRol', () => {
@@ -282,5 +295,105 @@ describe('cerrarSesion', () => {
     await auth.cerrarSesion()
 
     expect(cliente.auth.signOut).toHaveBeenCalledOnce()
+  })
+})
+
+// AUD10-M8: una sesión expirada, revocada o de un usuario suspendido no se reflejaba en la pantalla.
+describe('alCambiarSesion (avisos de sesión de Supabase)', () => {
+  const SESION = { user: { id: PERFIL_ANA.id } }
+
+  it('avisa cuando la sesión se cerró (SIGNED_OUT: expiró, se revocó o se cerró en otra pestaña)', () => {
+    const { cliente, emitir } = crearClienteDoble()
+    const alCerrarse = vi.fn()
+    crearServicioAuth(cliente).alCambiarSesion(alCerrarse)
+
+    emitir('SIGNED_OUT', null)
+
+    expect(alCerrarse).toHaveBeenCalledTimes(1)
+  })
+
+  it('avisa si al renovar el token ya no hay sesión', () => {
+    const { cliente, emitir } = crearClienteDoble()
+    const alCerrarse = vi.fn()
+    crearServicioAuth(cliente).alCambiarSesion(alCerrarse)
+
+    emitir('TOKEN_REFRESHED', null)
+
+    expect(alCerrarse).toHaveBeenCalledTimes(1)
+  })
+
+  it.each([['SIGNED_IN', SESION], ['TOKEN_REFRESHED', SESION], ['USER_UPDATED', SESION], ['INITIAL_SESSION', SESION], ['INITIAL_SESSION', null]] as const)(
+    'no avisa con %s (con sesión: %j)',
+    (evento, sesion) => {
+      const { cliente, emitir } = crearClienteDoble()
+      const alCerrarse = vi.fn()
+      crearServicioAuth(cliente).alCambiarSesion(alCerrarse)
+
+      emitir(evento, sesion)
+
+      expect(alCerrarse).not.toHaveBeenCalled()
+    },
+  )
+
+  it('no avisa cuando es el propio usuario quien cierra la sesión (ya sabe que salió)', async () => {
+    const { cliente } = crearClienteDoble()
+    const servicio = crearServicioAuth(cliente)
+    const alCerrarse = vi.fn()
+    servicio.alCambiarSesion(alCerrarse)
+
+    await servicio.cerrarSesion()
+
+    expect(alCerrarse).not.toHaveBeenCalled()
+  })
+
+  it('después de un cierre propio vuelve a avisar de los siguientes', async () => {
+    const { cliente, emitir } = crearClienteDoble()
+    const servicio = crearServicioAuth(cliente)
+    const alCerrarse = vi.fn()
+    servicio.alCambiarSesion(alCerrarse)
+
+    await servicio.cerrarSesion()
+    emitir('SIGNED_OUT', null)
+
+    expect(alCerrarse).toHaveBeenCalledTimes(1)
+  })
+
+  it('devuelve la función que deja de escuchar', () => {
+    const { cliente, emitir } = crearClienteDoble()
+    const alCerrarse = vi.fn()
+    const dejarDeEscuchar = crearServicioAuth(cliente).alCambiarSesion(alCerrarse)
+
+    dejarDeEscuchar()
+    emitir('SIGNED_OUT', null)
+
+    expect(alCerrarse).not.toHaveBeenCalled()
+  })
+})
+
+describe('estadoDeSesion (¿sigue valiendo la sesión?)', () => {
+  it('sin sesión: expirada', async () => {
+    const { cliente, consultasPerfil } = crearClienteDoble({ sesionUsuarioId: null })
+    expect(await crearServicioAuth(cliente).estadoDeSesion()).toBe('expirada')
+    expect(consultasPerfil).toEqual([])
+  })
+
+  it('con sesión y perfil activo: válida', async () => {
+    const { cliente } = crearClienteDoble({ sesionUsuarioId: PERFIL_ANA.id })
+    expect(await crearServicioAuth(cliente).estadoDeSesion()).toBe('valida')
+  })
+
+  it('con sesión pero el perfil fue suspendido: suspendida', async () => {
+    const { cliente } = crearClienteDoble({ sesionUsuarioId: PERFIL_ANA.id, perfil: { ...PERFIL_ANA, activo: false } })
+    expect(await crearServicioAuth(cliente).estadoDeSesion()).toBe('suspendida')
+  })
+
+  it('con sesión pero sin perfil: suspendida (ya no tiene acceso a PROCISO)', async () => {
+    const { cliente } = crearClienteDoble({ sesionUsuarioId: PERFIL_ANA.id, perfil: null })
+    expect(await crearServicioAuth(cliente).estadoDeSesion()).toBe('suspendida')
+  })
+
+  it('un error al leer el perfil (red caída) NO cierra la sesión: incierta', async () => {
+    const { cliente } = crearClienteDoble({ sesionUsuarioId: PERFIL_ANA.id, errorPerfil: { message: 'Failed to fetch' } })
+    expect(await crearServicioAuth(cliente).estadoDeSesion()).toBe('incierta')
   })
 })

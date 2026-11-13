@@ -79,6 +79,14 @@ export default function Login() {
           </div>
         )}
 
+        {/* Cuenta suspendida mientras estaba abierta la sesión (AUD10-M8) */}
+        {loginReason === 'blocked' && (
+          <div className="mb-4 flex gap-2 items-start bg-amber-50 border border-amber-200 rounded-xl p-3 text-sm text-amber-800">
+            <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+            <span>Tu acceso fue suspendido. Contacta al administrador de tu consultoría.</span>
+          </div>
+        )}
+
         {/* Card */}
         <div className="bg-white rounded-2xl shadow-sm border border-line p-8">
           <h2 className="text-lg font-semibold text-fg mb-1">Iniciar sesión</h2>

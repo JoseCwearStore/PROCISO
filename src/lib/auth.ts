@@ -47,6 +47,10 @@ export interface ClienteAuth {
     }>
     signOut(): PromiseLike<{ error: unknown }>
     getSession(): PromiseLike<{ data: { session: { user: { id: string } } | null } }>
+    // Avisos de Supabase sobre la sesión (SIGNED_OUT, TOKEN_REFRESHED…). Devuelve cómo dejar de escuchar.
+    onAuthStateChange(
+      oyente: (evento: string, sesion: { user: { id: string } } | null) => void,
+    ): { data: { subscription: { unsubscribe(): void } } }
     resetPasswordForEmail(email: string, opciones: { redirectTo: string }): PromiseLike<{ error: ErrorAuth | null }>
     updateUser(datos: { password: string }): PromiseLike<{ error: ErrorAuth | null }>
   }
@@ -97,7 +101,16 @@ function aUsuarioSesion(perfil: PerfilBD): UsuarioSesion {
   }
 }
 
+// ¿Sigue valiendo la sesión que la pantalla tiene en memoria? (AUD10-M8)
+//   · expirada: ya no hay sesión (venció o se revocó).
+//   · suspendida: hay sesión pero el perfil ya no está activo (o no existe): la BD le corta el acceso.
+//   · incierta: no se pudo leer el perfil (red caída): NO se cierra la sesión por un error pasajero.
+export type EstadoDeSesion = 'valida' | 'expirada' | 'suspendida' | 'incierta'
+
 export function crearServicioAuth(cliente: ClienteAuth) {
+  // Mientras el propio usuario cierra su sesión, Supabase avisa SIGNED_OUT: ese aviso no es un cierre sorpresivo.
+  let cerrandoPorElUsuario = false
+
   async function leerPerfil(usuarioId: string): Promise<PerfilBD | null> {
     const { data } = await cliente.from('perfiles').select(COLUMNAS_PERFIL).eq('id', usuarioId).maybeSingle()
     return data
@@ -155,7 +168,30 @@ export function crearServicioAuth(cliente: ClienteAuth) {
     },
 
     async cerrarSesion(): Promise<void> {
-      await cliente.auth.signOut()
+      cerrandoPorElUsuario = true
+      try {
+        await cliente.auth.signOut()
+      } finally {
+        cerrandoPorElUsuario = false
+      }
+    },
+
+    // AUD10-M8: la sesión se cerró sin que el usuario lo pidiera (expiró, se revocó, o la cerró otra pestaña). Antes la
+    // pantalla no se enteraba: seguía mostrando lo ya descargado hasta recargar. Devuelve la función que deja de escuchar.
+    alCambiarSesion(alCerrarse: () => void): () => void {
+      const { data } = cliente.auth.onAuthStateChange((evento, sesion) => {
+        if (cerrandoPorElUsuario) return
+        if (evento === 'SIGNED_OUT' || (evento === 'TOKEN_REFRESHED' && !sesion)) alCerrarse()
+      })
+      return () => data.subscription.unsubscribe()
+    },
+
+    async estadoDeSesion(): Promise<EstadoDeSesion> {
+      const { data } = await cliente.auth.getSession()
+      if (!data.session) return 'expirada'
+      const { data: perfil, error } = await cliente.from('perfiles').select(COLUMNAS_PERFIL).eq('id', data.session.user.id).maybeSingle()
+      if (error) return 'incierta'
+      return perfil?.activo ? 'valida' : 'suspendida'
     },
   }
 }

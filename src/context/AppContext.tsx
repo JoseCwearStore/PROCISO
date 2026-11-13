@@ -471,12 +471,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return lectura
   }, [usuarioId, rolUsuario])
 
-  // Al volver a la pestaña (o a la ventana) se relee, pero no más de una vez por minuto.
+  // AUD10-M8: la sesión se cierra sin que el usuario lo pida (venció, se revocó o se cerró en otra pestaña). La BD ya
+  // le corta el acceso; esto hace que la pantalla también salga, en vez de seguir mostrando lo ya descargado.
+  useEffect(() => {
+    return servicioAuth.alCambiarSesion(() => {
+      if (usuarioActual.current) dispatch({ type: 'LOGOUT', reason: 'expired' })
+    })
+  }, [])
+
+  // Al volver a la pestaña (o a la ventana) se relee, pero no más de una vez por minuto. Antes de releer se confirma que
+  // la sesión siga valiendo: una cuenta suspendida o una sesión revocada sale a la pantalla de ingreso con su aviso;
+  // un error pasajero de red no cierra nada.
   const datosListos = state.datosSesion === 'listo'
   useEffect(() => {
     if (!datosListos) return
     const alVolver = () => {
-      if (document.visibilityState === 'visible' && debeRefrescar(ultimaLectura.current, Date.now())) void refrescarDatos()
+      if (document.visibilityState !== 'visible' || !debeRefrescar(ultimaLectura.current, Date.now())) return
+      void servicioAuth
+        .estadoDeSesion()
+        .catch(() => 'incierta' as const)
+        .then((estado) => {
+          if (!usuarioActual.current) return
+          if (estado === 'expirada') dispatch({ type: 'LOGOUT', reason: 'expired' })
+          else if (estado === 'suspendida') dispatch({ type: 'LOGOUT', reason: 'blocked' })
+          else void refrescarDatos()
+        })
     }
     window.addEventListener('focus', alVolver)
     document.addEventListener('visibilitychange', alVolver)

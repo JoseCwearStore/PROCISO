@@ -20,6 +20,7 @@ function adaptarClienteAuth(cliente: SupabaseClient): ClienteAuth {
       signInWithPassword: (credenciales) => cliente.auth.signInWithPassword(credenciales),
       signOut: () => cliente.auth.signOut(),
       getSession: () => cliente.auth.getSession(),
+      onAuthStateChange: (oyente) => cliente.auth.onAuthStateChange((evento, sesion) => oyente(evento, sesion)),
       resetPasswordForEmail: (email, opciones) => cliente.auth.resetPasswordForEmail(email, opciones),
       updateUser: (datos) => cliente.auth.updateUser(datos),
     },
