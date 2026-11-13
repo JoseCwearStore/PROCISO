@@ -9,7 +9,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(51);
+select plan(55);
 
 -- K1 consultor miembro de P1 (C1) · K2 consultor de C1 SIN ser miembro · A1 admin de C1
 -- CL cliente de E1 · K4 consultor de C2 (miembro de P4)
@@ -259,30 +259,41 @@ select throws_ok(
   '42501', null, 'Un anónimo no puede ejecutar autorizar_transcripcion');
 reset role;
 
--- Tope diario por usuario (la transcripción gasta la clave de un servicio externo). Cuenta las generadas en 24 h.
-insert into public.historial (consultoria_id, proyecto_id, entidad_tipo, entidad_id, autor_id, accion, creado_en)
-select '34343434-0000-0000-0001-000000000001', '34343434-0000-0000-0003-000000000001', 'evidencia',
-       '34343434-0000-0000-0004-000000000002', '34343434-0000-0000-0000-000000000001', 'Transcripción generada',
-       case when n <= 5 then now() - interval '25 hours' else now() - interval '1 hour' end
--- 5 viejas (no cuentan) + las recientes que faltan para que K1 quede en (tope - 1), contando las que ya generó arriba
-from generate_series(1, 5 + private.tope_transcripciones() - 1 - (
-  select count(*)::int from public.historial
-  where autor_id = '34343434-0000-0000-0000-000000000001' and accion = 'Transcripción generada' and creado_en > now() - interval '24 hours'
+-- Tope diario por usuario (la transcripción gasta la clave de un servicio externo). AUD10-M5: el pedido se cuenta al
+-- AUTORIZAR (private.pedidos_transcripcion), no cuando termina: así un pedido que falla después de gastar la llamada, o
+-- dos pedidos a la vez, también cuentan. Cada autorización aceptada deja un pedido; una rechazada no deja nada.
+select is(
+  (select count(*)::int from private.pedidos_transcripcion where usuario_id = '34343434-0000-0000-0000-000000000001'),
+  1, 'La autorización aceptada de arriba dejó UN pedido contado para K1 (y las rechazadas, ninguno)');
+insert into private.pedidos_transcripcion (usuario_id, creado_en)
+select '34343434-0000-0000-0000-000000000001', case when n <= 5 then now() - interval '25 hours' else now() - interval '1 hour' end
+-- 5 viejos (no cuentan) + los recientes que faltan para que K1 quede en (tope - 2): la próxima autorización lo deja en (tope - 1)
+from generate_series(1, 5 + private.tope_transcripciones() - 2 - (
+  select count(*)::int from private.pedidos_transcripcion
+  where usuario_id = '34343434-0000-0000-0000-000000000001' and creado_en > now() - interval '24 hours'
 )) as n;
 select pg_temp.como(1); set local role authenticated;
 select lives_ok(
   $$ select * from public.autorizar_transcripcion('34343434-0000-0000-0004-000000000002') $$,
-  'Con (tope - 1) transcripciones de hoy todavía puede hacer una más (las de hace más de 24 h no cuentan)');
+  'Con (tope - 2) pedidos de hoy todavía puede hacer uno más (los de hace más de 24 h no cuentan)');
+select lives_ok(
+  $$ select * from public.autorizar_transcripcion('34343434-0000-0000-0004-000000000002') $$,
+  'Con (tope - 1) pedidos de hoy todavía puede hacer el último');
 reset role;
-insert into public.historial (consultoria_id, proyecto_id, entidad_tipo, entidad_id, autor_id, accion)
-values ('34343434-0000-0000-0001-000000000001', '34343434-0000-0000-0003-000000000001', 'evidencia',
-        '34343434-0000-0000-0004-000000000002', '34343434-0000-0000-0000-000000000001', 'Transcripción generada');
+select is(
+  (select count(*)::int from private.pedidos_transcripcion
+   where usuario_id = '34343434-0000-0000-0000-000000000001' and creado_en > now() - interval '24 hours'),
+  private.tope_transcripciones(), 'K1 llegó exactamente al tope');
 select pg_temp.como(1); set local role authenticated;
 select throws_ok(
   $$ select * from public.autorizar_transcripcion('34343434-0000-0000-0004-000000000002') $$,
   'IA429', format('Alcanzaste el tope diario de transcripciones (%s). Inténtalo mañana.', private.tope_transcripciones()),
   'Al llegar al tope del día se rechaza con un mensaje que dice cuánto es');
 reset role;
+select is(
+  (select count(*)::int from private.pedidos_transcripcion
+   where usuario_id = '34343434-0000-0000-0000-000000000001' and creado_en > now() - interval '24 hours'),
+  private.tope_transcripciones(), 'El pedido rechazado por el tope no se cuenta');
 select pg_temp.como(3); set local role authenticated;
 select lives_ok(
   $$ select * from public.autorizar_transcripcion('34343434-0000-0000-0004-000000000002') $$,
