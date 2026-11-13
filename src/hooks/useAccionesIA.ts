@@ -28,7 +28,7 @@ export function useAccionesIA() {
     analisisDe: (fuente: FuenteAnalisis): AnalisisIA[] =>
       state.analisisIA.filter((a) => (fuente.tipo === 'documento' ? a.documentoId : a.evidenciaId) === fuente.id),
 
-    // `duracionSegundos` solo viaja en modo video: el servidor la exige y rechaza lo que pase de 5 minutos.
+    // `duracionSegundos` solo viaja en modo video: el servidor la exige y rechaza lo que pase de 10 minutos.
     async analizar(fuente: FuenteAnalisis, criterioIds: string[], modo: 'texto' | 'video' = 'texto', duracionSegundos?: number): Promise<AnalisisIA | null> {
       if (!state.currentUser) return null
       // Variable aparte (no un literal): la propiedad extra pasa el control de tipos sin tocar el tipo del pedido en escrituras.ts.

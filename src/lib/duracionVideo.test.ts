@@ -1,12 +1,19 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { esperarDuracion, estadoDuracionVideo, formatearDuracion, MAX_VIDEO_SEGUNDOS, motivoSubidaVideo } from './duracionVideo'
+import {
+  esperarDuracion, estadoDuracionVideo, formatearDuracion, MAX_VIDEO_SEGUNDOS, motivoSubidaVideo, RECOMENDADO_VIDEO_SEGUNDOS,
+} from './duracionVideo'
 
 // Espejo de supabase/functions/_compartido/duracion-video.ts (la regla la aplica el servidor; esto es solo UX).
-// Decisión del usuario (12/11): máximo 5 minutos por video.
+// Decisión del usuario (13/11, cambió la del 12/11): tope de 10 minutos por video y 5 minutos RECOMENDADOS; a partir de ahí
+// puede aparecer el aviso de tiempo excedido.
 
-describe('MAX_VIDEO_SEGUNDOS', () => {
-  it('es de 5 minutos, igual que en el servidor', () => {
-    expect(MAX_VIDEO_SEGUNDOS).toBe(300)
+describe('MAX_VIDEO_SEGUNDOS y RECOMENDADO_VIDEO_SEGUNDOS', () => {
+  it('el tope es de 10 minutos, igual que en el servidor', () => {
+    expect(MAX_VIDEO_SEGUNDOS).toBe(600)
+  })
+
+  it('lo recomendado es de 5 minutos', () => {
+    expect(RECOMENDADO_VIDEO_SEGUNDOS).toBe(300)
   })
 })
 
@@ -28,24 +35,40 @@ describe('formatearDuracion', () => {
 describe('estadoDuracionVideo (el botón "Analizar video")', () => {
   it('mientras el reproductor no leyó la duración, espera: no habilita ni acusa', () => {
     for (const aun of [null, undefined]) {
-      expect(estadoDuracionVideo(aun)).toEqual({ permitido: false, leyendo: true, motivo: null })
+      expect(estadoDuracionVideo(aun)).toEqual({ permitido: false, leyendo: true, motivo: null, advertencia: null })
     }
   })
 
-  it.each([[1], [120], [300], [300.4]])('con %s s permite analizar', (segundos) => {
-    expect(estadoDuracionVideo(segundos)).toEqual({ permitido: true, leyendo: false, motivo: null })
+  it.each([[1], [120], [299.9], [300], [300.4]])('con %s s (hasta 5 min, lo recomendado) permite analizar sin avisos', (segundos) => {
+    expect(estadoDuracionVideo(segundos)).toEqual({ permitido: true, leyendo: false, motivo: null, advertencia: null })
   })
 
-  it('pasado de 5 minutos bloquea y dice cuánto dura y cuál es el máximo', () => {
+  it.each([[301], [420], [600], [600.4]])('con %s s (entre 5 y 10 min) permite analizar pero advierte del tiempo excedido', (segundos) => {
+    const estado = estadoDuracionVideo(segundos)
+    expect(estado.permitido).toBe(true)
+    expect(estado.leyendo).toBe(false)
+    expect(estado.motivo).toBeNull()
+    expect(estado.advertencia).toMatch(/5 minutos recomendados/)
+    expect(estado.advertencia).toMatch(/tiempo de espera/i)
+    expect(estado.advertencia).toMatch(/reintent/i)
+  })
+
+  it('la advertencia dice cuánto dura el video', () => {
+    expect(estadoDuracionVideo(430)?.advertencia).toContain('7 min 10 s')
+  })
+
+  it('pasado de 10 minutos bloquea y dice cuánto dura y cuál es el máximo', () => {
     const estado = estadoDuracionVideo(631)
     expect(estado.permitido).toBe(false)
     expect(estado.leyendo).toBe(false)
     expect(estado.motivo).toMatch(/10 min 31 s/)
-    expect(estado.motivo).toMatch(/5 minutos/)
+    expect(estado.motivo).toMatch(/máximo/i)
+    expect(estado.motivo).toMatch(/10 minutos/)
+    expect(estado.advertencia).toBeNull()
   })
 
-  it('justo en el borde: 300,6 s ya no entra (redondea a 301)', () => {
-    expect(estadoDuracionVideo(300.6).permitido).toBe(false)
+  it('justo en el borde: 600,6 s ya no entra (redondea a 601)', () => {
+    expect(estadoDuracionVideo(600.6).permitido).toBe(false)
   })
 
   it.each([[NaN], [Infinity], [0], [-4]])('si la duración es inválida (%s) bloquea y lo explica sin hablar del máximo', (valor) => {
@@ -54,17 +77,18 @@ describe('estadoDuracionVideo (el botón "Analizar video")', () => {
     expect(estado.leyendo).toBe(false)
     expect(estado.motivo).toMatch(/duración/i)
     expect(estado.motivo).not.toMatch(/máximo/i)
+    expect(estado.advertencia).toBeNull()
   })
 })
 
 describe('motivoSubidaVideo (al elegir el archivo en "Capturar evidencia")', () => {
-  it('bloquea un video de más de 5 minutos con su duración', () => {
-    const motivo = motivoSubidaVideo(480)
-    expect(motivo).toMatch(/8 min/)
-    expect(motivo).toMatch(/5 minutos/)
+  it('bloquea un video de más de 10 minutos con su duración', () => {
+    const motivo = motivoSubidaVideo(780)
+    expect(motivo).toMatch(/13 min/)
+    expect(motivo).toMatch(/10 minutos/)
   })
 
-  it.each([[1], [300], [300.4]])('deja subir %s s', (segundos) => {
+  it.each([[1], [300], [480], [600], [600.4]])('deja subir %s s (el aviso de más de 5 min se da al analizar, no al subir)', (segundos) => {
     expect(motivoSubidaVideo(segundos)).toBeNull()
   })
 

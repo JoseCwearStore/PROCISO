@@ -61,7 +61,7 @@ export function criteriosSugeridos(tipo: Documento['tipo'] | null, catalogo: Cri
 
 export const AVISO_VIDEO_NATIVO =
   'Al analizar el video, el archivo sale de la plataforma hacia un proveedor externo de IA, que mira la imagen y oye el audio. ' +
-  'El video puede durar máximo 5 minutos. ' +
+  'Se recomiendan videos de hasta 5 minutos; el máximo es de 10 minutos y, cuanto más largo, más probable es que aparezca el aviso de tiempo de espera excedido (si pasa, reintenta o usa un video más corto). ' +
   'Lo que no se ve en el video (equipo de protección, controles, registros) figura como "No evaluable": no se toma como un incumplimiento. ' +
   'Una persona debe revisar el resultado contra el video antes de usarlo.'
 

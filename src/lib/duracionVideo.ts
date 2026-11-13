@@ -1,10 +1,12 @@
 // Duración máxima de un video: espejo de supabase/functions/_compartido/duracion-video.ts.
 // La regla la aplica el SERVIDOR (rechaza el pedido); acá solo se avisa antes, para no hacer esperar a nadie.
 //
-// Decisión del usuario (12/11, proyecto escolar): máximo 5 minutos por video. El manual de usuario debe decirlo.
+// Decisión final del usuario (13/11, proyecto escolar; cambió la del 12/11): TOPE de 10 minutos por video y 5 minutos
+// RECOMENDADOS; a los 10 minutos el aviso de tiempo excedido puede aparecer. El manual de usuario debe decirlo.
 // Es un tope de USO: la duración la mide el navegador (el servidor solo ve bytes), así que no es una barrera de seguridad.
 
-export const MAX_VIDEO_SEGUNDOS = 300
+export const MAX_VIDEO_SEGUNDOS = 600
+export const RECOMENDADO_VIDEO_SEGUNDOS = 300
 
 // "4 min 30 s", "45 s", "5 min": redondeada al segundo más cercano.
 export function formatearDuracion(segundos: number): string {
@@ -16,31 +18,48 @@ export function formatearDuracion(segundos: number): string {
 }
 
 const legible = (segundos: unknown): segundos is number => typeof segundos === 'number' && Number.isFinite(segundos) && segundos > 0
-// Un video de "5:00" suele medir 300,02 s: se compara redondeado al segundo, igual que el servidor.
+// Un video de "10:00" suele medir 600,02 s: se compara redondeado al segundo, igual que el servidor.
 const pasaDelTope = (segundos: number) => Math.round(segundos) > MAX_VIDEO_SEGUNDOS
+const pasaDeLoRecomendado = (segundos: number) => Math.round(segundos) > RECOMENDADO_VIDEO_SEGUNDOS
 const TOPE_EN_MINUTOS = MAX_VIDEO_SEGUNDOS / 60
+const RECOMENDADO_EN_MINUTOS = RECOMENDADO_VIDEO_SEGUNDOS / 60
 
 export interface EstadoDuracionVideo {
   permitido: boolean
   // La duración todavía no se leyó: el botón espera, no acusa nada.
   leyendo: boolean
+  // Por qué NO se puede analizar (null si se puede).
   motivo: string | null
+  // Se puede analizar, pero pasa de lo recomendado: puede aparecer el aviso de tiempo excedido (null si no).
+  advertencia: string | null
 }
 
 // Para el botón "Analizar video" de una evidencia: la duración sale del reproductor (null = todavía no la leyó).
 export function estadoDuracionVideo(segundos: number | null | undefined): EstadoDuracionVideo {
-  if (segundos === null || segundos === undefined) return { permitido: false, leyendo: true, motivo: null }
+  if (segundos === null || segundos === undefined) return { permitido: false, leyendo: true, motivo: null, advertencia: null }
   if (!legible(segundos)) {
-    return { permitido: false, leyendo: false, motivo: 'No se pudo leer la duración del video. Vuelve a abrir la evidencia o prueba con otro archivo.' }
+    return {
+      permitido: false, leyendo: false, advertencia: null,
+      motivo: 'No se pudo leer la duración del video. Vuelve a abrir la evidencia o prueba con otro archivo.',
+    }
   }
   if (pasaDelTope(segundos)) {
     return {
       permitido: false,
       leyendo: false,
+      advertencia: null,
       motivo: `Este video dura ${formatearDuracion(segundos)}; el máximo para analizarlo es de ${TOPE_EN_MINUTOS} minutos. Acórtalo y súbelo de nuevo.`,
     }
   }
-  return { permitido: true, leyendo: false, motivo: null }
+  if (pasaDeLoRecomendado(segundos)) {
+    return {
+      permitido: true,
+      leyendo: false,
+      motivo: null,
+      advertencia: `Este video dura ${formatearDuracion(segundos)}: pasa de los ${RECOMENDADO_EN_MINUTOS} minutos recomendados y puede aparecer el aviso de tiempo de espera excedido (es más probable cerca de los ${TOPE_EN_MINUTOS} minutos). Puedes intentarlo y reintentar, o usar un video más corto.`,
+    }
+  }
+  return { permitido: true, leyendo: false, motivo: null, advertencia: null }
 }
 
 // Para el formulario "Capturar evidencia": solo frena lo que SE SABE que pasa del tope. Si no se pudo leer la duración

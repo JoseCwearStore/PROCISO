@@ -39,7 +39,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   avisoPrevio?: string | null
   // Solo importa para audio y video: sin archivo no se puede transcribir ni analizar el video (E8).
   tieneArchivo?: boolean
-  // Solo video: duración que leyó el reproductor (null = todavía no la leyó). El video se analiza con máximo 5 minutos.
+  // Solo video: duración que leyó el reproductor (null = todavía no la leyó). Tope de 10 minutos y 5 recomendados.
   duracionSegundos?: number | null
 }) {
   const ia = useAccionesIA()
@@ -64,7 +64,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const esVideo = tipoEvidencia === 'Video'
   // O14: el análisis de video tiene su propio tope (5 por usuario / 15 por consultoría): se avisa antes del rechazo.
   const estadoVideo = estadoUsoVideo(ia.usoIA?.video)
-  // Decisión del 12/11: un video se analiza con máximo 5 minutos. El servidor lo rechaza; acá se avisa antes.
+  // Decisión del 13/11: tope de 10 minutos por video y 5 recomendados. El servidor rechaza lo que pase de 10; acá se avisa antes.
   const duracion = estadoDuracionVideo(duracionSegundos)
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
   const historial = ia.analisisDe(fuente)
@@ -171,6 +171,12 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
           {fallo && <AvisoFallo analisis={fallo} onCerrar={() => setFallo(null)} />}
           {esVideo && tieneArchivo && duracion.motivo && (
             <p role="alert" className="text-xs font-medium text-red-700"><strong>Solo para «Analizar video»: </strong>{duracion.motivo}</p>
+          )}
+          {esVideo && tieneArchivo && duracion.advertencia && (
+            <p role="status" className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{duracion.advertencia}</span>
+            </p>
           )}
           {esVideo && tieneArchivo && duracion.leyendo && (
             <p className="text-xs text-slate-500">Leyendo la duración del video…</p>

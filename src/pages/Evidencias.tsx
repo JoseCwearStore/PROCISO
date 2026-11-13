@@ -83,7 +83,7 @@ export default function Evidencias() {
   const [form, setForm] = useState<Formulario>(FORM_VACIO)
   const [archivo, setArchivo] = useState<globalThis.File | null>(null)
   const [vistaPrevia, setVistaPrevia] = useState<Evidencia | null>(null)
-  // Duración del video abierto, leída del reproductor (null = leyendo; NaN = no se pudo leer). Máximo 5 minutos para analizarlo.
+  // Duración del video abierto, leída del reproductor (null = leyendo; NaN = no se pudo leer). Tope de 10 minutos para analizarlo (5 recomendados).
   const [duracionVideo, setDuracionVideo] = useState<number | null>(null)
   const medirReproductor = useCallback((el: HTMLVideoElement | null) => {
     if (!el) return
@@ -147,7 +147,7 @@ export default function Evidencias() {
       setErrorCarga("")
       return
     }
-    // Un video de más de 5 minutos no se acepta (decisión del 12/11). Si no se pudo leer la duración, se deja subir:
+    // Un video de más de 10 minutos no se acepta (decisión del 13/11). Si no se pudo leer la duración, se deja subir:
     // el análisis la vuelve a medir con el reproductor.
     if (file.type.startsWith("video/")) {
       const motivo = motivoSubidaVideo(await medirDuracionDeArchivo(file))

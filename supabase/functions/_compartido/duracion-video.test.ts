@@ -1,12 +1,18 @@
 import { describe, expect, it } from 'vitest'
-import { formatearDuracion, MAX_VIDEO_SEGUNDOS, motivoDuracionInvalida } from './duracion-video.ts'
+import { formatearDuracion, MAX_VIDEO_SEGUNDOS, motivoDuracionInvalida, RECOMENDADO_VIDEO_SEGUNDOS } from './duracion-video.ts'
 
-// Decisión del usuario (12/11): un video se analiza como máximo con 5 minutos. Medido ese día: un video de 10 min 31 s
-// completó en 99 s en una corrida y venció a los 141 s en otra (plazo de la función: 140 s), así que 10 min no es confiable.
+// Decisión del usuario (13/11, cambió la del 12/11): tope de 10 minutos por video, con 5 minutos RECOMENDADOS. Medido: un video
+// de 10 min 31 s tardó 57, 84, 99 y 120 s, y venció a los 140 s en otras corridas (plazo de la función): a 10 minutos el aviso
+// de tiempo excedido puede aparecer, por eso la recomendación es de 5.
 
 describe('MAX_VIDEO_SEGUNDOS', () => {
-  it('es de 5 minutos', () => {
-    expect(MAX_VIDEO_SEGUNDOS).toBe(300)
+  it('es de 10 minutos', () => {
+    expect(MAX_VIDEO_SEGUNDOS).toBe(600)
+  })
+
+  it('el que se recomienda es la mitad: 5 minutos', () => {
+    expect(RECOMENDADO_VIDEO_SEGUNDOS).toBe(300)
+    expect(RECOMENDADO_VIDEO_SEGUNDOS * 2).toBe(MAX_VIDEO_SEGUNDOS)
   })
 })
 
@@ -27,15 +33,15 @@ describe('formatearDuracion', () => {
 })
 
 describe('motivoDuracionInvalida', () => {
-  it.each([[1], [120], [299.9], [300], [300.4]])('acepta %s s (hasta 5 min, redondeado al segundo)', (segundos) => {
+  it.each([[1], [120], [300], [301], [599.9], [600], [600.4]])('acepta %s s (hasta 10 min, redondeado al segundo; lo que pasa de 5 min solo se recomienda evitar)', (segundos) => {
     expect(motivoDuracionInvalida(segundos)).toBeNull()
   })
 
-  it('rechaza lo que pasa de 5 minutos y dice cuánto dura y cuál es el máximo', () => {
-    const motivo = motivoDuracionInvalida(300.6)
-    expect(motivo).toMatch(/5 min 1 s/)
+  it('rechaza lo que pasa de 10 minutos y dice cuánto dura y cuál es el máximo', () => {
+    const motivo = motivoDuracionInvalida(600.6)
+    expect(motivo).toMatch(/10 min 1 s/)
     expect(motivo).toMatch(/máximo/i)
-    expect(motivo).toMatch(/5 minutos/)
+    expect(motivo).toMatch(/10 minutos/)
   })
 
   it('un video de 10 min 31 s se rechaza con su duración', () => {

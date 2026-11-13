@@ -188,8 +188,10 @@ describe('análisis de video: avisos y etiquetas', () => {
     expect(AVISO_VIDEO_NATIVO).toMatch(/revis/i)
   })
 
-  it('avisa que el video puede durar como máximo 5 minutos (decisión del usuario, 12/11)', () => {
-    expect(AVISO_VIDEO_NATIVO).toMatch(/máximo 5 minutos/i)
+  it('recomienda hasta 5 minutos, dice que el máximo es de 10 y que puede aparecer el aviso de tiempo excedido (decisión del usuario, 13/11)', () => {
+    expect(AVISO_VIDEO_NATIVO).toMatch(/recomienda.{0,40}5 minutos/i)
+    expect(AVISO_VIDEO_NATIVO).toMatch(/máximo.{0,25}10 minutos/i)
+    expect(AVISO_VIDEO_NATIVO).toMatch(/tiempo (de espera )?excedido/i)
   })
 
   it('la etiqueta de sugerencia dice que es de la IA y que se verifica con el video', () => {
@@ -306,22 +308,25 @@ describe('cableado del análisis de video (no queda sin conectar)', () => {
   })
 })
 
-// Reemplaza a la "duración recomendada" de 10 minutos (commit 9b4eec2, 13/11): la decisión del usuario del 12/11 es un tope de
-// 5 minutos por video, no una recomendación. Medido con un video de 10:31: 57, 84 y 120 s en tres corridas y una falla a los
-// 140 s, así que a 5 minutos hay margen. La lógica (formato, tope, bloqueo) está en duracionVideo.ts, con sus propios tests.
-describe('tope de 5 minutos por video: cableado de la pantalla', () => {
+// Decisión final del usuario (13/11): tope de 10 minutos por video y 5 minutos RECOMENDADOS (antes: 5 de tope el 12/11, y la
+// recomendación de 10 del commit 9b4eec2). Medido con un video de 10:31: 57, 84, 99 y 120 s, y fallas a los 140 s: a los 10
+// minutos el aviso de tiempo excedido puede aparecer. La lógica (formato, tope, advertencia) está en duracionVideo.ts.
+describe('tope de 10 minutos y recomendación de 5 por video: cableado de la pantalla', () => {
   const leer = (...p: string[]) => readFileSync(resolve(__dirname, '..', ...p), 'utf8')
 
-  it('el panel bloquea "Analizar video" si el video pasa de 5 minutos y explica el motivo', () => {
+  it('el panel bloquea "Analizar video" si el video pasa de 10 minutos y advierte entre 5 y 10', () => {
     const panel = leer('components', 'PanelAnalisisIA.tsx')
     expect(panel).toMatch(/estadoDuracionVideo\(duracionSegundos\)/)
     expect(panel).toMatch(/!duracion\.permitido/)
     expect(panel).toContain('Solo para «Analizar video»')
+    // La advertencia se muestra solo en un video con archivo, y con su texto adentro (no basta con nombrarla).
+    expect(panel).toMatch(/\{esVideo && tieneArchivo && duracion\.advertencia && \(/)
+    expect(panel).toMatch(/<span>\{duracion\.advertencia\}<\/span>/)
     // Nunca se pide el análisis sin una duración válida (el servidor igual la exige).
     expect(panel).toMatch(/if \(!duracion\.permitido \|\| typeof duracionSegundos !== 'number'\) return/)
   })
 
-  it('la recomendación vieja de 10 minutos ya no está en el panel', () => {
+  it('las constantes de la recomendación vieja (9b4eec2) no vuelven al panel', () => {
     const panel = leer('components', 'PanelAnalisisIA.tsx')
     expect(panel).not.toMatch(/AVISO_DURACION_VIDEO|alertaDuracionVideo|DURACION_RECOMENDADA/)
   })

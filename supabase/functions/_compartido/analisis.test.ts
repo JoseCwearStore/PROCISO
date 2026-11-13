@@ -284,11 +284,12 @@ describe('validarPedidoAnalisis · modo video', () => {
     expect((error as ErrorIA).message).toMatch(/duración/i)
   })
 
-  it('modo video acepta justo 5 minutos y rechaza lo que pasa', () => {
+  it('modo video acepta justo 10 minutos (aunque pase de los 5 recomendados) y rechaza lo que pasa', () => {
     expect(validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 300 }).duracionSegundos).toBe(300)
-    const error = (() => { try { validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 301 }) } catch (e) { return e } })()
+    expect(validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 600 }).duracionSegundos).toBe(600)
+    const error = (() => { try { validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 601 }) } catch (e) { return e } })()
     expect(error).toBeInstanceOf(ErrorIA)
-    expect((error as ErrorIA).message).toMatch(/5 minutos/)
+    expect((error as ErrorIA).message).toMatch(/10 minutos/)
   })
 
   it.each([['texto', NaN], ['texto', '120'], ['video', Infinity], ['video', -3], ['video', '120']])(
