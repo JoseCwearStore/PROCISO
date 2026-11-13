@@ -470,11 +470,12 @@ function KanbanView({
 // ─── View: Cronograma ─────────────────────────────────────────────────────────
 
 function CronogramaView({
-  proyectos, getEmpresa, onView,
+  proyectos, getEmpresa, onView, calcularAvance,
 }: {
   proyectos: Proyecto[]
   getEmpresa: (id: string) => { nombre: string } | undefined
   onView: (id: string) => void
+  calcularAvance: (id: string) => number
 }) {
   if (proyectos.length === 0) {
     return (
@@ -549,7 +550,7 @@ function CronogramaView({
                   style={{ left: `${leftPct}%`, width: `${widthPct}%`, minWidth: '2.5rem' }}
                   title={`${p.nombre} — ${p.fechaInicio} → ${p.fechaFinEstimada}`}
                   onClick={() => onView(p.id)}>
-                  <span className="text-white text-xs font-medium truncate">{p.nombre} · {p.avance}%</span>
+                  <span className="text-white text-xs font-medium truncate">{p.nombre} · {calcularAvance(p.id)}%</span>
                 </div>
               </div>
             )
@@ -704,7 +705,7 @@ export function Proyectos() {
           onDragLeave={() => setDragOver(null)} />
       )}
       {viewMode === 'cronograma' && (
-        <CronogramaView proyectos={filtered} getEmpresa={getEmpresa}
+        <CronogramaView proyectos={filtered} getEmpresa={getEmpresa} calcularAvance={calcularAvance}
           onView={(id) => navigate('proyecto-detalle', { id })} />
       )}
 

@@ -9,6 +9,7 @@ import { useAccionesGestion } from '../hooks/useAccionesGestion'
 import { servicioEscritura } from '../lib/servicios'
 import { mensajeDeError } from '../lib/escrituras'
 import { etiquetaEstadoEmpresa } from '../lib/estadoEmpresa'
+import { historialDeEmpresa } from '../lib/historialEmpresa'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -270,7 +271,7 @@ export function EmpresaDetalle() {
   const documentos = proyectosEmpresa.flatMap((p) => getDocumentos(p.id))
   const evidenciasEmpresa = state.evidencias.filter((ev) => proyectosEmpresa.some((p) => p.id === ev.proyectoId))
   const usuariosEmpresa = state.usuarios.filter((u) => u.empresaId === empresa.id)
-  const historialEmpresa = state.auditoria.filter((h) => h.entidadId === empresa.id || proyectosEmpresa.some((p) => p.id === h.entidadId))
+  const historialEmpresa = historialDeEmpresa(state.auditoria, empresa.id, proyectosEmpresa.map((p) => p.id))
   const consultor = state.usuarios.find((u) => u.id === empresa.consultorAsignadoId)
 
   async function handleArchive() {

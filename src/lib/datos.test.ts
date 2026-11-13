@@ -80,7 +80,7 @@ function filasBase(): FilasSesion {
       { id: 8, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'Revisada', estado_nuevo: 'Revisada', creado_en: '2024-03-24T10:00:00+00:00' },
       { id: 7, entidad_tipo: 'evidencia', entidad_id: 'ev-p1', autor_id: ROBERTO, accion: 'Cambio de estado', descripcion: 'Se ve bien', estado_anterior: 'Cargada', estado_nuevo: 'Revisada', creado_en: '2024-03-23T10:00:00+00:00' },
       { id: 9, entidad_tipo: 'documento', entidad_id: 'doc-p1', autor_id: ROBERTO, accion: 'Enviado a revisión', descripcion: 'Versión 1.0', estado_anterior: null, estado_nuevo: null, creado_en: '2024-03-25T10:00:00+00:00' },
-      { id: 11, entidad_tipo: 'tarea', entidad_id: 'tar-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: 'Listo', estado_anterior: 'En proceso', estado_nuevo: 'En revisión', creado_en: '2024-09-12T10:00:00+00:00' },
+      { id: 11, entidad_tipo: 'tarea', entidad_id: 'tar-p1', proyecto_id: P1, autor_id: CARLOS, accion: 'Cambio de estado', descripcion: 'Listo', estado_anterior: 'En proceso', estado_nuevo: 'En revisión', creado_en: '2024-09-12T10:00:00+00:00' },
       { id: 21, entidad_tipo: 'no_conformidad', entidad_id: 'nc-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'En análisis', estado_nuevo: 'En corrección', creado_en: '2024-09-02T10:00:00+00:00' },
       { id: 20, entidad_tipo: 'no_conformidad', entidad_id: 'nc-p1', autor_id: CARLOS, accion: 'Tratamiento actualizado', descripcion: 'Corrección, análisis de causa y acción correctiva.', estado_anterior: null, estado_nuevo: null, creado_en: '2024-09-01T10:00:00+00:00' },
       { id: 10, entidad_tipo: 'tarea', entidad_id: 'tar-p1', autor_id: CARLOS, accion: 'Cambio de estado', descripcion: null, estado_anterior: 'Pendiente', estado_nuevo: 'En proceso', creado_en: '2024-09-11T10:00:00+00:00' },
@@ -249,6 +249,13 @@ describe('combinarDatosSesion', () => {
     expect(proyectos[0].fases.map((fase) => fase.id)).toEqual(['f1', 'f2'])
     expect(proyectos[0].alcance).toBeUndefined()
     expect(proyectos[0].fechaFinReal).toBeUndefined()
+  })
+
+  it('no expone el avance guardado del proyecto: el avance sale de la fórmula (calcularAvance), E4', () => {
+    // La fila trae avance: 45 (columna sin mantenimiento); si el proyecto lo copiara, una pantalla podría
+    // mostrarlo y contradecir a las demás, que usan la fórmula de tareas y entregables.
+    const { proyectos } = combinarDatosSesion(filasBase())
+    expect(proyectos[0]).not.toHaveProperty('avance')
   })
 
   it('arma los usuarios desde los perfiles, con sus proyectos según el rol', () => {
@@ -528,10 +535,37 @@ describe('combinarDatosSesion', () => {
     expect(ids(historial)).toEqual(['11', '10', '21', '20', '9', '8', '7'])
     expect(historial[0]).toEqual<EntradaHistorial>({
       id: '11', fecha: '12/09/2024', autorId: CARLOS, accion: 'Cambio de estado', descripcion: 'Listo',
-      entidadId: 'tar-p1', entidadTipo: 'tarea',
+      entidadId: 'tar-p1', entidadTipo: 'tarea', proyectoId: P1,
     })
     // Sin descripción, se explica con el cambio de estado.
     expect(historial[1].descripcion).toBe('Pendiente → En proceso')
+  })
+
+  it('el evento conserva el proyecto de la BD (E2: sin él no se puede ubicar en una empresa)', () => {
+    const filas = filasBase()
+    filas.historial = [
+      { id: 1, entidad_tipo: 'tarea', entidad_id: 'tar-p1', proyecto_id: P1, autor_id: CARLOS, accion: 'a', descripcion: null, estado_anterior: null, estado_nuevo: null, creado_en: '2024-09-11T10:00:00+00:00' },
+      { id: 2, entidad_tipo: 'usuario', entidad_id: ROBERTO, proyecto_id: null, autor_id: CARLOS, accion: 'b', descripcion: null, estado_anterior: null, estado_nuevo: null, creado_en: '2024-09-10T10:00:00+00:00' },
+    ]
+    const { historial } = combinarDatosSesion(filas)
+    expect(historial.map((h) => h.proyectoId)).toEqual([P1, undefined])
+  })
+
+  it('pide la columna proyecto_id al leer el historial', async () => {
+    const pedidas: Record<string, string> = {}
+    const cliente = {
+      from: (tabla: string) => ({
+        select: async (columnas: string) => {
+          pedidas[tabla] = columnas
+          return { data: [], error: null }
+        },
+      }),
+      rpc: async (_funcion: 'mis_notificaciones') => ({ data: [], error: null }),
+    } satisfies ClienteDatos
+
+    await cargarFilasSesion(cliente, 'Consultor')
+
+    expect(pedidas.historial).toMatch(/\bproyecto_id\b/)
   })
 })
 

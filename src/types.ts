@@ -154,7 +154,6 @@ export interface Proyecto {
   consultorId: string
   equipoIds: string[]
   estado: EstadoProyecto
-  avance: number
   edicionNorma: 'ISO 9001:2026' | 'ISO 9001:2015'
   fechaInicio: string
   fechaFinEstimada: string
@@ -412,6 +411,9 @@ export interface EntradaHistorial {
   accion: string
   descripcion: string
   entidadId: string
+  // El proyecto al que pertenece el evento (una tarea, un documento, una evidencia...). Sin él, un evento
+  // de una tarea no se puede asociar a una empresa: su entidadId es el de la tarea.
+  proyectoId?: string
   // Los mismos tipos que acepta public.historial.
   entidadTipo:
     | 'consultoria'

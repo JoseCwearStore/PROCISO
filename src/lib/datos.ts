@@ -232,6 +232,8 @@ export interface FilaHistorial {
   id: number
   entidad_tipo: string
   entidad_id: string
+  // La BD siempre la pide (nula en eventos sin proyecto, p. ej. de usuarios); opcional aquí por las filas de prueba.
+  proyecto_id?: string | null
   autor_id: string | null
   accion: string
   descripcion: string | null
@@ -446,7 +448,7 @@ const CONSULTAS = {
   procesos: ['procesos', '*'],
   actividades: ['actividades', 'id, proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden'],
   evidencias: ['evidencias', 'id, proyecto_id, proceso_id, actividad_id, subido_por, nombre, tipo, estado, descripcion, categoria, archivo_ruta, archivo_nombre, archivo_mime, creado_en'],
-  historial: ['historial', 'id, entidad_tipo, entidad_id, autor_id, accion, descripcion, estado_anterior, estado_nuevo, creado_en'],
+  historial: ['historial', 'id, entidad_tipo, entidad_id, proyecto_id, autor_id, accion, descripcion, estado_anterior, estado_nuevo, creado_en'],
   documentos: ['documentos', '*'],
   versiones: ['documento_versiones', 'documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en'],
   vinculos: ['documento_evidencias', 'documento_id, evidencia_id'],
@@ -589,7 +591,7 @@ export function traducirProyecto(fila: FilaProyecto, fases: FilaFase[], miembros
     consultorId: fila.consultor_id ?? '',
     equipoIds: [...new Set(equipo.filter((id): id is string => Boolean(id)))],
     estado: fila.estado,
-    avance: fila.avance,
+    // Sin `avance`: el de la fila no se mantiene; el avance de un proyecto sale de calcularAvance (E4).
     edicionNorma: fila.edicion_norma,
     fechaInicio: formatearFecha(fila.fecha_inicio),
     fechaFinEstimada: formatearFecha(fila.fecha_fin_estimada),
@@ -1013,6 +1015,7 @@ export function traducirHistorial(filas: FilaHistorial[]): EntradaHistorial[] {
       accion: h.accion,
       descripcion: h.descripcion ?? (h.estado_nuevo ? `${h.estado_anterior} → ${h.estado_nuevo}` : ''),
       entidadId: h.entidad_id,
+      proyectoId: opcional(h.proyecto_id),
       entidadTipo: h.entidad_tipo as EntradaHistorial['entidadTipo'],
     }))
 }
