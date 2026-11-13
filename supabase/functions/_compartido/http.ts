@@ -21,18 +21,20 @@ export const responderCon = (cors: Record<string, string>) => (status: number, c
 
 // ─── Errores de la BD → HTTP ────────────────────────────────────────────────
 
-// Mismo idioma que PostgREST. IA429 es el código de nuestro tope diario de IA.
+// Mismo idioma que PostgREST. IA429 es el código de nuestro tope diario de IA; IV429, el de invitaciones por día por
+// administrador, e IV409, el de la consultoría que ya llegó a su límite de usuarios (AUD10-M7).
 const COMO_400 = new Set(['22023', '22P02', '23502', '23503', '23514'])
 export function estadoDe(code?: string): number {
   if (code === '42501') return 403
-  if (code === 'IA429') return 429
+  if (code === 'IA429' || code === 'IV429') return 429
+  if (code === 'IV409') return 409
   return code && COMO_400.has(code) ? 400 : 500
 }
 
 // Los mensajes de NUESTRAS reglas (permiso, regla de negocio, tope) son para el usuario y
 // pasan tal cual. El resto (formato, claves, errores internos) trae texto de Postgres con
 // nombres de tablas y columnas: eso se queda en el log del servidor, no viaja (AUD04-B2).
-const MENSAJE_PROPIO = new Set(['42501', '22023', 'IA429'])
+const MENSAJE_PROPIO = new Set(['42501', '22023', 'IA429', 'IV429', 'IV409'])
 // Un 42501 puede ser NUESTRO (un `raise` con mensaje para el usuario) o de Postgres ("new row
 // violates row-level security policy for table …", "permission denied for table …"): este
 // último trae el nombre de la tabla y no se muestra.
@@ -43,6 +45,7 @@ export function mensajeDeBD(error: { code?: string; message?: string }): string 
   if (estado === 400) return 'Los datos del pedido no son válidos.'
   if (estado === 403) return 'No tienes permiso para esta acción.'
   if (estado === 429) return 'Se alcanzó el límite de uso.'
+  if (estado === 409) return 'No se pudo completar por un límite de la consultoría.'
   return 'Error interno. Inténtalo de nuevo más tarde.'
 }
 

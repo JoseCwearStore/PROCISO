@@ -66,6 +66,8 @@ export type ErrorEscritura =
   | 'limite_ia'
   | 'limite_transcripciones'
   | 'limite_reportes'
+  | 'limite_invitaciones'
+  | 'limite_usuarios'
   // Mensajes que la BD escribe a propósito en las operaciones del equipo de un proyecto (L5d).
   | 'empresa_archivada'
   | 'ya_es_miembro'
@@ -507,7 +509,9 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         },
       })
       if (error) {
-        return { ok: false, error: error.status === 403 ? 'sin_permiso' : error.status === 400 ? 'datos_invalidos' : 'servicio' }
+        // 429: el tope diario de invitaciones del administrador; 409: la consultoría llegó a su límite de usuarios (AUD10-M7).
+        const estados: Record<number, ErrorEscritura> = { 403: 'sin_permiso', 400: 'datos_invalidos', 429: 'limite_invitaciones', 409: 'limite_usuarios' }
+        return { ok: false, error: estados[error.status ?? 0] ?? 'servicio' }
       }
       return { ok: true, valor: data as { id: string; email: string } }
     },
@@ -990,6 +994,8 @@ export const MENSAJES_ERROR_ESCRITURA: Record<ErrorEscritura, string> = {
   limite_ia: 'Se alcanzó el tope diario de pedidos a la IA. Inténtalo mañana o continúa sin IA.',
   limite_transcripciones: 'Alcanzaste el tope diario de transcripciones. Inténtalo mañana.',
   limite_reportes: 'Alcanzaste el máximo de reportes de soporte por día. Inténtalo mañana.',
+  limite_invitaciones: 'Alcanzaste el tope diario de invitaciones. Inténtalo mañana.',
+  limite_usuarios: 'La consultoría alcanzó su límite de usuarios. Pide ampliarlo antes de invitar a más personas.',
   empresa_archivada: 'La empresa está archivada: no se le pueden crear proyectos.',
   ya_es_miembro: 'Esa persona ya es parte del equipo del proyecto.',
   ya_es_responsable: 'Esa persona ya es el consultor responsable del proyecto.',

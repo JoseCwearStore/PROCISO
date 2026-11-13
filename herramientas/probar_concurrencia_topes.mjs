@@ -109,5 +109,16 @@ resultados.push(await escenario('Video: 5 análisis por día por usuario (el má
   limpiar: () => sql(`delete from public.analisis_ia where id::text like 'c0c0c0c0-%'`),
 }))
 
+const ANA = 'aaaaaaaa-0000-0000-0000-000000000002'
+resultados.push(await escenario('Invitaciones: 20 por día por administrador', {
+  tope: 20,
+  codigoEsperado: 'IV429',
+  contar: `select count(*) from private.pedidos_invitacion where admin_id = '${ANA}' and creado_en > now() - interval '24 hours'`,
+  preparar: () => sql(`insert into private.pedidos_invitacion (admin_id) select '${ANA}' from generate_series(1, 19)`),
+  comoUsuario: ANA,
+  sentencia: (n) => `select public.autorizar_invitacion('concurrencia${n}@prueba.test', 'consultor', '${CONSULTORIA}', null)`,
+  limpiar: () => sql(`delete from private.pedidos_invitacion where admin_id = '${ANA}'`),
+}))
+
 console.log(resultados.every(Boolean) ? '\nTodos los topes se respetan con pedidos simultáneos.' : '\nHAY TOPES QUE SE EXCEDEN.')
 process.exit(resultados.every(Boolean) ? 0 : 1)

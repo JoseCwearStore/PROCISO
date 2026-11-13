@@ -1401,6 +1401,16 @@ describe('invitarUsuario', () => {
     expect(llamadas).toEqual([])
   })
 
+  it('el tope diario de invitaciones (429) y el límite de usuarios de la consultoría (409) tienen su propio error (AUD10-M7)', async () => {
+    const con = (status: number) => crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status } }).cliente
+    const invitar = (status: number) => crearServicioEscritura(con(status)).invitarUsuario(INVITACION, 'http://localhost:5173')
+
+    expect(await invitar(429)).toEqual({ ok: false, error: 'limite_invitaciones' })
+    expect(await invitar(409)).toEqual({ ok: false, error: 'limite_usuarios' })
+    expect(MENSAJES_ERROR_ESCRITURA.limite_invitaciones).toMatch(/invitaciones/i)
+    expect(MENSAJES_ERROR_ESCRITURA.limite_usuarios).toMatch(/l[ií]mite de usuarios/i)
+  })
+
   it('traduce el status HTTP de la función: 403 sin permiso, 400 datos inválidos, otro servicio', async () => {
     const con = (status: number) => crearClienteDoble({}, { error: null }, { data: null, error: { message: 'x', status } }).cliente
     const invitar = (status: number) => crearServicioEscritura(con(status)).invitarUsuario(INVITACION, 'http://localhost:5173')

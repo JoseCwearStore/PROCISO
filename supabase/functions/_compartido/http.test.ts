@@ -11,6 +11,8 @@ describe('estadoDe (código de la BD → estado HTTP)', () => {
     ['23514', 400], // check
     ['23502', 400], // not null
     ['IA429', 429], // tope diario de pedidos a la IA (L4)
+    ['IV429', 429], // tope diario de invitaciones por administrador (AUD10-M7)
+    ['IV409', 409], // la consultoría llegó a su límite de usuarios (AUD10-M7)
     ['XX000', 500],
     [undefined, 500],
   ])('%s → %i', (code, esperado) => {
@@ -23,6 +25,8 @@ describe('mensajeDeBD (qué se le muestra a quien llama)', () => {
     expect(mensajeDeBD({ code: '42501', message: 'No tenés permiso para invitar' })).toBe('No tenés permiso para invitar')
     expect(mensajeDeBD({ code: '22023', message: 'Ese email ya existe' })).toBe('Ese email ya existe')
     expect(mensajeDeBD({ code: 'IA429', message: 'Llegaste al tope diario' })).toBe('Llegaste al tope diario')
+    expect(mensajeDeBD({ code: 'IV429', message: 'Alcanzaste el tope de invitaciones' })).toBe('Alcanzaste el tope de invitaciones')
+    expect(mensajeDeBD({ code: 'IV409', message: 'La consultoría alcanzó su límite de usuarios' })).toBe('La consultoría alcanzó su límite de usuarios')
   })
 
   it('un rechazo del RLS o de los permisos de tabla (42501 de Postgres) NO muestra el nombre de la tabla', () => {
