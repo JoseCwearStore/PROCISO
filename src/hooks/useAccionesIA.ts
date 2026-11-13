@@ -28,18 +28,21 @@ export function useAccionesIA() {
     analisisDe: (fuente: FuenteAnalisis): AnalisisIA[] =>
       state.analisisIA.filter((a) => (fuente.tipo === 'documento' ? a.documentoId : a.evidenciaId) === fuente.id),
 
-    async analizar(fuente: FuenteAnalisis, criterioIds: string[], modo: 'texto' | 'video' = 'texto'): Promise<AnalisisIA | null> {
+    // `duracionSegundos` solo viaja en modo video: el servidor la exige y rechaza lo que pase de 5 minutos.
+    async analizar(fuente: FuenteAnalisis, criterioIds: string[], modo: 'texto' | 'video' = 'texto', duracionSegundos?: number): Promise<AnalisisIA | null> {
       if (!state.currentUser) return null
+      // Variable aparte (no un literal): la propiedad extra pasa el control de tipos sin tocar el tipo del pedido en escrituras.ts.
+      const pedido = {
+        consultoriaId: state.currentUser.consultoriaId ?? null,
+        proyectoId: fuente.proyectoId,
+        fuenteTipo: fuente.tipo,
+        documentoId: fuente.tipo === 'documento' ? fuente.id : undefined,
+        evidenciaId: fuente.tipo === 'evidencia' ? fuente.id : undefined,
+        criterioIds,
+        ...(modo === 'video' ? { modo, duracionSegundos } : {}),
+      }
       const resultado = await servicioEscritura.analizarConIA(
-        {
-          consultoriaId: state.currentUser.consultoriaId ?? null,
-          proyectoId: fuente.proyectoId,
-          fuenteTipo: fuente.tipo,
-          documentoId: fuente.tipo === 'documento' ? fuente.id : undefined,
-          evidenciaId: fuente.tipo === 'evidencia' ? fuente.id : undefined,
-          criterioIds,
-          ...(modo === 'video' ? { modo } : {}),
-        },
+        pedido,
         state.currentUser.id,
         formatearFecha(new Date().toISOString()),
       )

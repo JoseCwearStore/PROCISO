@@ -8,6 +8,7 @@
 //     Cambiar de proveedor = cambiar IA_BASE_URL, IA_MODELO e IA_API_KEY.
 //   · Agregar Claude u otro = un adaptador nuevo con la misma interfaz.
 
+import { motivoDuracionInvalida } from './duracion-video.ts'
 import { esUuid } from './validar.ts'
 
 // `consumio`: ¿el pedido llegó a gastar tokens en el proveedor? (decisión del 12/11: el tope diario de pedidos solo cuenta
@@ -35,6 +36,8 @@ export interface PedidoAnalisis {
   criterioIds: string[]
   // "video": el modelo de video nativo mira el video; solo para una evidencia.
   modo: 'texto' | 'video'
+  // Solo en modo video: duración medida por el navegador, ya validada (máximo 5 minutos). null en modo texto.
+  duracionSegundos: number | null
 }
 
 // El catálogo tiene 62 criterios: pedir más de los que existen no tiene sentido.
@@ -58,8 +61,17 @@ export function validarPedidoAnalisis(entrada: unknown): PedidoAnalisis {
   if (modo !== 'texto' && modo !== 'video') throw new ErrorIA('modo debe ser "texto" o "video".')
   if (modo === 'video' && e.fuenteTipo !== 'evidencia') throw new ErrorIA('El análisis de video solo se pide para una evidencia.')
 
+  // Tope de 5 minutos por video (decisión del 12/11). Se rechaza ACÁ, antes de registrar el pedido: no gasta cupo ni llama a Google.
+  let duracionSegundos: number | null = null
+  if (modo === 'video') {
+    const motivo = motivoDuracionInvalida(e.duracionSegundos)
+    if (motivo) throw new ErrorIA(motivo)
+    duracionSegundos = e.duracionSegundos as number
+  }
+
   return {
     modo,
+    duracionSegundos,
     consultoriaId: e.consultoriaId,
     proyectoId: e.proyectoId,
     fuenteTipo: e.fuenteTipo,

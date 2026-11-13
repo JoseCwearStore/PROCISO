@@ -2,8 +2,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  alertaDuracionVideo, avisosDeEvidencia, avisoTranscripcion, AVISO_DURACION_VIDEO, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas,
-  DURACION_RECOMENDADA_SEGUNDOS, detalleFalloAnalisis, esAnalisisDeVideo, formatearDuracion,
+  avisosDeEvidencia, avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas,
+  detalleFalloAnalisis, esAnalisisDeVideo,
   ETIQUETA_SUGERENCIA_IA, etiquetaSugerencia, fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
   textoAvisoFallo,
 } from './ia'
@@ -188,6 +188,10 @@ describe('análisis de video: avisos y etiquetas', () => {
     expect(AVISO_VIDEO_NATIVO).toMatch(/revis/i)
   })
 
+  it('avisa que el video puede durar como máximo 5 minutos (decisión del usuario, 12/11)', () => {
+    expect(AVISO_VIDEO_NATIVO).toMatch(/máximo 5 minutos/i)
+  })
+
   it('la etiqueta de sugerencia dice que es de la IA y que se verifica con el video', () => {
     expect(ETIQUETA_SUGERENCIA_IA).toMatch(/IA/)
     expect(ETIQUETA_SUGERENCIA_IA).toMatch(/verificar con el video/i)
@@ -281,62 +285,51 @@ describe('cableado del análisis de video (no queda sin conectar)', () => {
     expect(panel).not.toMatch(/\{AVISO_VIDEO_NATIVO\}/)
     expect(panel).toMatch(/\{etiquetaSugerencia\(tipoEvidencia, analisis\)\}/)
     expect(panel).toMatch(/partirMarcasDeTiempo\(/)
-    expect(panel).toMatch(/ia\.analizar\(fuente, seleccion, 'video'\)/)
+    // Tope de 5 minutos (12/11): el panel manda la duración del video con el pedido.
+    expect(panel).toMatch(/ia\.analizar\(fuente, seleccion, 'video', duracionSegundos\)/)
     // El aviso de "transcribe primero" aplica solo al botón de transcripción: en video se aclara.
     expect(panel).toContain('Solo para «Analizar transcripción»')
   })
 
-  it('el hook manda el modo "video" a la función y no manda nada en el análisis de texto', () => {
+  it('el hook manda el modo "video" con la duración a la función y no manda nada en el análisis de texto', () => {
     const hook = leer('hooks', 'useAccionesIA.ts')
-    expect(hook).toMatch(/modo === 'video' \? \{ modo \} : \{\}/)
+    expect(hook).toMatch(/modo === 'video' \? \{ modo, duracionSegundos \} : \{\}/)
   })
 
   it('la pantalla de evidencias usa el límite por tipo', () => {
     expect(leer('pages', 'Evidencias.tsx')).toMatch(/limiteSubidaMb\(tipoArchivo\(archivo\)\)/)
   })
+
+  it('el pedido de video lleva la duración también en la función: se valida antes de registrar el pedido', () => {
+    const analisis = leer('..', 'supabase', 'functions', '_compartido', 'analisis.ts')
+    expect(analisis).toMatch(/motivoDuracionInvalida\(e\.duracionSegundos\)/)
+  })
 })
 
-describe('duración recomendada del video', () => {
-  it('recomienda hasta 10 minutos, avisa que puede fallar por tiempo de espera y nombra el límite de tamaño', () => {
-    expect(AVISO_DURACION_VIDEO).toMatch(/hasta 10 minutos/)
-    expect(AVISO_DURACION_VIDEO).toMatch(/tiempo de espera/i)
-    expect(AVISO_DURACION_VIDEO).toMatch(/reintent/i)
-    expect(AVISO_DURACION_VIDEO).toMatch(/200 MB/)
-  })
+// Reemplaza a la "duración recomendada" de 10 minutos (commit 9b4eec2, 13/11): la decisión del usuario del 12/11 es un tope de
+// 5 minutos por video, no una recomendación. Medido con un video de 10:31: 57, 84 y 120 s en tres corridas y una falla a los
+// 140 s, así que a 5 minutos hay margen. La lógica (formato, tope, bloqueo) está en duracionVideo.ts, con sus propios tests.
+describe('tope de 5 minutos por video: cableado de la pantalla', () => {
+  const leer = (...p: string[]) => readFileSync(resolve(__dirname, '..', ...p), 'utf8')
 
-  it('la duración recomendada es de 600 segundos', () => {
-    expect(DURACION_RECOMENDADA_SEGUNDOS).toBe(600)
-  })
-
-  it.each([
-    [0, '0:00'], [5, '0:05'], [59, '0:59'], [60, '1:00'], [394.46, '6:34'], [631.3, '10:31'], [3725, '62:05'], [-5, '0:00'],
-  ])('formatearDuracion(%s) = %s', (s, esperado) => {
-    expect(formatearDuracion(s)).toBe(esperado)
-  })
-
-  it.each([undefined, null, Number.NaN, Number.POSITIVE_INFINITY, -1, 0, 300, 600])('no alerta con duración %s', (s) => {
-    expect(alertaDuracionVideo(s as number | null | undefined)).toBeNull()
-  })
-
-  it('alerta si el video pasa de 10 minutos, con la duración real y el riesgo de timeout', () => {
-    const t = alertaDuracionVideo(631)!
-    expect(t).toContain('10:31')
-    expect(t).toMatch(/más de 10 minutos/)
-    expect(t).toMatch(/tiempo de espera/i)
-    expect(t).toMatch(/reintent/i)
-  })
-
-  it('un segundo por encima del límite ya alerta', () => {
-    expect(alertaDuracionVideo(601)).not.toBeNull()
-  })
-
-  it('el panel muestra el aviso permanente y la alerta, y la pantalla le pasa la duración del video', () => {
-    const leer = (...p: string[]) => readFileSync(resolve(__dirname, '..', ...p), 'utf8')
+  it('el panel bloquea "Analizar video" si el video pasa de 5 minutos y explica el motivo', () => {
     const panel = leer('components', 'PanelAnalisisIA.tsx')
-    expect(panel).toMatch(/\{AVISO_DURACION_VIDEO\}/)
-    expect(panel).toMatch(/esVideo && alertaDuracionVideo\(duracionSegundos\)/)
+    expect(panel).toMatch(/estadoDuracionVideo\(duracionSegundos\)/)
+    expect(panel).toMatch(/!duracion\.permitido/)
+    expect(panel).toContain('Solo para «Analizar video»')
+    // Nunca se pide el análisis sin una duración válida (el servidor igual la exige).
+    expect(panel).toMatch(/if \(!duracion\.permitido \|\| typeof duracionSegundos !== 'number'\) return/)
+  })
+
+  it('la recomendación vieja de 10 minutos ya no está en el panel', () => {
+    const panel = leer('components', 'PanelAnalisisIA.tsx')
+    expect(panel).not.toMatch(/AVISO_DURACION_VIDEO|alertaDuracionVideo|DURACION_RECOMENDADA/)
+  })
+
+  it('la pantalla de evidencias mide el reproductor, se lo pasa al panel y frena la subida de más de 5 minutos', () => {
     const pantalla = leer('pages', 'Evidencias.tsx')
-    expect(pantalla).toMatch(/onLoadedMetadata/)
-    expect(pantalla).toMatch(/duracionSegundos=\{/)
+    expect(pantalla).toMatch(/ref=\{medirReproductor\}/)
+    expect(pantalla).toMatch(/duracionSegundos=\{duracionVideo\}/)
+    expect(pantalla).toMatch(/motivoSubidaVideo\(await medirDuracionDeArchivo\(file\)\)/)
   })
 })

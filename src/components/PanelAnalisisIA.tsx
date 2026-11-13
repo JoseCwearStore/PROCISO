@@ -8,9 +8,10 @@ import { ncDesdeResultadoIA, puedeCrearNCDesdeResultado } from '../lib/ncDesdeIA
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
 import {
-  alertaDuracionVideo, avisosDeEvidencia, AVISO_DURACION_VIDEO, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
+  avisosDeEvidencia, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
   fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
 } from '../lib/ia'
+import { estadoDuracionVideo } from '../lib/duracionVideo'
 import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
 import { estadoUsoVideo } from '../lib/usoIA'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
@@ -38,7 +39,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   avisoPrevio?: string | null
   // Solo importa para audio y video: sin archivo no se puede transcribir ni analizar el video (E8).
   tieneArchivo?: boolean
-  // Duración del video si la pantalla ya la leyó (metadatos del reproductor).
+  // Solo video: duración que leyó el reproductor (null = todavía no la leyó). El video se analiza con máximo 5 minutos.
   duracionSegundos?: number | null
 }) {
   const ia = useAccionesIA()
@@ -63,6 +64,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const esVideo = tipoEvidencia === 'Video'
   // O14: el análisis de video tiene su propio tope (5 por usuario / 15 por consultoría): se avisa antes del rechazo.
   const estadoVideo = estadoUsoVideo(ia.usoIA?.video)
+  // Decisión del 12/11: un video se analiza con máximo 5 minutos. El servidor lo rechaza; acá se avisa antes.
+  const duracion = estadoDuracionVideo(duracionSegundos)
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
   const historial = ia.analisisDe(fuente)
 
@@ -76,9 +79,10 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
 
   // Video nativo: el modelo mira la imagen y oye el audio; no depende de la transcripción.
   async function analizarVideo() {
+    if (!duracion.permitido || typeof duracionSegundos !== 'number') return
     setFallo(null)
     setAnalizandoVideo(true)
-    const resultado = await ia.analizar(fuente, seleccion, 'video')
+    const resultado = await ia.analizar(fuente, seleccion, 'video', duracionSegundos)
     setAnalizandoVideo(false)
     setFallo(resultado?.estado === 'Error' ? resultado : null)
   }
@@ -120,18 +124,6 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
               </div>
             </div>
           )}
-          {esVideo && (
-            <p className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{AVISO_DURACION_VIDEO}</span>
-            </p>
-          )}
-          {esVideo && alertaDuracionVideo(duracionSegundos) && (
-            <p role="alert" className="flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-800">
-              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{alertaDuracionVideo(duracionSegundos)}</span>
-            </p>
-          )}
           <IndicadorUsoIA uso={ia.usoIA} estado={ia.estadoUsoIA} conVideo={esVideo} />
           <p className="text-xs font-medium text-slate-600">Cláusulas a evaluar {tipoDocumento ? '(sugeridas según el tipo; puedes cambiarlas)' : ''}</p>
           <div className="flex flex-wrap gap-1.5">
@@ -160,8 +152,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
             {esVideo && (
               <Button
                 onClick={() => void analizarVideo()}
-                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado || estadoVideo.agotado || !tieneArchivo}
-                title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : (estadoVideo.mensaje ?? undefined)}
+                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado || estadoVideo.agotado || !tieneArchivo || !duracion.permitido}
+                title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : (duracion.motivo ?? estadoVideo.mensaje ?? undefined)}
                 icon={analizandoVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
               >
                 {analizandoVideo ? 'Analizando video…' : 'Analizar video'}
@@ -177,6 +169,12 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
             </Button>
           </div>
           {fallo && <AvisoFallo analisis={fallo} onCerrar={() => setFallo(null)} />}
+          {esVideo && tieneArchivo && duracion.motivo && (
+            <p role="alert" className="text-xs font-medium text-red-700"><strong>Solo para «Analizar video»: </strong>{duracion.motivo}</p>
+          )}
+          {esVideo && tieneArchivo && duracion.leyendo && (
+            <p className="text-xs text-slate-500">Leyendo la duración del video…</p>
+          )}
           {motivoBloqueo && (
             <p className="text-xs text-amber-700">{esVideo && estadoTr !== 'sin_archivo' ? <strong>Solo para «Analizar transcripción»: </strong> : null}{motivoBloqueo}</p>
           )}

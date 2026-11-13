@@ -61,6 +61,7 @@ export function criteriosSugeridos(tipo: Documento['tipo'] | null, catalogo: Cri
 
 export const AVISO_VIDEO_NATIVO =
   'Al analizar el video, el archivo sale de la plataforma hacia un proveedor externo de IA, que mira la imagen y oye el audio. ' +
+  'El video puede durar máximo 5 minutos. ' +
   'Lo que no se ve en el video (equipo de protección, controles, registros) figura como "No evaluable": no se toma como un incumplimiento. ' +
   'Una persona debe revisar el resultado contra el video antes de usarlo.'
 
@@ -142,23 +143,7 @@ export function partirMarcasDeTiempo(texto: string): { texto: string; marca: boo
   return tramos
 }
 
-// ─── Duración recomendada del video ─────────────────────────────────────────
-// Medido el 2026-11-13 con un video de 10:30: el análisis tardó 57, 84 y 120 s, y otra corrida pasó los 140 s de la función
-// y falló por tiempo de espera (Google tarda según su carga). No hay un tope duro por duración (la función no la conoce
-// antes de mandar el video): se recomienda hasta 10 minutos y se avisa del riesgo. El límite duro es el tamaño, 200 MB.
-export const DURACION_RECOMENDADA_SEGUNDOS = 600
-
-export const AVISO_DURACION_VIDEO =
-  'Recomendado: videos de hasta 10 minutos (límite de tamaño: 200 MB). Los más largos tardan más y pueden fallar por tiempo de espera; ' +
-  'incluso uno de 10 minutos a veces falla. Si pasa, reintenta o usa un video más corto.'
-
-export function formatearDuracion(segundos: number): string {
-  const total = Math.max(0, Math.floor(segundos))
-  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
-}
-
-// Alerta cuando se SABE que el video pasa de lo recomendado (la pantalla lee la duración del propio video).
-export function alertaDuracionVideo(segundos: number | null | undefined): string | null {
-  if (typeof segundos !== 'number' || !Number.isFinite(segundos) || segundos <= DURACION_RECOMENDADA_SEGUNDOS) return null
-  return `Este video dura ${formatearDuracion(segundos)}, más de 10 minutos: es probable que el análisis falle por tiempo de espera. Puedes intentarlo y reintentar, o usar un video más corto.`
-}
+// ─── Duración del video ─────────────────────────────────────────────────────
+// El máximo (5 minutos por video) vive en duracionVideo.ts. Reemplazó a la "duración recomendada" de 10 minutos del commit
+// 9b4eec2 (13/11) por decisión del usuario (12/11). Con un video de 10:31 el análisis tardó 57, 84 y 120 s en tres corridas y
+// falló una vez al pasar los 140 s de la función (Google tarda según su carga): a 5 minutos hay margen.

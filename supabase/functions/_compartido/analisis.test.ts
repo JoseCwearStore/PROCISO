@@ -272,8 +272,38 @@ describe('validarPedidoAnalisis · modo video', () => {
     expect(validarPedidoAnalisis(PEDIDO_DOC).modo).toBe('texto')
   })
 
-  it('acepta modo "video" para una evidencia', () => {
-    expect(validarPedidoAnalisis({ ...EV, modo: 'video' })).toMatchObject({ fuenteTipo: 'evidencia', modo: 'video' })
+  it('acepta modo "video" para una evidencia, con la duración del video', () => {
+    expect(validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 120 })).toMatchObject({
+      fuenteTipo: 'evidencia', modo: 'video', duracionSegundos: 120,
+    })
+  })
+
+  it('modo video exige la duración: sin ella se rechaza con un mensaje claro', () => {
+    const error = (() => { try { validarPedidoAnalisis({ ...EV, modo: 'video' }) } catch (e) { return e } })()
+    expect(error).toBeInstanceOf(ErrorIA)
+    expect((error as ErrorIA).message).toMatch(/duración/i)
+  })
+
+  it('modo video acepta justo 5 minutos y rechaza lo que pasa', () => {
+    expect(validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 300 }).duracionSegundos).toBe(300)
+    const error = (() => { try { validarPedidoAnalisis({ ...EV, modo: 'video', duracionSegundos: 301 }) } catch (e) { return e } })()
+    expect(error).toBeInstanceOf(ErrorIA)
+    expect((error as ErrorIA).message).toMatch(/5 minutos/)
+  })
+
+  it.each([['texto', NaN], ['texto', '120'], ['video', Infinity], ['video', -3], ['video', '120']])(
+    'modo %s con una duración inválida (%s)',
+    (modo, duracion) => {
+      const llamada = () => validarPedidoAnalisis({ ...EV, modo, duracionSegundos: duracion })
+      // En modo texto la duración no importa (se ignora); en modo video una inválida se rechaza.
+      if (modo === 'video') expect(llamada).toThrow(ErrorIA)
+      else expect(llamada().duracionSegundos).toBeNull()
+    },
+  )
+
+  it('en modo texto la duración se ignora aunque sea enorme', () => {
+    expect(validarPedidoAnalisis({ ...EV, duracionSegundos: 99999 }).duracionSegundos).toBeNull()
+    expect(validarPedidoAnalisis({ ...PEDIDO_DOC, duracionSegundos: 99999 }).duracionSegundos).toBeNull()
   })
 
   it('acepta modo "texto" explícito', () => {

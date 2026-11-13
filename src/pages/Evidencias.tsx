@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import {
   Camera,
   File,
@@ -24,6 +24,7 @@ import { Button } from "../components/ui/Button"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
 import { PanelAnalisisIA } from "../components/PanelAnalisisIA"
+import { esperarDuracion, medirDuracionDeArchivo, motivoSubidaVideo } from "../lib/duracionVideo"
 import { hayFiltrosActivos } from "../lib/filtros"
 import type { EstadoEvidencia, Evidencia, TipoEvidencia } from "../types"
 
@@ -82,8 +83,13 @@ export default function Evidencias() {
   const [form, setForm] = useState<Formulario>(FORM_VACIO)
   const [archivo, setArchivo] = useState<globalThis.File | null>(null)
   const [vistaPrevia, setVistaPrevia] = useState<Evidencia | null>(null)
-  // Duración del video abierto, leída de los metadatos del reproductor (para avisar si pasa de lo recomendado).
+  // Duración del video abierto, leída del reproductor (null = leyendo; NaN = no se pudo leer). Máximo 5 minutos para analizarlo.
   const [duracionVideo, setDuracionVideo] = useState<number | null>(null)
+  const medirReproductor = useCallback((el: HTMLVideoElement | null) => {
+    if (!el) return
+    setDuracionVideo(null)
+    void esperarDuracion(el).then((d) => setDuracionVideo(d ?? Number.NaN))
+  }, [])
   const [progreso, setProgreso] = useState(0)
   const [estadoCarga, setEstadoCarga] =
     useState<"idle" | "uploading" | "error">("idle")
@@ -133,13 +139,25 @@ export default function Evidencias() {
     return true
   })
 
-  function seleccionarArchivo(file: globalThis.File | null) {
+  async function seleccionarArchivo(file: globalThis.File | null) {
     if (!file) {
       setArchivo(null)
       setEstadoCarga("idle")
       setProgreso(0)
       setErrorCarga("")
       return
+    }
+    // Un video de más de 5 minutos no se acepta (decisión del 12/11). Si no se pudo leer la duración, se deja subir:
+    // el análisis la vuelve a medir con el reproductor.
+    if (file.type.startsWith("video/")) {
+      const motivo = motivoSubidaVideo(await medirDuracionDeArchivo(file))
+      if (motivo) {
+        setArchivo(null)
+        setProgreso(0)
+        setErrorCarga(motivo)
+        setEstadoCarga("error")
+        return
+      }
     }
     setArchivo(file)
     setForm((actual) => ({ ...actual, nombre: actual.nombre || file.name }))
@@ -718,10 +736,11 @@ export default function Evidencias() {
               )}
               {vistaPrevia.archivoUrl && vistaPrevia.tipo === "Video" && (
                 <video
+                  key={vistaPrevia.id}
+                  ref={medirReproductor}
                   src={vistaPrevia.archivoUrl}
                   controls
                   className="max-h-96 w-full"
-                  onLoadedMetadata={(e) => setDuracionVideo(e.currentTarget.duration)}
                 />
               )}
               {vistaPrevia.archivoUrl && vistaPrevia.tipo === "Audio" && (
