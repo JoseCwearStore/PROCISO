@@ -6,10 +6,11 @@ import { TranscripcionEvidencia } from './TranscripcionEvidencia'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
 import {
-  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
+  avisosDeEvidencia, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
   fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
 } from '../lib/ia'
 import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
+import { estadoUsoVideo } from '../lib/usoIA'
 import type { AnalisisIA, Documento, EstadoResultadoIA } from '../types'
 
 const COLOR: Record<EstadoResultadoIA, string> = {
@@ -35,7 +36,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   tieneArchivo?: boolean
 }) {
   const ia = useAccionesIA()
-  const aviso = avisoTranscripcion(tipoEvidencia)
+  const avisos = avisosDeEvidencia(tipoEvidencia)
   const [seleccion, setSeleccion] = useState<string[]>(() => criteriosSugeridos(tipoDocumento, ia.criterios))
 
   // Audio y video: se analiza el texto GUARDADO de la transcripción (el que el equipo pudo corregir), no el audio.
@@ -54,6 +55,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const [fallo, setFallo] = useState<AnalisisIA | null>(null)
   useEffect(() => setFallo(null), [fuente.id])
   const esVideo = tipoEvidencia === 'Video'
+  // O14: el análisis de video tiene su propio tope (5 por usuario / 15 por consultoría): se avisa antes del rechazo.
+  const estadoVideo = estadoUsoVideo(ia.usoIA?.video)
   const porId = new Map(ia.criterios.map((c) => [c.id, c]))
   const historial = ia.analisisDe(fuente)
 
@@ -95,19 +98,17 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
 
       {ia.puedePedir && (
         <div className="mb-4 space-y-2">
-          {esVideo && (
-            <p className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
-              <Clapperboard className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{AVISO_VIDEO_NATIVO}</span>
-            </p>
-          )}
-          {aviso && (
-            <p className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
+          {avisos.length > 0 && (
+            <div className="flex gap-2 rounded-lg border border-sky-200 bg-sky-50 p-3 text-xs text-sky-900">
               <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{aviso}</span>
-            </p>
+              <div className="space-y-1.5">
+                {avisos.map((a) => (
+                  <p key={a.etiqueta ?? 'unico'}>{a.etiqueta && <strong>{a.etiqueta}: </strong>}{a.texto}</p>
+                ))}
+              </div>
+            </div>
           )}
-          <IndicadorUsoIA uso={ia.usoIA} estado={ia.estadoUsoIA} />
+          <IndicadorUsoIA uso={ia.usoIA} estado={ia.estadoUsoIA} conVideo={esVideo} />
           <p className="text-xs font-medium text-slate-600">Cláusulas a evaluar {tipoDocumento ? '(sugeridas según el tipo; puedes cambiarlas)' : ''}</p>
           <div className="flex flex-wrap gap-1.5">
             {seleccion.map((id) => (
@@ -135,8 +136,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
             {esVideo && (
               <Button
                 onClick={() => void analizarVideo()}
-                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado || !tieneArchivo}
-                title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : undefined}
+                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado || estadoVideo.agotado || !tieneArchivo}
+                title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : (estadoVideo.mensaje ?? undefined)}
                 icon={analizandoVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
               >
                 {analizandoVideo ? 'Analizando video…' : 'Analizar video'}

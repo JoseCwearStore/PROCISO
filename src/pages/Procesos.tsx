@@ -210,7 +210,6 @@ export default function Procesos() {
           <div>
             <div className="mb-2 flex items-center gap-2">
               <StatusBadge status={proceso.estado} />
-              <span className="text-xs text-slate-400">{proceso.id}</span>
             </div>
             <h2 className="text-2xl font-bold text-navy">{proceso.nombre}</h2>
             <p className="mt-1 text-sm text-slate-500">

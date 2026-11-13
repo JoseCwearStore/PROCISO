@@ -11,6 +11,16 @@ export interface UsoIA {
   consultoriaUsados: number
   consultoriaTope: number
   consultoriaLiberaEn: string | null
+  video?: UsoVideo
+}
+
+// El análisis de VIDEO tiene su propio tope, más bajo (O14): mi_uso_ia lo informa junto al general, de las mismas
+// funciones que aplica el trigger. Es opcional: si la fila no lo trae, la pantalla sigue como antes.
+export interface UsoVideo {
+  usuarioUsados: number
+  usuarioTope: number
+  consultoriaUsados: number
+  consultoriaTope: number
 }
 
 export type NivelUsoIA = 'normal' | 'aviso' | 'agotado'
@@ -35,6 +45,8 @@ export function adaptarUsoIA(fila: unknown): UsoIA | null {
   if (!fila || typeof fila !== 'object') return null
   const f = fila as Record<string, unknown>
   if (!esNumero(f.usuario_usados) || !esNumero(f.usuario_tope) || !esNumero(f.consultoria_usados) || !esNumero(f.consultoria_tope)) return null
+  const tieneVideo = esNumero(f.video_usuario_usados) && esNumero(f.video_usuario_tope)
+    && esNumero(f.video_consultoria_usados) && esNumero(f.video_consultoria_tope)
   return {
     usuarioUsados: f.usuario_usados,
     usuarioTope: f.usuario_tope,
@@ -42,7 +54,34 @@ export function adaptarUsoIA(fila: unknown): UsoIA | null {
     consultoriaUsados: f.consultoria_usados,
     consultoriaTope: f.consultoria_tope,
     consultoriaLiberaEn: fechaONulo(f.consultoria_libera_en),
+    ...(tieneVideo
+      ? {
+          video: {
+            usuarioUsados: f.video_usuario_usados as number,
+            usuarioTope: f.video_usuario_tope as number,
+            consultoriaUsados: f.video_consultoria_usados as number,
+            consultoriaTope: f.video_consultoria_tope as number,
+          },
+        }
+      : {}),
   }
+}
+
+// ¿Se puede pedir otro análisis de VIDEO? Mismos mensajes que da la BD al rechazar (aplicar_tope_ia), para que la
+// pantalla avise ANTES del rechazo. Un tope de 0 cuenta como agotado. El del usuario manda si ambos se acabaron.
+export function estadoUsoVideo(video: UsoVideo | undefined): { agotado: boolean; mensaje: string | null } {
+  if (!video) return { agotado: false, mensaje: null }
+  if (video.usuarioUsados >= video.usuarioTope) {
+    return { agotado: true, mensaje: `Alcanzaste el tope diario de análisis de video (${video.usuarioTope} por usuario). Inténtalo mañana.` }
+  }
+  if (video.consultoriaUsados >= video.consultoriaTope) {
+    return { agotado: true, mensaje: `Tu consultoría alcanzó el tope diario de análisis de video (${video.consultoriaTope}). Inténtalo mañana.` }
+  }
+  return { agotado: false, mensaje: null }
+}
+
+export function leyendaTopeVideo(video: UsoVideo | undefined): string | null {
+  return video ? `Análisis de video: ${video.usuarioTope} por usuario y ${video.consultoriaTope} por consultoría al día.` : null
 }
 
 export function formatearEspera(ms: number): string {

@@ -1,5 +1,5 @@
 import { Gauge } from 'lucide-react'
-import { leyendaTopeIA, type EstadoUsoIA, type UsoIA } from '../lib/usoIA'
+import { estadoUsoVideo, leyendaTopeIA, leyendaTopeVideo, type EstadoUsoIA, type UsoIA } from '../lib/usoIA'
 
 const COLOR_BARRA = { normal: 'bg-violet-500', aviso: 'bg-amber-500', agotado: 'bg-red-500' } as const
 const COLOR_CAJA = {
@@ -32,8 +32,12 @@ function Barra({ titulo, usados, tope, nivel }: { titulo: string; usados: number
 
 // Tope diario de pedidos a la IA: leyenda fija + consumo del usuario y de su consultoría.
 // Si no se pudo leer el consumo, queda solo la leyenda. Lo ve únicamente el equipo.
-export function IndicadorUsoIA({ uso, estado }: { uso: UsoIA | null; estado: EstadoUsoIA | null }) {
+// conVideo: en la evidencia de un video se agrega el tope PROPIO del análisis de video (O14), que antes solo se
+// conocía al llegar al rechazo.
+export function IndicadorUsoIA({ uso, estado, conVideo = false }: { uso: UsoIA | null; estado: EstadoUsoIA | null; conVideo?: boolean }) {
   const nivel = estado?.nivel ?? 'normal'
+  const estadoVideo = estadoUsoVideo(uso?.video)
+  const nivelVideo = estadoVideo.agotado ? 'agotado' : 'normal'
   return (
     <div className={`space-y-2 rounded-lg border p-3 text-xs ${COLOR_CAJA[nivel]}`} data-testid="indicador-uso-ia">
       <p className="flex items-start gap-2">
@@ -44,6 +48,16 @@ export function IndicadorUsoIA({ uso, estado }: { uso: UsoIA | null; estado: Est
         <div className="grid gap-2 sm:grid-cols-2">
           <Barra titulo="Tus pedidos hoy" usados={uso.usuarioUsados} tope={uso.usuarioTope} nivel={nivel} />
           <Barra titulo="Tu consultoría hoy" usados={uso.consultoriaUsados} tope={uso.consultoriaTope} nivel={nivel} />
+        </div>
+      )}
+      {conVideo && uso?.video && (
+        <div className="space-y-2" data-testid="indicador-uso-video">
+          <p>{leyendaTopeVideo(uso.video)}</p>
+          <div className="grid gap-2 sm:grid-cols-2">
+            <Barra titulo="Tus análisis de video hoy" usados={uso.video.usuarioUsados} tope={uso.video.usuarioTope} nivel={nivelVideo} />
+            <Barra titulo="Tu consultoría (video) hoy" usados={uso.video.consultoriaUsados} tope={uso.video.consultoriaTope} nivel={nivelVideo} />
+          </div>
+          {estadoVideo.mensaje && <p role="alert" className="font-medium">{estadoVideo.mensaje}</p>}
         </div>
       )}
       {estado?.mensaje && (

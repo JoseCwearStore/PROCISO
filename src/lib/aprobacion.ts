@@ -28,3 +28,24 @@ export function mensajeAprobacion(documento: DocumentoAprobable, reemplazados: D
   }
   return mensaje
 }
+
+// El título y la ayuda del panel de decisión (O22): cada rol lee lo que ÉL puede hacer. El cliente aprueba o pide
+// correcciones; no tiene el botón Rechazar, así que no se le habla de rechazo.
+export function textosDeDecision(esCliente: boolean): { titulo: string; ayuda: string } {
+  return esCliente
+    ? {
+        titulo: 'Aprobación del documento',
+        ayuda: 'Como responsable de la empresa, apruebas el documento o solicitas correcciones. El comentario de la corrección debe quedar anclado a una sección.',
+      }
+    : {
+        titulo: 'Decisión de revisión',
+        ayuda: 'El equipo revisa; la aprobación final la da el cliente. Los comentarios de corrección o rechazo deben quedar anclados a una sección.',
+      }
+}
+
+// El historial de un documento, lo más nuevo primero (O24). Siempre una lista: así la pantalla puede decidir con
+// `.length` si avisa "Sin eventos registrados". Antes usaba `lista.map(...) || aviso`, que nunca llegaba al aviso
+// porque una lista vacía también cuenta como verdadera.
+export function historialParaMostrar<T>(historial: T[] | undefined): T[] {
+  return [...(historial ?? [])].reverse()
+}

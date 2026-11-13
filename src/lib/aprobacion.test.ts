@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mensajeAprobacion, reemplazadosAlAprobar, type DocumentoAprobable } from './aprobacion'
+import { historialParaMostrar, mensajeAprobacion, reemplazadosAlAprobar, textosDeDecision, type DocumentoAprobable } from './aprobacion'
 
 let n = 0
 const doc = (cambios: Partial<DocumentoAprobable> = {}): DocumentoAprobable => ({
@@ -92,5 +92,44 @@ describe('mensajeAprobacion (lo que dice el diálogo antes de aprobar)', () => {
   it('un documento sin código se nombra por su título', () => {
     const m = mensajeAprobacion(d, [doc({ codigo: undefined, nombre: 'Manual viejo', version: '0.9' })])
     expect(m).toContain('Manual viejo versión 0.9')
+  })
+})
+
+// O22: la ayuda del panel de decisión tiene que hablar de lo que ESA persona puede hacer.
+describe('textosDeDecision (el panel de la derecha de Revisiones, O22)', () => {
+  it('el cliente aprueba o pide correcciones; no se le habla de rechazo porque no tiene ese botón', () => {
+    const t = textosDeDecision(true)
+    expect(t.titulo).toBe('Aprobación del documento')
+    expect(t.ayuda).toMatch(/apruebas el documento o solicitas correcciones/i)
+    expect(t.ayuda).not.toMatch(/rechaz/i)
+    expect(t.ayuda).toMatch(/anclad/i)
+  })
+
+  it('el equipo revisa y puede pedir corrección o rechazar; la aprobación es del cliente', () => {
+    const t = textosDeDecision(false)
+    expect(t.titulo).toBe('Decisión de revisión')
+    expect(t.ayuda).toMatch(/la aprobación final la da el cliente/i)
+    expect(t.ayuda).toMatch(/correcci[oó]n o rechazo/i)
+    expect(t.ayuda).toMatch(/anclad/i)
+  })
+})
+
+// O24: el aviso "Sin eventos registrados" nunca salía: `lista.map(...) || aviso` no cae al aviso con una lista vacía.
+describe('historialParaMostrar (el historial de un documento en Revisiones, O24)', () => {
+  const ev = (id: string) => ({ id, fecha: '09/11/2026', autorId: 'u-1', accion: `acción ${id}`, detalle: '' })
+
+  it('muestra primero lo más nuevo (el orden en que se guardó, al revés)', () => {
+    expect(historialParaMostrar([ev('1'), ev('2'), ev('3')]).map((e) => e.id)).toEqual(['3', '2', '1'])
+  })
+
+  it('no modifica el historial original', () => {
+    const original = [ev('1'), ev('2')]
+    historialParaMostrar(original)
+    expect(original.map((e) => e.id)).toEqual(['1', '2'])
+  })
+
+  it('sin historial (ausente o vacío) devuelve una lista vacía, para poder avisar que no hay eventos', () => {
+    expect(historialParaMostrar(undefined)).toEqual([])
+    expect(historialParaMostrar([])).toEqual([])
   })
 })

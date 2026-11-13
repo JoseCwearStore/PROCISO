@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, detalleFalloAnalisis, esAnalisisDeVideo,
+  avisosDeEvidencia, avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, detalleFalloAnalisis, esAnalisisDeVideo,
   ETIQUETA_SUGERENCIA_IA, etiquetaSugerencia, fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
   textoAvisoFallo,
 } from './ia'
@@ -72,8 +72,8 @@ describe('aviso de transcripción de audio y video', () => {
 
   it('el panel de IA muestra el aviso y Evidencias le pasa el tipo (no queda sin cablear)', () => {
     const panel = readFileSync(resolve(__dirname, '..', 'components', 'PanelAnalisisIA.tsx'), 'utf8')
-    expect(panel).toMatch(/avisoTranscripcion\(/)
-    expect(panel).toMatch(/\{aviso\}/)
+    expect(panel).toMatch(/avisosDeEvidencia\(/)
+    expect(panel).toMatch(/\{a\.texto\}/)
     const evidencias = readFileSync(resolve(__dirname, '..', 'pages', 'Evidencias.tsx'), 'utf8')
     expect(evidencias).toMatch(/tipoEvidencia=\{vistaPrevia\.tipo\}/)
   })
@@ -88,6 +88,26 @@ describe('aviso de transcripción de audio y video', () => {
 const criterio = (clausula: string, orden: number): CriterioEvaluacion => ({
   id: `c-${clausula}`, clausula, titulo: clausula, intencion: '', evidenciaEsperada: [], preguntas: [],
   senalesDeHueco: [], puedeNoAplicar: false, orden,
+})
+
+// O13: en un video salían DOS cajas azules, y la segunda solo vale para "Analizar transcripción". Ahora es UNA caja
+// con cada línea rotulada con el botón al que se refiere.
+describe('avisosDeEvidencia (la caja azul del panel de IA, O13)', () => {
+  it('un video: una línea para "Analizar video" y otra, rotulada, para "Analizar transcripción"', () => {
+    const avisos = avisosDeEvidencia('Video')
+    expect(avisos).toEqual([
+      { etiqueta: 'Analizar video', texto: AVISO_VIDEO_NATIVO },
+      { etiqueta: 'Analizar transcripción', texto: avisoTranscripcion('Video') },
+    ])
+  })
+
+  it('un audio: una sola línea, sin rótulo (solo hay un botón)', () => {
+    expect(avisosDeEvidencia('Audio')).toEqual([{ etiqueta: null, texto: avisoTranscripcion('Audio') }])
+  })
+
+  it('los demás tipos no llevan aviso', () => {
+    for (const tipo of ['Foto', 'Documento', 'Formulario', '', null, undefined]) expect(avisosDeEvidencia(tipo), String(tipo)).toEqual([])
+  })
 })
 
 describe('clausulasSugeridas', () => {
@@ -255,7 +275,9 @@ describe('cableado del análisis de video (no queda sin conectar)', () => {
   it('el panel ofrece "Analizar video", muestra el aviso, resalta las marcas y etiqueta la sugerencia', () => {
     const panel = leer('components', 'PanelAnalisisIA.tsx')
     expect(panel).toContain('Analizar video')
-    expect(panel).toMatch(/\{AVISO_VIDEO_NATIVO\}/)
+    // O13: los avisos salen en UNA caja desde avisosDeEvidencia; el aviso de video no se pinta suelto.
+    expect(panel).toMatch(/avisosDeEvidencia\(/)
+    expect(panel).not.toMatch(/\{AVISO_VIDEO_NATIVO\}/)
     expect(panel).toMatch(/\{etiquetaSugerencia\(tipoEvidencia, analisis\)\}/)
     expect(panel).toMatch(/partirMarcasDeTiempo\(/)
     expect(panel).toMatch(/ia\.analizar\(fuente, seleccion, 'video'\)/)

@@ -24,6 +24,7 @@ import { Button } from "../components/ui/Button"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
 import { PanelAnalisisIA } from "../components/PanelAnalisisIA"
+import { hayFiltrosActivos } from "../lib/filtros"
 import type { EstadoEvidencia, Evidencia, TipoEvidencia } from "../types"
 
 const ESTADOS: EstadoEvidencia[] = [
@@ -110,6 +111,7 @@ export default function Evidencias() {
     (proceso) => proceso.id === form.procesoId,
   )
 
+  const hayFiltros = hayFiltrosActivos({ busqueda, tipo: filtroTipo, estado: filtroEstado, proyecto: filtroProyecto })
   const evidencias = state.evidencias.filter((evidencia) => {
     if (!proyectoIdsDisponibles.has(evidencia.proyectoId)) return false
     const texto =
@@ -338,8 +340,22 @@ export default function Evidencias() {
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-12 text-center">
           <File className="mx-auto h-9 w-9 text-slate-300" />
           <p className="mt-3 font-medium text-slate-600">
-            No hay evidencias para estos filtros
+            {hayFiltros ? "No hay evidencias para estos filtros" : "Todavía no hay evidencias"}
           </p>
+          {hayFiltros && (
+            <Button
+              variant="secondary"
+              className="mt-4"
+              onClick={() => {
+                setBusqueda("")
+                setFiltroTipo("")
+                setFiltroEstado("")
+                setFiltroProyecto("")
+              }}
+            >
+              Limpiar filtros
+            </Button>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">

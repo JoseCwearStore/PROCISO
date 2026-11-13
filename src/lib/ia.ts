@@ -64,6 +64,26 @@ export const AVISO_VIDEO_NATIVO =
   'Lo que no se ve en el video (equipo de protección, controles, registros) figura como "No evaluable": no se toma como un incumplimiento. ' +
   'Una persona debe revisar el resultado contra el video antes de usarlo.'
 
+// La caja azul de avisos del panel de IA de una evidencia (O13). Un video tiene DOS botones y cada uno sale a un
+// proveedor distinto, así que antes mostraba dos cajas y la segunda solo valía para "Analizar transcripción". Ahora
+// es una sola caja y cada línea dice a qué botón se refiere (el audio tiene un solo botón: sin rótulo).
+export interface AvisoDelPanel {
+  etiqueta: string | null
+  texto: string
+}
+
+export function avisosDeEvidencia(tipoEvidencia: string | null | undefined): AvisoDelPanel[] {
+  const transcripcion = avisoTranscripcion(tipoEvidencia)
+  if (!transcripcion) return []
+  if (tipoEvidencia === 'Video') {
+    return [
+      { etiqueta: 'Analizar video', texto: AVISO_VIDEO_NATIVO },
+      { etiqueta: 'Analizar transcripción', texto: transcripcion },
+    ]
+  }
+  return [{ etiqueta: null, texto: transcripcion }]
+}
+
 export const ETIQUETA_SUGERENCIA_IA = 'Sugerencia de la IA: verificar con el video'
 
 // El análisis de video queda registrado con el proveedor "gemini" (ver analizar-ia): así se distingue del de texto.

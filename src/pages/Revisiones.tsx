@@ -13,7 +13,7 @@ import { servicioEscritura } from '../lib/servicios'
 import { mensajeDeError } from '../lib/escrituras'
 import { documentoCambio } from '../lib/refresco'
 import { formatearFecha } from '../lib/datos'
-import { mensajeAprobacion, reemplazadosAlAprobar } from '../lib/aprobacion'
+import { historialParaMostrar, mensajeAprobacion, reemplazadosAlAprobar, textosDeDecision } from '../lib/aprobacion'
 import { Button } from '../components/ui/Button'
 import { ConfirmDialog } from '../components/ui/ConfirmDialog'
 import { StatusBadge } from '../components/ui/StatusBadge'
@@ -142,6 +142,9 @@ export default function Revisiones() {
     )
   }
 
+  const textos = textosDeDecision(esCliente)
+  const eventos = historialParaMostrar(documento.historial)
+
   return (
     <div className="p-4 sm:p-6">
       <Button variant="ghost" size="sm" onClick={() => { setSeleccionadoId(null); setError('') }} icon={<ArrowLeft className="h-4 w-4" />}>Volver a la bandeja</Button>
@@ -161,8 +164,8 @@ export default function Revisiones() {
         </main>
 
         <aside className="h-fit space-y-4 xl:sticky xl:top-20">
-          <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">{esCliente ? 'Aprobación del documento' : 'Decisión de revisión'}</p><p className="mt-1 text-xs text-slate-500">{esCliente ? 'Como responsable de la empresa, apruebas el documento o solicitas correcciones.' : 'El equipo revisa; la aprobación final la da el cliente.'} Los comentarios de corrección o rechazo deben quedar anclados a una sección.</p><select className={`${inputClass} mt-4`} value={seccionId} onChange={(event) => setSeccionId(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea rows={4} className={`${inputClass} mt-3`} value={comentario} onChange={(event) => setComentario(event.target.value)} placeholder="Comentario de revisión..." />{error && <div className="mt-3 flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}<div className="mt-4 space-y-2">{esCliente && <Button className="w-full" variant="success" disabled={decidiendo} onClick={() => setConfirmandoAprobacion(true)} icon={<CheckCircle2 className="h-4 w-4" />}>Aprobar y fijar versión</Button>}<Button className="w-full" variant="outline" disabled={decidiendo} onClick={() => decidir('En corrección')} icon={<RotateCcw className="h-4 w-4" />}>Solicitar corrección</Button>{!esCliente && <Button className="w-full" variant="danger" disabled={decidiendo} onClick={() => decidir('Rechazado')} icon={<XCircle className="h-4 w-4" />}>Rechazar</Button>}</div></div>
-          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 text-sm font-semibold text-slate-700">Historial completo</p><div className="space-y-3">{documento.historial?.slice().reverse().map((item) => <div key={item.id} className="border-l-2 border-violet-200 pl-3"><p className="text-xs font-medium text-slate-700">{item.accion}</p><p className="text-[10px] text-slate-400">{item.fecha}</p><p className="mt-1 text-xs text-slate-500">{item.detalle}</p></div>) || <p className="text-xs text-slate-400">Sin eventos registrados.</p>}</div></div>
+          <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">{textos.titulo}</p><p className="mt-1 text-xs text-slate-500">{textos.ayuda}</p><select className={`${inputClass} mt-4`} value={seccionId} onChange={(event) => setSeccionId(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea rows={4} className={`${inputClass} mt-3`} value={comentario} onChange={(event) => setComentario(event.target.value)} placeholder="Comentario de revisión..." />{error && <div className="mt-3 flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}<div className="mt-4 space-y-2">{esCliente && <Button className="w-full" variant="success" disabled={decidiendo} onClick={() => setConfirmandoAprobacion(true)} icon={<CheckCircle2 className="h-4 w-4" />}>Aprobar y fijar versión</Button>}<Button className="w-full" variant="outline" disabled={decidiendo} onClick={() => decidir('En corrección')} icon={<RotateCcw className="h-4 w-4" />}>Solicitar corrección</Button>{!esCliente && <Button className="w-full" variant="danger" disabled={decidiendo} onClick={() => decidir('Rechazado')} icon={<XCircle className="h-4 w-4" />}>Rechazar</Button>}</div></div>
+          <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 text-sm font-semibold text-slate-700">Historial completo</p><div className="space-y-3">{eventos.length === 0 ? <p className="text-xs text-slate-400">Sin eventos registrados.</p> : eventos.map((item) => <div key={item.id} className="border-l-2 border-violet-200 pl-3"><p className="text-xs font-medium text-slate-700">{item.accion}</p><p className="text-[10px] text-slate-400">{item.fecha}</p><p className="mt-1 text-xs text-slate-500">{item.detalle}</p></div>)}</div></div>
         </aside>
       </div>
 

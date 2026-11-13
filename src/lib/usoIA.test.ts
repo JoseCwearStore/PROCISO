@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adaptarUsoIA, crearServicioUsoIA, estadoUsoIA, formatearEspera, leyendaTopeIA, type UsoIA } from './usoIA'
+import { adaptarUsoIA, crearServicioUsoIA, estadoUsoIA, estadoUsoVideo, formatearEspera, leyendaTopeIA, leyendaTopeVideo, type UsoIA, type UsoVideo } from './usoIA'
 
 const AHORA = new Date('2026-11-11T12:00:00.000Z')
 const enMinutos = (min: number) => new Date(AHORA.getTime() + min * 60_000).toISOString()
@@ -28,6 +28,90 @@ describe('adaptarUsoIA (fila de mi_uso_ia → UsoIA)', () => {
     ['un número es texto', { usuario_usados: '1', usuario_tope: 30, consultoria_usados: 1, consultoria_tope: 150 }],
   ])('devuelve null si la fila es inválida (%s)', (_caso, fila) => {
     expect(adaptarUsoIA(fila)).toBeNull()
+  })
+})
+
+// O14: el consumo del tope de VIDEO (5 por usuario / 15 por consultoría al día) viaja en las mismas filas de mi_uso_ia.
+describe('adaptarUsoIA: consumo de video (O14)', () => {
+  const FILA = {
+    usuario_usados: 12, usuario_tope: 30, usuario_libera_en: null,
+    consultoria_usados: 40, consultoria_tope: 150, consultoria_libera_en: null,
+  }
+
+  it('traduce las columnas de video', () => {
+    const r = adaptarUsoIA({ ...FILA, video_usuario_usados: 2, video_usuario_tope: 5, video_consultoria_usados: 7, video_consultoria_tope: 15 })
+    expect(r?.video).toEqual({ usuarioUsados: 2, usuarioTope: 5, consultoriaUsados: 7, consultoriaTope: 15 })
+  })
+
+  it('una fila sin columnas de video (o con alguna rota) sigue funcionando, sin video', () => {
+    expect(adaptarUsoIA(FILA)?.video).toBeUndefined()
+    expect(adaptarUsoIA({ ...FILA, video_usuario_usados: 2, video_usuario_tope: 5 })?.video).toBeUndefined()
+    expect(adaptarUsoIA({ ...FILA, video_usuario_usados: '2', video_usuario_tope: 5, video_consultoria_usados: 7, video_consultoria_tope: 15 })?.video).toBeUndefined()
+  })
+
+  it.each(['video_usuario_usados', 'video_usuario_tope', 'video_consultoria_usados', 'video_consultoria_tope'])(
+    'si falta o está roto solo %s, no se inventa el consumo de video', (campo) => {
+      const completa = { ...FILA, video_usuario_usados: 2, video_usuario_tope: 5, video_consultoria_usados: 7, video_consultoria_tope: 15 }
+      expect(adaptarUsoIA({ ...completa, [campo]: undefined })?.video, `${campo} ausente`).toBeUndefined()
+      expect(adaptarUsoIA({ ...completa, [campo]: '3' })?.video, `${campo} como texto`).toBeUndefined()
+      expect(adaptarUsoIA({ ...completa, [campo]: null })?.video, `${campo} nulo`).toBeUndefined()
+    },
+  )
+
+  it('lo de video no cambia el consumo general', () => {
+    const r = adaptarUsoIA({ ...FILA, video_usuario_usados: 2, video_usuario_tope: 5, video_consultoria_usados: 7, video_consultoria_tope: 15 })
+    expect(r).toMatchObject({ usuarioUsados: 12, usuarioTope: 30, consultoriaUsados: 40, consultoriaTope: 150 })
+  })
+})
+
+describe('estadoUsoVideo (¿se puede pedir otro análisis de video?)', () => {
+  const video = (cambios: Partial<UsoVideo> = {}): UsoVideo => ({ usuarioUsados: 2, usuarioTope: 5, consultoriaUsados: 7, consultoriaTope: 15, ...cambios })
+
+  it('con cupo no avisa nada', () => {
+    expect(estadoUsoVideo(video())).toEqual({ agotado: false, mensaje: null })
+  })
+
+  it('sin datos de video (la BD no los mandó) no bloquea ni inventa mensajes', () => {
+    expect(estadoUsoVideo(undefined)).toEqual({ agotado: false, mensaje: null })
+  })
+
+  it('el último cupo del usuario todavía se puede usar (4 de 5)', () => {
+    expect(estadoUsoVideo(video({ usuarioUsados: 4 })).agotado).toBe(false)
+  })
+
+  it('con 5 de 5 el usuario está agotado, con el mismo mensaje que da la BD', () => {
+    expect(estadoUsoVideo(video({ usuarioUsados: 5 }))).toEqual({
+      agotado: true, mensaje: 'Alcanzaste el tope diario de análisis de video (5 por usuario). Inténtalo mañana.',
+    })
+  })
+
+  it('pasarse de lo contado (carrera) sigue siendo agotado', () => {
+    expect(estadoUsoVideo(video({ usuarioUsados: 6 })).agotado).toBe(true)
+  })
+
+  it('con 15 de 15 la consultoría está agotada, aunque el usuario no haya pedido nada', () => {
+    expect(estadoUsoVideo(video({ usuarioUsados: 0, consultoriaUsados: 15 }))).toEqual({
+      agotado: true, mensaje: 'Tu consultoría alcanzó el tope diario de análisis de video (15). Inténtalo mañana.',
+    })
+  })
+
+  it('si ambos están agotados manda el del usuario', () => {
+    expect(estadoUsoVideo(video({ usuarioUsados: 5, consultoriaUsados: 15 })).mensaje).toMatch(/por usuario/)
+  })
+
+  it('un tope de 0 (video apagado) cuenta como agotado, no como cupo infinito', () => {
+    expect(estadoUsoVideo(video({ usuarioUsados: 0, usuarioTope: 0 })).agotado).toBe(true)
+  })
+})
+
+describe('leyendaTopeVideo', () => {
+  it('con datos, dice los topes de video de la BD', () => {
+    expect(leyendaTopeVideo({ usuarioUsados: 0, usuarioTope: 5, consultoriaUsados: 0, consultoriaTope: 15 }))
+      .toBe('Análisis de video: 5 por usuario y 15 por consultoría al día.')
+  })
+
+  it('sin datos no inventa números', () => {
+    expect(leyendaTopeVideo(undefined)).toBeNull()
   })
 })
 
