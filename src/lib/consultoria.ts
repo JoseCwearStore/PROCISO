@@ -20,8 +20,8 @@ export function datosDeConsultoria(consultoria: Consultoria, usuarios: Usuario[]
     ['Usuarios activos', String(activos)],
     ['Alta en el sistema', consultoria.fechaAlta],
     ['Renovación', consultoria.renovacion],
-    // Los límites del plan se muestran como referencia: el sistema todavía no los hace cumplir (D5).
-    ['Límite de usuarios del plan (referencia)', consultoria.limiteUsuarios === undefined ? undefined : String(consultoria.limiteUsuarios)],
+    // El límite de usuarios SÍ se hace cumplir al invitar (AUD10-M7); el almacenamiento sigue siendo solo referencia (D5).
+    ['Límite de usuarios del plan', consultoria.limiteUsuarios === undefined ? undefined : String(consultoria.limiteUsuarios)],
     ['Almacenamiento del plan (referencia)', consultoria.almacenamientoGb === undefined ? undefined : `${consultoria.almacenamientoGb} GB`],
   ]
   // Lo que no tiene valor se omite: ni guiones ni datos inventados.

@@ -38,12 +38,16 @@ describe('datosDeConsultoria', () => {
     expect(etiquetas).not.toContain('Contacto')
     expect(etiquetas).not.toContain('Renovación')
     expect(etiquetas.some((e) => e.includes('(referencia)'))).toBe(false)
+    expect(etiquetas).not.toContain('Límite de usuarios del plan')
     expect(etiquetas).toContain('Razón social')
   })
 
-  it('los límites del plan se presentan como referencia, no como algo que el sistema hace cumplir (D5)', () => {
-    const limites = datosDeConsultoria(C, []).filter((x) => x.etiqueta.includes('(referencia)'))
-    expect(limites.map((x) => x.etiqueta)).toEqual(['Límite de usuarios del plan (referencia)', 'Almacenamiento del plan (referencia)'])
-    expect(limites.map((x) => x.valor)).toEqual(['20', '50 GB'])
+  // AUD10-M7: autorizar_invitacion ya rechaza invitar cuando los usuarios activos llegan al límite: ese dato dejó de ser
+  // una referencia. El almacenamiento sí sigue siéndolo (el sistema no lo hace cumplir por consultoría, D5).
+  it('el límite de usuarios se muestra como lo que es (se hace cumplir); el almacenamiento sigue como referencia', () => {
+    const datos = datosDeConsultoria(C, [])
+    expect(datos.find((x) => x.etiqueta === 'Límite de usuarios del plan')?.valor).toBe('20')
+    expect(datos.some((x) => x.etiqueta === 'Límite de usuarios del plan (referencia)')).toBe(false)
+    expect(datos.find((x) => x.etiqueta === 'Almacenamiento del plan (referencia)')?.valor).toBe('50 GB')
   })
 })
