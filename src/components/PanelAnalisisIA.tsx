@@ -6,7 +6,7 @@ import { TranscripcionEvidencia } from './TranscripcionEvidencia'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
 import {
-  avisosDeEvidencia, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
+  alertaDuracionVideo, avisosDeEvidencia, AVISO_DURACION_VIDEO, criteriosSugeridos, detalleFalloAnalisis, esAnalisisDeVideo, etiquetaSugerencia,
   fuenteAnalizada, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
 } from '../lib/ia'
 import { estadoTranscripcion, mensajeDeEstado, puedeAnalizarConTranscripcion } from '../lib/transcripciones'
@@ -28,7 +28,7 @@ export const AVISO_PREEVALUACION =
   'con fines de demostración. Proyecto estudiantil con fines académicos: los criterios son propios y toman como base una edición anterior de la norma. ' +
   'Esto es una preevaluación generada con IA: requiere revisión humana y no constituye un dictamen de conformidad ni una certificación.'
 
-export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null, tieneArchivo = true, avisoPrevio = null }: {
+export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null, tieneArchivo = true, avisoPrevio = null, duracionSegundos = null }: {
   fuente: FuenteAnalisis
   tipoDocumento?: Documento['tipo'] | null
   tipoEvidencia?: string | null
@@ -36,6 +36,8 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   avisoPrevio?: string | null
   // Solo importa para audio y video: sin archivo no se puede transcribir ni analizar el video (E8).
   tieneArchivo?: boolean
+  // Duración del video si la pantalla ya la leyó (metadatos del reproductor).
+  duracionSegundos?: number | null
 }) {
   const ia = useAccionesIA()
   const avisos = avisosDeEvidencia(tipoEvidencia)
@@ -115,6 +117,18 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
                 ))}
               </div>
             </div>
+          )}
+          {esVideo && (
+            <p className="flex gap-2 rounded-lg border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{AVISO_DURACION_VIDEO}</span>
+            </p>
+          )}
+          {esVideo && alertaDuracionVideo(duracionSegundos) && (
+            <p role="alert" className="flex gap-2 rounded-lg border border-red-200 bg-red-50 p-3 text-xs font-medium text-red-800">
+              <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{alertaDuracionVideo(duracionSegundos)}</span>
+            </p>
           )}
           <IndicadorUsoIA uso={ia.usoIA} estado={ia.estadoUsoIA} conVideo={esVideo} />
           <p className="text-xs font-medium text-slate-600">Cláusulas a evaluar {tipoDocumento ? '(sugeridas según el tipo; puedes cambiarlas)' : ''}</p>

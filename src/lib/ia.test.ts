@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import {
-  avisosDeEvidencia, avisoTranscripcion, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas, detalleFalloAnalisis, esAnalisisDeVideo,
+  alertaDuracionVideo, avisosDeEvidencia, avisoTranscripcion, AVISO_DURACION_VIDEO, AVISO_VIDEO_NATIVO, criteriosSugeridos, clausulasSugeridas,
+  DURACION_RECOMENDADA_SEGUNDOS, detalleFalloAnalisis, esAnalisisDeVideo, formatearDuracion,
   ETIQUETA_SUGERENCIA_IA, etiquetaSugerencia, fuenteAnalizada, limiteSubidaMb, NOTA_CONTENIDO_NO_CONFIABLE, partirMarcasDeTiempo,
   textoAvisoFallo,
 } from './ia'
@@ -292,5 +293,50 @@ describe('cableado del análisis de video (no queda sin conectar)', () => {
 
   it('la pantalla de evidencias usa el límite por tipo', () => {
     expect(leer('pages', 'Evidencias.tsx')).toMatch(/limiteSubidaMb\(tipoArchivo\(archivo\)\)/)
+  })
+})
+
+describe('duración recomendada del video', () => {
+  it('recomienda hasta 10 minutos, avisa que puede fallar por tiempo de espera y nombra el límite de tamaño', () => {
+    expect(AVISO_DURACION_VIDEO).toMatch(/hasta 10 minutos/)
+    expect(AVISO_DURACION_VIDEO).toMatch(/tiempo de espera/i)
+    expect(AVISO_DURACION_VIDEO).toMatch(/reintent/i)
+    expect(AVISO_DURACION_VIDEO).toMatch(/200 MB/)
+  })
+
+  it('la duración recomendada es de 600 segundos', () => {
+    expect(DURACION_RECOMENDADA_SEGUNDOS).toBe(600)
+  })
+
+  it.each([
+    [0, '0:00'], [5, '0:05'], [59, '0:59'], [60, '1:00'], [394.46, '6:34'], [631.3, '10:31'], [3725, '62:05'], [-5, '0:00'],
+  ])('formatearDuracion(%s) = %s', (s, esperado) => {
+    expect(formatearDuracion(s)).toBe(esperado)
+  })
+
+  it.each([undefined, null, Number.NaN, Number.POSITIVE_INFINITY, -1, 0, 300, 600])('no alerta con duración %s', (s) => {
+    expect(alertaDuracionVideo(s as number | null | undefined)).toBeNull()
+  })
+
+  it('alerta si el video pasa de 10 minutos, con la duración real y el riesgo de timeout', () => {
+    const t = alertaDuracionVideo(631)!
+    expect(t).toContain('10:31')
+    expect(t).toMatch(/más de 10 minutos/)
+    expect(t).toMatch(/tiempo de espera/i)
+    expect(t).toMatch(/reintent/i)
+  })
+
+  it('un segundo por encima del límite ya alerta', () => {
+    expect(alertaDuracionVideo(601)).not.toBeNull()
+  })
+
+  it('el panel muestra el aviso permanente y la alerta, y la pantalla le pasa la duración del video', () => {
+    const leer = (...p: string[]) => readFileSync(resolve(__dirname, '..', ...p), 'utf8')
+    const panel = leer('components', 'PanelAnalisisIA.tsx')
+    expect(panel).toMatch(/\{AVISO_DURACION_VIDEO\}/)
+    expect(panel).toMatch(/esVideo && alertaDuracionVideo\(duracionSegundos\)/)
+    const pantalla = leer('pages', 'Evidencias.tsx')
+    expect(pantalla).toMatch(/onLoadedMetadata/)
+    expect(pantalla).toMatch(/duracionSegundos=\{/)
   })
 })

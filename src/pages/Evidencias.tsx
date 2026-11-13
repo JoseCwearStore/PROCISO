@@ -82,6 +82,8 @@ export default function Evidencias() {
   const [form, setForm] = useState<Formulario>(FORM_VACIO)
   const [archivo, setArchivo] = useState<globalThis.File | null>(null)
   const [vistaPrevia, setVistaPrevia] = useState<Evidencia | null>(null)
+  // Duración del video abierto, leída de los metadatos del reproductor (para avisar si pasa de lo recomendado).
+  const [duracionVideo, setDuracionVideo] = useState<number | null>(null)
   const [progreso, setProgreso] = useState(0)
   const [estadoCarga, setEstadoCarga] =
     useState<"idle" | "uploading" | "error">("idle")
@@ -373,7 +375,10 @@ export default function Evidencias() {
               className="overflow-hidden rounded-xl border border-line bg-white shadow-sm"
             >
               <button
-                onClick={() => setVistaPrevia(evidencia)}
+                onClick={() => {
+                  setDuracionVideo(null)
+                  setVistaPrevia(evidencia)
+                }}
                 className="flex h-32 w-full items-center justify-center bg-slate-50 text-slate-400"
               >
                 {evidencia.archivoUrl && evidencia.tipo === "Foto" ? (
@@ -716,6 +721,7 @@ export default function Evidencias() {
                   src={vistaPrevia.archivoUrl}
                   controls
                   className="max-h-96 w-full"
+                  onLoadedMetadata={(e) => setDuracionVideo(e.currentTarget.duration)}
                 />
               )}
               {vistaPrevia.archivoUrl && vistaPrevia.tipo === "Audio" && (
@@ -816,6 +822,7 @@ export default function Evidencias() {
               fuente={{ tipo: "evidencia", id: vistaPrevia.id, proyectoId: vistaPrevia.proyectoId, nombre: vistaPrevia.nombre }}
               tipoEvidencia={vistaPrevia.tipo}
               tieneArchivo={!!vistaPrevia.archivoRuta}
+              duracionSegundos={duracionVideo}
             />
           </div>
         )}

@@ -141,3 +141,24 @@ export function partirMarcasDeTiempo(texto: string): { texto: string; marca: boo
   if (desde < texto.length) tramos.push({ texto: texto.slice(desde), marca: false })
   return tramos
 }
+
+// ─── Duración recomendada del video ─────────────────────────────────────────
+// Medido el 2026-11-13 con un video de 10:30: el análisis tardó 57, 84 y 120 s, y otra corrida pasó los 140 s de la función
+// y falló por tiempo de espera (Google tarda según su carga). No hay un tope duro por duración (la función no la conoce
+// antes de mandar el video): se recomienda hasta 10 minutos y se avisa del riesgo. El límite duro es el tamaño, 200 MB.
+export const DURACION_RECOMENDADA_SEGUNDOS = 600
+
+export const AVISO_DURACION_VIDEO =
+  'Recomendado: videos de hasta 10 minutos (límite de tamaño: 200 MB). Los más largos tardan más y pueden fallar por tiempo de espera; ' +
+  'incluso uno de 10 minutos a veces falla. Si pasa, reintenta o usa un video más corto.'
+
+export function formatearDuracion(segundos: number): string {
+  const total = Math.max(0, Math.floor(segundos))
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`
+}
+
+// Alerta cuando se SABE que el video pasa de lo recomendado (la pantalla lee la duración del propio video).
+export function alertaDuracionVideo(segundos: number | null | undefined): string | null {
+  if (typeof segundos !== 'number' || !Number.isFinite(segundos) || segundos <= DURACION_RECOMENDADA_SEGUNDOS) return null
+  return `Este video dura ${formatearDuracion(segundos)}, más de 10 minutos: es probable que el análisis falle por tiempo de espera. Puedes intentarlo y reintentar, o usar un video más corto.`
+}
