@@ -28,6 +28,7 @@ import { Tabs } from '../components/ui/Tabs'
 import type { Column } from '../components/ui/DataTable'
 import type { Proyecto, EstadoProyecto, Entregable, Tarea, Documento, Fase, NavParams, PageId, Usuario } from '../types'
 import { servicioEscritura } from '../lib/servicios'
+import { errorDeFechasProyecto } from '../lib/fechasProyecto'
 import { estaVencida, hoyLocal, ordenarTareasDeProyecto } from '../lib/tareas'
 import { type NuevoEntregable, type NuevoProyecto, mensajeDeError } from '../lib/escrituras'
 import { useAccionesEntregable } from '../hooks/useAccionesEntregable'
@@ -133,6 +134,9 @@ function NuevoProyectoModal({
     if (!form.consultorId) e.consultorId = 'Selecciona un consultor'
     if (!form.fechaInicio) e.fechaInicio = 'La fecha de inicio es requerida'
     if (!form.fechaFinEstimada) e.fechaFinEstimada = 'La fecha estimada es requerida'
+    // O35: un proyecto no termina antes de empezar (la BD también lo rechaza).
+    const fechas = errorDeFechasProyecto(form.fechaInicio, form.fechaFinEstimada)
+    if (fechas) e.fechaFinEstimada = fechas
     setErrors(e)
     return Object.keys(e).length === 0
   }
