@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { candidatosEquipo, candidatosResponsable, miembrosDelEquipo } from './equipoProyecto'
+import { candidatosEquipo, candidatosResponsable, mensajeQuitarDelEquipo, miembrosDelEquipo } from './equipoProyecto'
 import type { Proyecto, Usuario } from '../types'
 
 const C1 = 'c1'
@@ -77,5 +77,30 @@ describe('candidatosResponsable (quién puede pasar a ser el responsable)', () =
     expect(ids).not.toEqual(expect.arrayContaining(['susp']))
     expect(ids).not.toContain('carlos')
     expect(ids).not.toContain('otra')
+  })
+})
+
+describe('mensajeQuitarDelEquipo (lo que avisa el diálogo, E5)', () => {
+  // La BD (quitar_miembro_equipo, M4) rechaza quitar a quien tenga tareas abiertas O sea responsable de
+  // procesos, actividades o no conformidades abiertas: el aviso tiene que nombrar las cuatro cosas.
+  const texto = mensajeQuitarDelEquipo('Roberto Vázquez')
+
+  it('empieza con el nombre y dice que dejará de ver el proyecto', () => {
+    expect(texto.startsWith('Roberto Vázquez dejará de ver este proyecto.')).toBe(true)
+  })
+
+  it('menciona tareas, procesos, actividades y no conformidades', () => {
+    expect(texto).toContain('tareas abiertas')
+    expect(texto).toContain('procesos')
+    expect(texto).toContain('actividades')
+    expect(texto).toContain('no conformidades abiertas')
+  })
+
+  it('pide reasignarlos antes de quitarlo', () => {
+    expect(texto).toContain('reasignar')
+  })
+
+  it('sin persona elegida habla de "Esta persona"', () => {
+    expect(mensajeQuitarDelEquipo(undefined).startsWith('Esta persona dejará de ver este proyecto.')).toBe(true)
   })
 })

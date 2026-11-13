@@ -20,6 +20,7 @@ import { Button } from "../components/ui/Button"
 import { ConfirmDialog } from "../components/ui/ConfirmDialog"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
+import { avisoDelPaso, faltantesVisibles, type AvisoPaso } from "../lib/avisoLevantamiento"
 import type { ActividadProceso, Proceso, TipoActividad, TipoProceso } from "../types"
 
 const PASOS = [
@@ -217,7 +218,7 @@ export default function LevantamientoProcesos() {
   const [iniciado, setIniciado] = useState(false)
   const [paso, setPaso] = useState(0)
   const [borrador, setBorrador] = useState<Borrador>(VACIO)
-  const [errores, setErrores] = useState<string[]>([])
+  const [aviso, setAviso] = useState<AvisoPaso | null>(null)
   const [actividad, setActividad] =
     useState<Omit<ActividadProceso, "id" | "orden">>(ACTIVIDAD_VACIA)
   const [actividadId, setActividadId] = useState<string | null>(null)
@@ -228,6 +229,7 @@ export default function LevantamientoProcesos() {
   const proyectos = state.proyectos.filter(
     (proyecto) => proyecto.empresaId === borrador.empresaId,
   )
+  const faltantesAviso = faltantesVisibles(aviso, paso)
   const completos = PASOS.map((_, index) => seccionCompleta(index, borrador))
   const avance = Math.round(
     (completos.filter(Boolean).length / PASOS.length) * 100,
@@ -235,7 +237,7 @@ export default function LevantamientoProcesos() {
 
   function set<K extends keyof Borrador>(key: K, value: Borrador[K]) {
     setBorrador((actual) => ({ ...actual, [key]: value }))
-    setErrores([])
+    setAviso(null)
   }
 
   function validar(index: number) {
@@ -297,7 +299,7 @@ export default function LevantamientoProcesos() {
     ) {
       faltantes.push("Justificación de “No aplica”")
     }
-    setErrores(faltantes)
+    setAviso(avisoDelPaso(index, faltantes))
     return faltantes.length === 0
   }
 
@@ -948,10 +950,10 @@ export default function LevantamientoProcesos() {
                 </Button>
               </div>
             )}
-            {errores.length > 0 && (
+            {faltantesAviso.length > 0 && (
               <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
                 <p className="font-medium">Completa los campos obligatorios:</p>
-                <p>{errores.join(", ")}</p>
+                <p>{faltantesAviso.join(", ")}</p>
               </div>
             )}
           </div>

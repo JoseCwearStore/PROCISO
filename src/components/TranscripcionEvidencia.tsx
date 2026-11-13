@@ -10,9 +10,10 @@ type Transcripcion = ReturnType<typeof useTranscripcion>
 // La transcripción automática de un audio o video, para REVISARLA y corregirla antes de analizar: la transcripción
 // se equivoca (medido: códigos y cifras decimales) y la IA analiza exactamente el texto que se ve acá. El equipo
 // transcribe y corrige; el cliente solo la lee. Se conserva siempre lo que escuchó la IA.
-export function TranscripcionEvidencia({ tipo, puedeEditar, tr, texto, onTexto }: {
+export function TranscripcionEvidencia({ tipo, puedeEditar, tieneArchivo, tr, texto, onTexto }: {
   tipo: 'Audio' | 'Video'
   puedeEditar: boolean
+  tieneArchivo: boolean
   tr: Transcripcion
   texto: string
   onTexto: (texto: string) => void
@@ -50,9 +51,11 @@ export function TranscripcionEvidencia({ tipo, puedeEditar, tr, texto, onTexto }
       ) : !transcripcion ? (
         <div className="flex flex-wrap items-center justify-between gap-3">
           <p className="text-sm text-slate-500">
-            {puedeEditar ? 'Todavía no hay transcripción de este archivo.' : 'El equipo todavía no transcribió este archivo.'}
+            {!tieneArchivo
+              ? 'No hay un archivo para transcribir.'
+              : puedeEditar ? 'Todavía no hay transcripción de este archivo.' : 'El equipo todavía no transcribió este archivo.'}
           </p>
-          {puedeEditar && (
+          {puedeEditar && tieneArchivo && (
             <Button onClick={() => void tr.transcribir()} disabled={transcribiendo} icon={iconoTranscribir}>
               {transcribiendo ? 'Transcribiendo…' : 'Transcribir'}
             </Button>

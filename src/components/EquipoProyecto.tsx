@@ -4,7 +4,7 @@ import { Button } from './ui/Button'
 import { ConfirmDialog } from './ui/ConfirmDialog'
 import { useApp } from '../context/AppContext'
 import { useAccionesEquipo } from '../hooks/useAccionesEquipo'
-import { candidatosEquipo, candidatosResponsable, miembrosDelEquipo, type MiembroEquipo } from '../lib/equipoProyecto'
+import { candidatosEquipo, candidatosResponsable, mensajeQuitarDelEquipo, miembrosDelEquipo, type MiembroEquipo } from '../lib/equipoProyecto'
 import type { Proyecto, Usuario } from '../types'
 
 const rolColor: Record<string, string> = {
@@ -82,7 +82,7 @@ export function EquipoProyecto({ proyecto }: { proyecto: Proyecto }) {
         onClose={() => setAQuitar(null)}
         onConfirm={() => aQuitar && void ejecutar(() => acciones.quitar(proyecto, aQuitar.id), () => setAQuitar(null))}
         title="Quitar del equipo"
-        message={`${aQuitar?.nombre ?? 'Esta persona'} dejará de ver este proyecto. Si tiene tareas abiertas en él, primero hay que reasignarlas.`}
+        message={mensajeQuitarDelEquipo(aQuitar?.nombre)}
         confirmLabel="Quitar"
       />
     </div>

@@ -791,6 +791,7 @@ export default function Evidencias() {
               key={vistaPrevia.id}
               fuente={{ tipo: "evidencia", id: vistaPrevia.id, proyectoId: vistaPrevia.proyectoId, nombre: vistaPrevia.nombre }}
               tipoEvidencia={vistaPrevia.tipo}
+              tieneArchivo={!!vistaPrevia.archivoRuta}
             />
           </div>
         )}

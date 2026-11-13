@@ -31,6 +31,12 @@ export function miembrosDelEquipo(proyecto: ProyectoEquipo, usuarios: Usuario[])
     .sort((a, b) => Number(b.esResponsable) - Number(a.esResponsable) || porNombre(a.usuario, b.usuario))
 }
 
+// Aviso del diálogo "Quitar del equipo". Espejo de quitar_miembro_equipo (M4): la BD no deja quitar a quien
+// tenga tareas abiertas o sea responsable de procesos, actividades o no conformidades abiertas del proyecto.
+export function mensajeQuitarDelEquipo(nombre: string | undefined): string {
+  return `${nombre ?? 'Esta persona'} dejará de ver este proyecto. Si tiene a su cargo en él tareas abiertas, procesos, actividades o no conformidades abiertas, primero hay que reasignarlos.`
+}
+
 // A quién se puede agregar al equipo: los elegibles que todavía no están.
 export function candidatosEquipo(proyecto: ProyectoEquipo, usuarios: Usuario[], consultoriaId: string | null | undefined): Usuario[] {
   return elegibles(usuarios, consultoriaId)

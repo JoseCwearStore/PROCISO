@@ -33,6 +33,7 @@ import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import type { PageId } from '../types'
 import { evolucionAvance } from '../lib/avance'
+import { destinoDeEntidad, destinoDeTarjeta } from '../lib/destinosInicio'
 import { estaVencida, fechaISO, hoyLocal } from '../lib/tareas'
 
 // ─── Constants ───────────────────────────────────────────────────────────────
@@ -79,17 +80,6 @@ const DOC_ESTADO_COLORS: Record<string, string> = {
 function parseDate(s: string): Date {
   const [d, m, y] = s.split('/').map(Number)
   return new Date(y, m - 1, d)
-}
-
-function getPageForEntidad(tipo: string): PageId {
-  const map: Record<string, PageId> = {
-    proyecto: 'proyecto-detalle',
-    empresa: 'empresa-detalle',
-    tarea: 'tareas',
-    documento: 'documentacion',
-    evidencia: 'levantamiento',
-  }
-  return map[tipo] ?? 'inicio'
 }
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
@@ -511,7 +501,7 @@ export function Dashboard() {
           value={kpiEmpresasCount}
           subtext={`${empresas.length} registradas en total`}
           iconBg="bg-slate-100 text-navy"
-          onClick={() => navigate('empresas')}
+          onClick={() => navigate(destinoDeTarjeta('empresas'))}
         />
         <KPICard
           icon={FolderKanban}
@@ -519,7 +509,7 @@ export function Dashboard() {
           value={kpiProyectosActivos}
           subtext={`${filteredProyectos.length} proyectos en el filtro`}
           iconBg="bg-blue-50 text-blue-600"
-          onClick={() => navigate('proyectos')}
+          onClick={() => navigate(destinoDeTarjeta('proyectos'))}
         />
         <KPICard
           icon={Clock}
@@ -529,7 +519,7 @@ export function Dashboard() {
           iconBg={
             kpiEvidenciasPendientes > 0 ? 'bg-amber-50 text-amber-600' : 'bg-emerald-50 text-emerald-600'
           }
-          onClick={() => navigate('levantamiento')}
+          onClick={() => navigate(destinoDeTarjeta('pendientes-informacion'))}
         />
         <KPICard
           icon={AlertTriangle}
@@ -540,7 +530,7 @@ export function Dashboard() {
             kpiProximosVencer > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'
           }
           highlight={kpiProximosVencer > 0}
-          onClick={() => navigate('tablero-tareas')}
+          onClick={() => navigate(destinoDeTarjeta('proximos-vencer'))}
         />
       </div>
 
@@ -551,7 +541,7 @@ export function Dashboard() {
           icon={FileText}
           label="Documentos por estado"
           iconBg="bg-indigo-50 text-indigo-600"
-          onClick={() => navigate('documentacion')}
+          onClick={() => navigate(destinoDeTarjeta('documentos'))}
         >
           {docEstadoCounts.length === 0 ? (
             <p className="text-xs text-slate-400 mt-3">Sin documentos para el filtro.</p>
@@ -592,7 +582,7 @@ export function Dashboard() {
           subtext={kpiVencidas > 0 ? 'Requieren atención inmediata' : 'Sin tareas vencidas'}
           iconBg={kpiVencidas > 0 ? 'bg-red-50 text-red-600' : 'bg-emerald-50 text-emerald-600'}
           highlight={kpiVencidas > 0}
-          onClick={() => navigate('tablero-tareas')}
+          onClick={() => navigate(destinoDeTarjeta('actividades-vencidas'))}
         />
 
         {/* Evidencias por validar */}
@@ -602,7 +592,7 @@ export function Dashboard() {
           value={kpiEvidenciasCargadas}
           subtext="Evidencias cargadas pendientes de revisión"
           iconBg="bg-sky-50 text-sky-600"
-          onClick={() => navigate('levantamiento')}
+          onClick={() => navigate(destinoDeTarjeta('evidencias-por-validar'))}
         />
       </div>
 
@@ -855,7 +845,7 @@ export function Dashboard() {
                     <tr
                       key={h.id}
                       onClick={() =>
-                        navigate(getPageForEntidad(h.entidadTipo), { id: h.entidadId })
+                        navigate(destinoDeEntidad(h.entidadTipo),{ id: h.entidadId })
                       }
                       className={[
                         'border-b border-slate-50 last:border-0 cursor-pointer transition-colors hover:bg-blue-50/40',

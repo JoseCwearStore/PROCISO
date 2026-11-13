@@ -42,21 +42,26 @@ export function adaptarTranscripcion(fila: unknown): Transcripcion | null {
 // Un audio o video no se analiza hasta tener la transcripción GUARDADA, y no se analiza un texto que la BD no
 // tiene: si el cuadro tiene cambios sin guardar, primero se guardan. (Lo que no es audio ni video no depende de esto.)
 
-export type EstadoTranscripcion = 'no_aplica' | 'falta' | 'sin_guardar' | 'lista'
+export type EstadoTranscripcion = 'no_aplica' | 'sin_archivo' | 'falta' | 'sin_guardar' | 'lista'
 
+// tieneArchivo: sin archivo no hay nada que transcribir (E8): se avisa eso en vez de ofrecer un botón que la BD rechaza.
 export function estadoTranscripcion(
   tipoEvidencia: string | null | undefined,
   transcripcion: Transcripcion | null,
   textoEditado: string,
+  tieneArchivo = true,
 ): EstadoTranscripcion {
   if (tipoEvidencia !== 'Audio' && tipoEvidencia !== 'Video') return 'no_aplica'
-  if (!transcripcion) return 'falta'
+  if (!transcripcion) return tieneArchivo ? 'falta' : 'sin_archivo'
   return textoEditado.trim() === transcripcion.texto ? 'lista' : 'sin_guardar'
 }
 
 export const puedeAnalizarConTranscripcion = (estado: EstadoTranscripcion): boolean => estado === 'no_aplica' || estado === 'lista'
 
+export const MENSAJE_SIN_ARCHIVO = 'Esta evidencia no tiene archivo: sube el audio o el video para poder transcribirlo.'
+
 export function mensajeDeEstado(estado: EstadoTranscripcion): string | null {
+  if (estado === 'sin_archivo') return MENSAJE_SIN_ARCHIVO
   if (estado === 'falta') return 'Antes de analizar, transcribe el archivo y revisa el texto.'
   if (estado === 'sin_guardar') return 'Hay cambios sin guardar en la transcripción: guárdalos antes de analizar.'
   return null

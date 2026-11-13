@@ -79,6 +79,7 @@ type Status =
   | 'Observación'
   // Misc
   | 'Activa'
+  | 'Archivada'
 
 type Size = 'sm' | 'md'
 
@@ -143,6 +144,7 @@ const config: Record<
   'Observación': { label: 'Observación', color: 'bg-blue-50 text-blue-700 border-blue-200', icon: Circle },
   // ── Misc ──────────────────────────────────────────────────────────────
   'Activa': { label: 'Activa', color: 'bg-emerald-50 text-emerald-700 border-emerald-200', icon: CheckCircle },
+  'Archivada': { label: 'Archivada', color: 'bg-slate-100 text-slate-500 border-slate-200', icon: Archive },
 }
 
 interface StatusBadgeProps {

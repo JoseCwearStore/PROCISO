@@ -8,6 +8,7 @@ import {
   estadoTranscripcion,
   etiquetaTranscripcion,
   MAX_TRANSCRIPCION,
+  MENSAJE_SIN_ARCHIVO,
   mensajeDeEstado,
   puedeAnalizarConTranscripcion,
   type ClienteTranscripciones,
@@ -82,6 +83,41 @@ describe('estadoTranscripcion: cuándo se puede analizar un audio o video', () =
     expect(mensajeDeEstado('sin_guardar')).toMatch(/guarda/i)
     expect(mensajeDeEstado('lista')).toBeNull()
     expect(mensajeDeEstado('no_aplica')).toBeNull()
+  })
+})
+
+describe('evidencia sin archivo (E8): no se ofrece transcribir y se dice por qué', () => {
+  it('un audio o video sin transcripción y SIN archivo: sin_archivo (no "falta")', () => {
+    expect(estadoTranscripcion('Audio', null, '', false)).toBe('sin_archivo')
+    expect(estadoTranscripcion('Video', null, '', false)).toBe('sin_archivo')
+  })
+
+  it('con archivo sigue siendo "falta", también si no se indica (valor por omisión)', () => {
+    expect(estadoTranscripcion('Audio', null, '', true)).toBe('falta')
+    expect(estadoTranscripcion('Video', null, '')).toBe('falta')
+  })
+
+  it('lo que no es audio ni video no depende del archivo', () => {
+    for (const tipo of ['Foto', 'Documento', 'Formulario', null, undefined]) {
+      expect(estadoTranscripcion(tipo, null, '', false), String(tipo)).toBe('no_aplica')
+    }
+  })
+
+  it('si ya hay transcripción guardada manda ella, aunque no haya archivo', () => {
+    expect(estadoTranscripcion('Audio', TRANSCRIPCION, TRANSCRIPCION.texto, false)).toBe('lista')
+    expect(estadoTranscripcion('Audio', TRANSCRIPCION, 'otro texto', false)).toBe('sin_guardar')
+  })
+
+  it('sin archivo no se puede analizar', () => {
+    expect(puedeAnalizarConTranscripcion('sin_archivo')).toBe(false)
+  })
+
+  it('el aviso nombra el problema (falta el archivo) y qué hacer (subirlo), no "transcribe"', () => {
+    const msg = mensajeDeEstado('sin_archivo')
+    expect(msg).toBe(MENSAJE_SIN_ARCHIVO)
+    expect(msg).toMatch(/no tiene archivo/i)
+    expect(msg).toMatch(/sube/i)
+    expect(msg).not.toMatch(/transcribe el archivo/i)
   })
 })
 

@@ -27,10 +27,12 @@ export const AVISO_PREEVALUACION =
   'con fines de demostración. Proyecto estudiantil con fines académicos: los criterios son propios y toman como base una edición anterior de la norma. ' +
   'Esto es una preevaluación generada con IA: requiere revisión humana y no constituye un dictamen de conformidad ni una certificación.'
 
-export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null }: {
+export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = null, tieneArchivo = true }: {
   fuente: FuenteAnalisis
   tipoDocumento?: Documento['tipo'] | null
   tipoEvidencia?: string | null
+  // Solo importa para audio y video: sin archivo no se puede transcribir ni analizar el video (E8).
+  tieneArchivo?: boolean
 }) {
   const ia = useAccionesIA()
   const aviso = avisoTranscripcion(tipoEvidencia)
@@ -42,7 +44,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
   const [textoEditado, setTextoEditado] = useState('')
   const guardado = tr.transcripcion?.texto ?? ''
   useEffect(() => setTextoEditado(guardado), [guardado, fuente.id])
-  const estadoTr = estadoTranscripcion(tipoEvidencia, tr.transcripcion, textoEditado)
+  const estadoTr = estadoTranscripcion(tipoEvidencia, tr.transcripcion, textoEditado, tieneArchivo)
   // Mientras se lee la transcripción no se sabe si falta: no se muestra un aviso que después desaparece.
   const puedeAnalizar = puedeAnalizarConTranscripcion(estadoTr)
   const motivoBloqueo = tipoMedia && !tr.cargado ? null : mensajeDeEstado(estadoTr)
@@ -88,7 +90,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
       </p>
 
       {tipoMedia && (
-        <TranscripcionEvidencia tipo={tipoMedia} puedeEditar={ia.puedePedir} tr={tr} texto={textoEditado} onTexto={setTextoEditado} />
+        <TranscripcionEvidencia tipo={tipoMedia} puedeEditar={ia.puedePedir} tieneArchivo={tieneArchivo} tr={tr} texto={textoEditado} onTexto={setTextoEditado} />
       )}
 
       {ia.puedePedir && (
@@ -133,7 +135,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
             {esVideo && (
               <Button
                 onClick={() => void analizarVideo()}
-                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado}
+                disabled={analizando || analizandoVideo || !seleccion.length || !!ia.estadoUsoIA?.agotado || !tieneArchivo}
                 title={ia.estadoUsoIA?.agotado ? (ia.estadoUsoIA.mensaje ?? undefined) : undefined}
                 icon={analizandoVideo ? <Loader2 className="h-4 w-4 animate-spin" /> : <Clapperboard className="h-4 w-4" />}
               >
@@ -151,7 +153,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
           </div>
           {fallo && <AvisoFallo analisis={fallo} onCerrar={() => setFallo(null)} />}
           {motivoBloqueo && (
-            <p className="text-xs text-amber-700">{esVideo ? <strong>Solo para «Analizar transcripción»: </strong> : null}{motivoBloqueo}</p>
+            <p className="text-xs text-amber-700">{esVideo && estadoTr !== 'sin_archivo' ? <strong>Solo para «Analizar transcripción»: </strong> : null}{motivoBloqueo}</p>
           )}
         </div>
       )}

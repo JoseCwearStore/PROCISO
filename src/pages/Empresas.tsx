@@ -8,6 +8,7 @@ import { useApp } from '../context/AppContext'
 import { useAccionesGestion } from '../hooks/useAccionesGestion'
 import { servicioEscritura } from '../lib/servicios'
 import { mensajeDeError } from '../lib/escrituras'
+import { etiquetaEstadoEmpresa } from '../lib/estadoEmpresa'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -313,7 +314,7 @@ export function EmpresaDetalle() {
               <div className="flex items-center gap-2">
                 <h1 className="text-xl font-bold text-fg">{empresa.nombre}</h1>
                 <span className={`text-xs px-2 py-0.5 rounded-full font-medium border ${empresa.activa ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-slate-100 text-slate-500 border-slate-200'}`}>
-                  {empresa.activa ? 'Activa' : 'Archivada'}
+                  {etiquetaEstadoEmpresa(empresa.activa)}
                 </span>
               </div>
               {empresa.nombreComercial && <p className="text-sm text-fg/50">{empresa.nombreComercial}</p>}
@@ -652,7 +653,7 @@ export function Empresas() {
                     ) : <span className="text-fg/30 text-xs">—</span>}
                   </td>
                   <td className="px-4 py-3">
-                    <StatusBadge status={empresa.activa ? 'Activa' : 'Obsoleto'} size="sm" />
+                    <StatusBadge status={etiquetaEstadoEmpresa(empresa.activa)} size="sm" />
                   </td>
                   <td className="px-4 py-3">
                     <button
