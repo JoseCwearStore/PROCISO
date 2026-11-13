@@ -27,3 +27,22 @@ jobs:
 
       # Vulnerabilidades de dependencias (AUD08-M1): el CI falla si vuelve alguna.
       - run: pnpm audit
+
+  # pgTAP y lint de la base (todas las reglas de negocio y el RLS viven ahí). Levanta Supabase local en el runner.
+  # La CLI va fijada en 2.122.1 como en local (la 3.0.0 rompe el contenedor de la BD).
+  # OJO: este trabajo todavía no se pudo probar en GitHub; si falla el primer push, revisar acá primero.
+  base-de-datos:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: supabase/setup-cli@v1
+        with:
+          version: 2.122.1
+
+      # Solo la base: sin Studio, correo, Storage de imágenes ni funciones (no hacen falta para pgTAP).
+      - run: supabase start -x studio,mailpit,imgproxy,edge-runtime,logflare,vector
+
+      - run: supabase test db
+
+      - run: supabase db lint --local --fail-on error
