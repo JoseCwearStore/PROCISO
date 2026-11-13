@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { AlertOctagon, CheckCircle2, Plus, Save, ShieldCheck } from 'lucide-react'
 import { useApp } from '../context/AppContext'
 import { Button } from '../components/ui/Button'
@@ -7,6 +7,7 @@ import { StatusBadge } from '../components/ui/StatusBadge'
 import { useAccionesNC } from '../hooks/useAccionesNC'
 import type { DatosNC, TratamientoNC } from '../lib/escrituras'
 import type { AccionNC } from '../lib/noConformidades'
+import { precargaDesdeParams } from '../lib/ncDesdeIA'
 import { fechaISO, hoyLocal } from '../lib/tareas'
 import type { NoConformidad, TipoNC } from '../types'
 
@@ -79,6 +80,30 @@ export default function NoConformidades() {
     setError('')
     setEditorOpen(true)
   }
+
+  // O37: desde un hallazgo de la preevaluación con IA se llega con el formulario nuevo precargado. No se guarda
+  // nada: el equipo revisa, elige responsable y confirma. Solo el equipo puede registrar (la BD también lo exige).
+  useEffect(() => {
+    const precarga = precargaDesdeParams(state.navParams)
+    if (!precarga || !acciones.esEquipo) return
+    const proyecto = getProyecto(precarga.proyectoId)
+    if (!proyecto) return
+    setActual(null)
+    setB({
+      ...borradorVacio(),
+      empresaId: proyecto.empresaId,
+      proyectoId: precarga.proyectoId,
+      titulo: precarga.titulo,
+      descripcion: precarga.descripcion,
+      detectadaEn: precarga.detectadaEn,
+      evidenciaIds: precarga.evidenciaId ? [precarga.evidenciaId] : [],
+    })
+    setVerificacion('')
+    setError('')
+    setEditorOpen(true)
+    // Solo al entrar a la pantalla: no debe reabrirse con cada cambio del estado.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   function validar(): boolean {
     if (!b.empresaId || !b.proyectoId || !b.descripcion.trim() || !b.fechaDeteccion || !b.responsableId) {

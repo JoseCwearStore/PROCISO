@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
-import { AlertTriangle, Clapperboard, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
+import { AlertOctagon, AlertTriangle, Clapperboard, Loader2, ShieldAlert, Sparkles, X } from 'lucide-react'
 import { Button } from './ui/Button'
 import { IndicadorUsoIA } from './IndicadorUsoIA'
 import { TranscripcionEvidencia } from './TranscripcionEvidencia'
+import { useApp } from '../context/AppContext'
+import { ncDesdeResultadoIA, puedeCrearNCDesdeResultado } from '../lib/ncDesdeIA'
 import { useAccionesIA, type FuenteAnalisis } from '../hooks/useAccionesIA'
 import { useTranscripcion } from '../hooks/useTranscripcion'
 import {
@@ -184,7 +186,7 @@ export function PanelAnalisisIA({ fuente, tipoDocumento = null, tipoEvidencia = 
       {!historial.length ? (
         <p className="text-sm text-slate-400">Todavía no hay preevaluaciones de esta fuente.</p>
       ) : (
-        <div className="space-y-3">{historial.map((a) => <TarjetaAnalisis key={a.id} analisis={a} porId={porId} tipoEvidencia={tipoEvidencia} />)}</div>
+        <div className="space-y-3">{historial.map((a) => <TarjetaAnalisis key={a.id} analisis={a} porId={porId} tipoEvidencia={tipoEvidencia} fuente={fuente} esEquipo={ia.puedePedir} />)}</div>
       )}
     </section>
   )
@@ -219,7 +221,14 @@ function TextoConMarcas({ texto }: { texto: string }) {
   )
 }
 
-function TarjetaAnalisis({ analisis, porId, tipoEvidencia }: { analisis: AnalisisIA; porId: Map<string, { clausula: string; titulo: string }>; tipoEvidencia: string | null }) {
+function TarjetaAnalisis({ analisis, porId, tipoEvidencia, fuente, esEquipo }: {
+  analisis: AnalisisIA
+  porId: Map<string, { clausula: string; titulo: string }>
+  tipoEvidencia: string | null
+  fuente: FuenteAnalisis
+  esEquipo: boolean
+}) {
+  const { navigate } = useApp()
   const video = esAnalisisDeVideo(analisis)
   return (
     <article className="rounded-lg border border-line p-3">
@@ -250,6 +259,18 @@ function TarjetaAnalisis({ analisis, porId, tipoEvidencia }: { analisis: Analisi
             <p className="mt-1 text-xs text-violet-700">
               <strong>{etiquetaSugerencia(tipoEvidencia, analisis)}:</strong> {video ? <TextoConMarcas texto={r.sugerencias} /> : r.sugerencias}
             </p>
+          )}
+          {puedeCrearNCDesdeResultado(r.estado, esEquipo) && porId.get(r.criterioId) && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-2"
+              title="Abre el formulario de nueva no conformidad con estos datos. No se crea hasta que lo confirmes."
+              icon={<AlertOctagon className="h-4 w-4" />}
+              onClick={() => navigate('no-conformidades', ncDesdeResultadoIA(fuente, porId.get(r.criterioId)!, r))}
+            >
+              Crear no conformidad
+            </Button>
           )}
         </div>
       ))}
