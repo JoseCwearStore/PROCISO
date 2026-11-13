@@ -26,6 +26,7 @@ Los generadores `.mts` no necesitan instalación: corren con `npx -y tsx@4.20.6`
 | `generar_seed_tareas.mts` | Ídem, `tareas` (con fechas relativas a `current_date`) | `<demo.ts>` | SQL por stdout |
 | `generar_seed_no_conformidades.mts` | Ídem, `no_conformidades` | `<demo.ts>` | SQL por stdout |
 | `generar_seed_entregables.mts` | Ídem, `entregables` | `<demo.ts>` | SQL por stdout |
+| `cargar_archivos_demo.mjs` | Sube un archivo real a las evidencias 1–4 del seed (O15). **Correr después de cada `db reset`**; `--video ruta.mp4` para la evidencia 3 | Supabase LOCAL (`status -o env`) | Storage + columnas `archivo_*` |
 | `puente_ids.mjs` | Reescribió los IDs de demo (`proc-001`…) a los UUID del seed | `<carpeta>` | reescribe archivos **in situ** |
 
 Ejemplos, desde la raíz del repo:

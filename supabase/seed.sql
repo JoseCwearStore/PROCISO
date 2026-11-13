@@ -160,12 +160,37 @@ insert into public.procesos (id, consultoria_id, proyecto_id, responsable_id, no
 -- compras, producción, atención, almacén y despacho son operativos; recursos humanos es de apoyo.
 update public.procesos set tipo = case nombre when 'Gestión de recursos humanos' then 'Apoyo' else 'Operativo' end;
 
+-- ─── Actividades de los procesos (O9) ───────────────────────────────────────
+-- Sin actividades la secuencia y el diagrama de flujo de un proceso no se pueden mostrar, y el asistente exige al menos
+-- una para completar un levantamiento: un proceso Documentado o Revisado sin actividades era un dato imposible.
+-- Compras (Documentado) y Producción (Revisado) completos; Atención al cliente (En levantamiento) a medias, como está.
+insert into public.actividades (consultoria_id, proyecto_id, proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden)
+select p.consultoria_id, p.proyecto_id, p.id, a.responsable_id, a.tipo, a.descripcion, a.entradas, a.recursos, a.controles, a.resultado, a.orden
+from (values
+  ('55555555-0000-0000-0000-000000000001'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Inicio',    'Se detecta una necesidad de compra',                          'Necesidad de compra',            null, null, null, 1),
+  ('55555555-0000-0000-0000-000000000001'::uuid, 'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 'Actividad', 'Solicitar cotizaciones a los proveedores aprobados',          'Catálogo de proveedores aprobados', 'Correo electrónico', 'Mínimo dos cotizaciones', 'Cotizaciones recibidas', 2),
+  ('55555555-0000-0000-0000-000000000001'::uuid, 'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 'Decisión',  '¿La cotización cumple los criterios de evaluación?',          'Cotizaciones recibidas',         null, 'Criterios de calidad, plazo y precio', 'Proveedor elegido', 3),
+  ('55555555-0000-0000-0000-000000000001'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Actividad', 'Emitir y autorizar la orden de compra',                        'Proveedor elegido',              'Sistema de compras', 'Autorización del director', 'Orden de compra autorizada', 4),
+  ('55555555-0000-0000-0000-000000000001'::uuid, 'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 'Actividad', 'Recibir lo comprado y evaluar al proveedor',                  'Orden de compra autorizada',     null, 'Formato de evaluación de proveedores', 'Evaluación de proveedor', 5),
+  ('55555555-0000-0000-0000-000000000001'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Fin',       'Orden de compra cerrada y evaluación archivada',              null,                             null, null, 'Compra cerrada', 6),
+  ('55555555-0000-0000-0000-000000000002'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Inicio',    'Se recibe el plan de producción de la semana',                'Plan de producción',             null, null, null, 1),
+  ('55555555-0000-0000-0000-000000000002'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Actividad', 'Programar las campañas y asignar a los ejecutivos',             'Plan de producción, materias primas', 'Tablero de producción', 'Aprobación del jefe de producción', 'Programación semanal', 2),
+  ('55555555-0000-0000-0000-000000000002'::uuid, 'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 'Actividad', 'Registrar el avance diario de cada campaña',                   'Programación semanal',           'Hoja de registro diario', 'Revisión semanal del avance', 'Registros de producción', 3),
+  ('55555555-0000-0000-0000-000000000002'::uuid, 'aaaaaaaa-0000-0000-0000-000000000003'::uuid, 'Decisión',  '¿El producto cumple las especificaciones del cliente?',       'Registros de producción',        null, 'Lista de verificación de salida', 'Producto liberado o devuelto', 4),
+  ('55555555-0000-0000-0000-000000000002'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Fin',       'Producto terminado entregado al cliente',                     null,                             null, null, 'Producto terminado', 5),
+  ('55555555-0000-0000-0000-000000000003'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Inicio',    'El cliente presenta una queja o reclamación',                 'Solicitud del cliente',          null, null, null, 1),
+  ('55555555-0000-0000-0000-000000000003'::uuid, 'aaaaaaaa-0000-0000-0000-000000000005'::uuid, 'Actividad', 'Registrar la queja y avisar al responsable',                   'Solicitud del cliente',          'Formato de quejas', null, 'Queja registrada', 2)
+) as a (proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden)
+join public.procesos p on p.id = a.proceso_id;
+
 -- ─── Evidencias (las mismas 5 de src/data/demo.ts; los archivos llegan con Storage) ─
+-- O15: el seed no puede subir archivos a Storage. Después de un `db reset` se corre herramientas/cargar_archivos_demo.mjs,
+-- que sube un archivo real a las evidencias 1, 2, 3 y 4. La 5 (audio) queda "Pendiente de carga" a propósito.
 
 -- Generado desde src/data/demo.ts (EVIDENCIAS). evid-00N → 4444…00N.
 insert into public.evidencias (id, consultoria_id, proyecto_id, proceso_id, subido_por, nombre, tipo, estado, descripcion, archivo_nombre, creado_en) values
-  ('44444444-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Formato de evaluación de proveedores', 'Formulario', 'Revisada', 'Formato actual para evaluar y dar seguimiento a proveedores.', 'evaluacion_proveedores_v2.xlsx', '2024-03-22 12:00:00-06'),
-  ('44444444-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Fotografías del área de almacén', 'Foto', 'Cargada', 'Fotografías del área de recepción y almacenamiento.', 'fotos_almacen_mar2024.zip', '2024-03-25 12:00:00-06'),
+  ('44444444-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Formato de evaluación de proveedores', 'Formulario', 'Revisada', 'Formato actual para evaluar y dar seguimiento a proveedores.', 'evaluacion_proveedores_v2.pdf', '2024-03-22 12:00:00-06'),
+  ('44444444-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000001', 'aaaaaaaa-0000-0000-0000-000000000005', 'Fotografías del área de almacén', 'Foto', 'Cargada', 'Fotografías del área de recepción y almacenamiento.', 'foto_almacen_mar2024.png', '2024-03-25 12:00:00-06'),
   ('44444444-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000005', 'Video recorrido de planta de producción', 'Video', 'Cargada', 'Recorrido por las líneas de producción principales.', 'recorrido_planta_abr2024.mp4', '2024-04-08 12:00:00-06'),
   ('44444444-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000002', '55555555-0000-0000-0000-000000000005', 'aaaaaaaa-0000-0000-0000-000000000006', 'Formulario de recepción de mercancía', 'Formulario', 'Cargada', 'Formato actual de recepción e inspección de productos.', 'formato_recepcion_actual.pdf', '2024-09-12 12:00:00-06'),
   ('44444444-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000001', '33333333-0000-0000-0000-000000000001', '55555555-0000-0000-0000-000000000002', 'aaaaaaaa-0000-0000-0000-000000000005', 'Audio entrevista con jefe de producción', 'Audio', 'Pendiente', 'Entrevista de levantamiento pendiente de carga.', null, now());
