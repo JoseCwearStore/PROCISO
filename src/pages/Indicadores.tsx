@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { useAccionesIndicador } from '../hooks/useAccionesIndicador'
+import { errorDeValorObservado } from '../lib/indicadores'
 import type { IndicadorGestion } from '../types'
 
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-500'
@@ -51,6 +52,12 @@ export default function Indicadores() {
     }
     if (indicador.ambito === 'SGC' && !indicador.empresaId) {
       setError('Selecciona la empresa del indicador del SGC.')
+      return
+    }
+    // O36: el valor observado es un número (o vacío); la BD también lo exige.
+    const errorValor = errorDeValorObservado(indicador.valor || '')
+    if (errorValor) {
+      setError(errorValor)
       return
     }
     setGuardando(true)

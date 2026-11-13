@@ -92,11 +92,11 @@ select throws_ok(
   '22023', null, 'El responsable no puede ser un cliente de OTRA empresa'
 );
 select isnt_empty(
-  $$ update public.indicadores set valor = '97 %' where id = 'adadadad-0000-0000-0000-000000000002' returning id $$,
+  $$ update public.indicadores set valor = '97' where id = 'adadadad-0000-0000-0000-000000000002' returning id $$,
   'El consultor registra el valor del indicador del SGC'
 );
 select is_empty(
-  $$ update public.indicadores set valor = '100 %' where id = 'adadadad-0000-0000-0000-000000000001' returning id $$,
+  $$ update public.indicadores set valor = '100' where id = 'adadadad-0000-0000-0000-000000000001' returning id $$,
   'El consultor no edita un indicador interno (RLS: 0 filas)'
 );
 select throws_ok(
@@ -129,11 +129,11 @@ select set_config('request.jwt.claims', '{"sub":"a7a7a7a7-0000-0000-0000-0000000
 set local role authenticated;
 select is(
   (select array_agg(nombre || ':' || valor) from public.indicadores),
-  array['Quejas atendidas a tiempo:97 %'],
+  array['Quejas atendidas a tiempo:97'],
   'El cliente ve SOLO el indicador del SGC de su empresa (nunca los internos)'
 );
 select is_empty(
-  $$ update public.indicadores set valor = '100 %' returning id $$,
+  $$ update public.indicadores set valor = '100' returning id $$,
   'El cliente no edita indicadores (RLS: 0 filas)'
 );
 select throws_ok(
@@ -154,7 +154,7 @@ select set_config('request.jwt.claims', '{"sub":"a7a7a7a7-0000-0000-0000-0000000
 set local role authenticated;
 select is((select count(*)::int from public.indicadores), 0, 'El admin de OTRA consultoría no ve nada');
 select is_empty(
-  $$ update public.indicadores set valor = 'hackeado' returning id $$,
+  $$ update public.indicadores set valor = '12345' returning id $$,
   'El admin de otra consultoría no edita nada'
 );
 reset role;
