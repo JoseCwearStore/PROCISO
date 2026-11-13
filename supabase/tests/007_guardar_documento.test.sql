@@ -46,7 +46,7 @@ select lives_ok(
          "secciones":[{"id":"s1","titulo":"Objetivo","tipo":"texto","contenido":"Comprar bien"}],
          "evidencias":["d5d5d5d5-0000-0000-0000-000000000001"]}'::jsonb,
        null,
-       '{"accion":"Documento creado","detalle":"Plantilla de procedimiento"}'::jsonb) $$,
+       '{"accion":"Borrador guardado","detalle":"Plantilla de procedimiento"}'::jsonb) $$,
   'El consultor asignado crea un documento con una evidencia vinculada'
 );
 reset role;
@@ -63,7 +63,7 @@ select is(
 );
 select is(
   (select accion from public.historial where entidad_tipo = 'documento' and entidad_id = 'd6d6d6d6-0000-0000-0000-000000000001'),
-  'Documento creado', 'El evento quedó en el historial'
+  'Borrador guardado', 'El evento quedó en el historial'
 );
 
 select set_config('request.jwt.claims', '{"sub":"d1d1d1d1-0000-0000-0000-000000000001","role":"authenticated"}', true);

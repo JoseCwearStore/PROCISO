@@ -158,7 +158,7 @@ select lives_ok(
   $$ select public.guardar_documento(
        '{"id":"f7f7f7f7-0005-0000-0000-000000000002","proyecto_id":"f7f7f7f7-0004-0000-0000-000000000001","nombre":"Nuevo","tipo":"Procedimiento","estado":"Borrador","version":"1.0"}'::jsonb,
        null,
-       '{"accion":"Documento guardado","detalle":"Primer guardado"}'::jsonb) $$,
+       '{"accion":"Borrador guardado","detalle":"Primer guardado"}'::jsonb) $$,
   'El consultor miembro guarda un documento nuevo por la RPC'
 );
 reset role;
