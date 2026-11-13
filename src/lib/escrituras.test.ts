@@ -166,6 +166,24 @@ describe('archivarEmpresa', () => {
   })
 })
 
+// O2: el diálogo de archivar promete "puedes reactivarla en cualquier momento".
+describe('reactivarEmpresa', () => {
+  it('marca la empresa como activa de nuevo', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.reactivarEmpresa(E_NUEVA)).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([{ tabla: 'empresas', operacion: 'update', datos: { activa: true }, id: E_NUEVA }])
+  })
+
+  it('trata "ninguna fila actualizada" como falta de permiso (el RLS la ocultó)', async () => {
+    const { cliente } = crearClienteDoble({ 'empresas.update': { data: null, error: SIN_FILAS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.reactivarEmpresa(E_NUEVA)).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
 // L5d (AUD05-M2): el proyecto y su consultor responsable se crean en UNA sola operación atómica de
 // la BD (antes eran dos escrituras y el resultado de la segunda se descartaba).
 describe('crearProyecto', () => {

@@ -14,6 +14,8 @@ export const AVISO_SOLO_ADMIN = 'Solo el administrador de la consultoría crea e
 export interface PermisosGestion {
   puedeCrearEmpresa: boolean
   puedeArchivarEmpresa: boolean
+  // Reactivar es el mismo UPDATE de "activa" que archivar (política "admins editan empresas"): O2.
+  puedeReactivarEmpresa: boolean
   puedeCrearProyecto: boolean
   // Por qué no puede (para mostrarlo en pantalla); null si puede.
   motivo: string | null
@@ -24,6 +26,7 @@ export function permisosGestion(rol: Rol): PermisosGestion {
   return {
     puedeCrearEmpresa: esAdmin,
     puedeArchivarEmpresa: esAdmin,
+    puedeReactivarEmpresa: esAdmin,
     puedeCrearProyecto: esAdmin,
     motivo: esAdmin ? null : AVISO_SOLO_ADMIN,
   }

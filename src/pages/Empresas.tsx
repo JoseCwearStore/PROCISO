@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import {
-  Building2, Plus, Search, X, ChevronRight, Archive, Users,
+  Building2, Plus, Search, X, ChevronRight, Archive, ArchiveRestore, Users,
   Briefcase, FileText, FolderOpen, Clock, Eye, Edit3, CheckCircle,
   AlertTriangle, MapPin, Phone, Mail, User, BarChart2,
 } from 'lucide-react'
@@ -285,6 +285,17 @@ export function EmpresaDetalle() {
     navigate('empresas')
   }
 
+  // O2: el diálogo de archivar promete que se puede reactivar. Se queda en la ficha para ver el cambio.
+  async function handleReactivar() {
+    const resultado = await servicioEscritura.reactivarEmpresa(empresa!.id)
+    if (!resultado.ok) {
+      showToast(mensajeDeError(resultado), 'error')
+      return
+    }
+    dispatch({ type: 'UPDATE_EMPRESA', id: empresa!.id, updates: { activa: true } })
+    showToast(`"${empresa!.nombre}" fue reactivada.`, 'success')
+  }
+
   const tabs = [
     { id: 'resumen', label: 'Resumen', icon: <BarChart2 className="w-4 h-4" /> },
     { id: 'proyectos', label: `Proyectos (${proyectosEmpresa.length})`, icon: <Briefcase className="w-4 h-4" /> },
@@ -331,6 +342,11 @@ export function EmpresaDetalle() {
             {empresa.activa && permisos.puedeArchivarEmpresa && (
               <Button variant="ghost" size="sm" icon={<Archive className="w-4 h-4" />} onClick={() => setShowArchive(true)}>
                 Archivar
+              </Button>
+            )}
+            {!empresa.activa && permisos.puedeReactivarEmpresa && (
+              <Button variant="outline" size="sm" icon={<ArchiveRestore className="w-4 h-4" />} onClick={handleReactivar}>
+                Reactivar
               </Button>
             )}
           </div>

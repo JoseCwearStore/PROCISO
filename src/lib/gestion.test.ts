@@ -20,6 +20,16 @@ describe('permisosGestion (espejo de las políticas de la BD)', () => {
     })
   })
 
+  // O2: reactivar una empresa archivada es el mismo UPDATE de "activa" que archivarla (política "admins editan empresas").
+  it.each<[Rol, boolean]>([
+    ['Admin PROCISO', true],
+    ['Admin Consultoría', true],
+    ['Consultor', false],
+    ['Usuario Cliente', false],
+  ])('%s → reactivar una empresa archivada: %s', (rol, permitido) => {
+    expect(permisosGestion(rol).puedeReactivarEmpresa).toBe(permitido)
+  })
+
   it('quien no puede recibe el motivo en una frase; quien puede, ninguno', () => {
     expect(permisosGestion('Consultor').motivo).toBe(AVISO_SOLO_ADMIN)
     expect(permisosGestion('Usuario Cliente').motivo).toBe(AVISO_SOLO_ADMIN)
@@ -33,7 +43,7 @@ describe('permisosGestion (espejo de las políticas de la BD)', () => {
 
   it('un rol desconocido (p. ej. sin sesión) no puede nada', () => {
     expect(permisosGestion(undefined as unknown as Rol)).toMatchObject({
-      puedeCrearEmpresa: false, puedeArchivarEmpresa: false, puedeCrearProyecto: false,
+      puedeCrearEmpresa: false, puedeArchivarEmpresa: false, puedeReactivarEmpresa: false, puedeCrearProyecto: false,
     })
   })
 })

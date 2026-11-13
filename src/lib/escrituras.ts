@@ -554,6 +554,11 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
       return actualizar('empresas', id, { activa: false })
     },
 
+    // O2: el diálogo de archivar promete "puedes reactivarla en cualquier momento".
+    reactivarEmpresa(id: string): Promise<ResultadoEscritura<void>> {
+      return actualizar('empresas', id, { activa: true })
+    },
+
     // L5d (AUD05-M2): el proyecto y su consultor responsable se crean en UNA operación atómica de la BD
     // (crear_proyecto). Antes eran dos escrituras y la segunda se descartaba: si fallaba, el consultor
     // asignado no veía su propio proyecto. La consultoría la decide la BD, no el navegador.
