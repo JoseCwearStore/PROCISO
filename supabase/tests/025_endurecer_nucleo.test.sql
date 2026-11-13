@@ -9,7 +9,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select plan(39);
+select plan(40);
 
 -- Consultoría C1 (activa) y CS (suspendida).
 -- k1 consultor miembro de P1 y consultor asignado de E3 · k2 consultor miembro solo de P2
@@ -248,9 +248,15 @@ select lives_ok(
   $$ update public.empresas set activa = false where id = 'f7f7f7f7-0003-0000-0000-000000000001' $$,
   'El admin archiva una empresa (activa=false)'
 );
-select throws_ok(
+-- O2: desde 043 el admin edita los datos de la empresa (las mismas columnas del alta); lo que sigue fuera es la
+-- consultoría y la fecha de alta.
+select lives_ok(
   $$ update public.empresas set nombre = 'Renombrada' where id = 'f7f7f7f7-0003-0000-0000-000000000001' $$,
-  '42501', null, 'Fuera de "activa", la empresa no se edita por UPDATE directo'
+  'El admin edita los datos de la empresa (O2)'
+);
+select throws_ok(
+  $$ update public.empresas set creado_en = now() where id = 'f7f7f7f7-0003-0000-0000-000000000001' $$,
+  '42501', null, 'La fecha de alta de la empresa no se edita por UPDATE directo'
 );
 select throws_ok(
   $$ update public.empresas set consultoria_id = 'f7f7f7f7-0002-0000-0000-000000000002' where id = 'f7f7f7f7-0003-0000-0000-000000000001' $$,

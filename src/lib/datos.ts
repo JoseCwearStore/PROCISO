@@ -197,6 +197,9 @@ export interface FilaDocumento {
   aprobado_por: string | null
   fecha_revision: string | null
   fecha_aprobacion: string | null
+  visto_bueno_por: string | null
+  visto_bueno_en: string | null
+  visto_bueno_version: string | null
   creado_en: string
   actualizado_en: string
 }
@@ -740,6 +743,9 @@ export function traducirDocumento(
     aprobadoPorId: opcional(fila.aprobado_por),
     fechaRevision: fila.fecha_revision ? formatearFecha(fila.fecha_revision) : undefined,
     fechaAprobacion: fila.fecha_aprobacion ? formatearFecha(fila.fecha_aprobacion) : undefined,
+    vistoBuenoPorId: opcional(fila.visto_bueno_por),
+    vistoBuenoEn: fila.visto_bueno_en ? formatearFecha(fila.visto_bueno_en) : undefined,
+    vistoBuenoVersion: opcional(fila.visto_bueno_version),
     contenidoPendiente: fila.contenido_pendiente,
     codigo: opcional(fila.codigo),
     categoria: opcional(fila.categoria),

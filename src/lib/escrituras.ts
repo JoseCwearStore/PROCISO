@@ -107,6 +107,7 @@ export interface ClienteEscritura {
       | 'revisar_evidencia'
       | 'guardar_documento'
       | 'decidir_documento'
+      | 'dar_visto_bueno_documento'
       | 'retirar_documento_de_revision'
       | 'cambiar_estado_tarea'
       | 'guardar_tratamiento_nc'
@@ -257,6 +258,31 @@ export interface NuevaEmpresa {
   consultorAsignadoId: string
   observaciones: string
   trabajadores: string
+}
+
+// Las columnas que el formulario de empresa escribe, iguales al crear y al editar (el permiso por columna de la BD
+// es el mismo conjunto, 20261112080000). Los campos vacíos se guardan como NULL.
+function columnasDeEmpresa(datos: NuevaEmpresa): Record<string, unknown> {
+  return {
+    nombre: datos.nombre.trim(),
+    nombre_comercial: nulo(datos.nombreComercial),
+    rfc: nulo(datos.rfc),
+    sector: nulo(datos.sector),
+    tamano: nulo(datos.tamano),
+    trabajadores: nulo(datos.trabajadores),
+    ciudad: nulo(datos.ciudad),
+    entidad_federativa: nulo(datos.estado),
+    direccion: nulo(datos.direccion),
+    contacto_principal: nulo(datos.contactoPrincipal),
+    cargo_contacto: nulo(datos.cargoContacto),
+    email_contacto: nulo(datos.emailContacto),
+    telefono_contacto: nulo(datos.telefonoContacto),
+    procesos_principales: nulo(datos.procesosprincipales),
+    alcance_inicial: nulo(datos.alcanceInicial),
+    norma_interes: datos.normaInteres,
+    consultor_asignado_id: nulo(datos.consultorAsignadoId),
+    observaciones: nulo(datos.observaciones),
+  }
 }
 
 export interface NuevoProyecto {
@@ -526,28 +552,16 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     async crearEmpresa(consultoriaId: string | null, datos: NuevaEmpresa): Promise<ResultadoEscritura<Empresa>> {
       if (!consultoriaId) return { ok: false, error: 'sin_consultoria' }
 
-      const resultado = await insertar<FilaEmpresa>('empresas', {
-        consultoria_id: consultoriaId,
-        nombre: datos.nombre.trim(),
-        nombre_comercial: nulo(datos.nombreComercial),
-        rfc: nulo(datos.rfc),
-        sector: nulo(datos.sector),
-        tamano: nulo(datos.tamano),
-        trabajadores: nulo(datos.trabajadores),
-        ciudad: nulo(datos.ciudad),
-        entidad_federativa: nulo(datos.estado),
-        direccion: nulo(datos.direccion),
-        contacto_principal: nulo(datos.contactoPrincipal),
-        cargo_contacto: nulo(datos.cargoContacto),
-        email_contacto: nulo(datos.emailContacto),
-        telefono_contacto: nulo(datos.telefonoContacto),
-        procesos_principales: nulo(datos.procesosprincipales),
-        alcance_inicial: nulo(datos.alcanceInicial),
-        norma_interes: datos.normaInteres,
-        consultor_asignado_id: nulo(datos.consultorAsignadoId),
-        observaciones: nulo(datos.observaciones),
-      })
+      const resultado = await insertar<FilaEmpresa>('empresas', { consultoria_id: consultoriaId, ...columnasDeEmpresa(datos) })
       return resultado.ok ? { ok: true, valor: traducirEmpresa(resultado.valor, []) } : resultado
+    },
+
+    // O2: corrige los datos de una empresa. Nunca manda la consultoría (la BD tampoco deja cambiarla) ni `activa`
+    // (archivar y reactivar tienen su propio botón). Si el usuario no puede editarla, la BD no encuentra la fila
+    // para él y se traduce a "sin permiso".
+    async actualizarEmpresa(id: string, datos: NuevaEmpresa): Promise<ResultadoEscritura<void>> {
+      if (!datos.nombre.trim()) return { ok: false, error: 'datos_invalidos' }
+      return actualizar('empresas', id, columnasDeEmpresa(datos))
     },
 
     archivarEmpresa(id: string): Promise<ResultadoEscritura<void>> {
@@ -732,6 +746,12 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_version: version,
       })
       return error ? falla(error) : { ok: true, valor: undefined }
+    },
+
+    // O23: el equipo deja constancia de que revisó ESTA versión. No cambia el estado ni bloquea al cliente.
+    // `version` es la que vio quien lo da: si el documento cambió, el servidor rechaza.
+    darVistoBuenoDocumento(id: string, version: string): Promise<ResultadoEscritura<void>> {
+      return llamar('dar_visto_bueno_documento', { p_id: id, p_version: version })
     },
 
     // La salida explícita de la revisión (solo el equipo): el contenido en revisión está congelado.

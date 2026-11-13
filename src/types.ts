@@ -364,6 +364,10 @@ export interface Documento {
   creadoPorId: string
   revisadoPorId?: string
   aprobadoPorId?: string
+  // O23: constancia del equipo de que revisó UNA versión (no decide ni bloquea al cliente).
+  vistoBuenoPorId?: string
+  vistoBuenoEn?: string
+  vistoBuenoVersion?: string
   historialVersiones: VersionDocumento[]
   contenidoPendiente?: boolean
   codigo?: string

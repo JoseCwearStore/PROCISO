@@ -62,10 +62,10 @@ select lives_ok(
   $$ update public.empresas set activa = true where id = 'd2d2d2d2-0002-0000-0000-000000000001' $$,
   'El admin de su consultoría reactiva la empresa'
 );
--- Reactivar no abre la puerta a editar lo demás.
+-- Reactivar no abre la puerta a editar lo que sigue fuera de la edición (desde O2 el nombre sí se edita: test 043).
 select throws_ok(
-  $$ update public.empresas set nombre = 'Renombrada' where id = 'd2d2d2d2-0002-0000-0000-000000000001' $$,
-  '42501', null, 'Reactivar es solo "activa": el nombre sigue sin editarse por UPDATE directo'
+  $$ update public.empresas set creado_en = now() where id = 'd2d2d2d2-0002-0000-0000-000000000001' $$,
+  '42501', null, 'La fecha de alta sigue sin editarse por UPDATE directo'
 );
 reset role;
 select is(

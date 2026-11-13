@@ -184,6 +184,55 @@ describe('reactivarEmpresa', () => {
   })
 })
 
+// O2: editar los datos de una empresa ya creada.
+describe('actualizarEmpresa', () => {
+  it('actualiza las columnas del formulario de la empresa y NO manda la consultoría (no se puede cambiar)', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    const resultado = await escrituras.actualizarEmpresa(E_NUEVA, { ...NUEVA_EMPRESA, nombre: '  Panadería Renovada  ', rfc: '' })
+
+    expect(resultado).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toHaveLength(1)
+    expect(llamadas[0]).toMatchObject({ tabla: 'empresas', operacion: 'update', id: E_NUEVA })
+    const datos = llamadas[0].datos as Record<string, unknown>
+    expect(datos).toMatchObject({
+      nombre: 'Panadería Renovada',
+      nombre_comercial: 'La Espiga',
+      entidad_federativa: 'Puebla',
+      procesos_principales: 'Producción',
+      norma_interes: 'ISO 9001:2026',
+      // Un campo vaciado en el formulario se guarda como NULL (así se borra un dato).
+      rfc: null,
+      consultor_asignado_id: null,
+    })
+    expect(datos).not.toHaveProperty('consultoria_id')
+    expect(datos).not.toHaveProperty('activa')
+  })
+
+  it('un nombre vacío no se guarda', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.actualizarEmpresa(E_NUEVA, { ...NUEVA_EMPRESA, nombre: '   ' })).toEqual({ ok: false, error: 'datos_invalidos' })
+    expect(llamadas).toHaveLength(0)
+  })
+
+  it('"ninguna fila actualizada" (un consultor, o el admin de otra consultoría) es falta de permiso', async () => {
+    const { cliente } = crearClienteDoble({ 'empresas.update': { data: null, error: SIN_FILAS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.actualizarEmpresa(E_NUEVA, NUEVA_EMPRESA)).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+
+  it('traduce el rechazo de la BD a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'empresas.update': { data: null, error: { code: '42501', message: 'permission denied for table empresas' } } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.actualizarEmpresa(E_NUEVA, NUEVA_EMPRESA)).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
 // L5d (AUD05-M2): el proyecto y su consultor responsable se crean en UNA sola operación atómica de
 // la BD (antes eran dos escrituras y el resultado de la segunda se descartaba).
 describe('crearProyecto', () => {
@@ -615,6 +664,46 @@ describe('retirarDocumento', () => {
     const escrituras = crearServicioEscritura(cliente)
 
     expect(await escrituras.retirarDocumento(DOC)).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+})
+
+// O23: el visto bueno del equipo (no decide ni bloquea al cliente).
+describe('darVistoBuenoDocumento', () => {
+  const DOC = '66666666-0000-0000-0000-000000000001'
+
+  it('llama a dar_visto_bueno_documento con el documento y la versión que se vio', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.darVistoBuenoDocumento(DOC, '1.1')).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      { tabla: 'dar_visto_bueno_documento', operacion: 'rpc', datos: { p_id: DOC, p_version: '1.1' } },
+    ])
+  })
+
+  it('traduce el rechazo del servidor (el cliente no es del equipo) a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'dar_visto_bueno_documento.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.darVistoBuenoDocumento(DOC, '1.1')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+
+  it('una versión que cambió se traduce a "version_desactualizada"', async () => {
+    const error = { code: '22023', message: 'El documento cambió desde que lo abriste (ahora es la versión 1.2): vuelve a cargarlo' }
+    const { cliente } = crearClienteDoble({ 'dar_visto_bueno_documento.rpc': { data: null, error } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.darVistoBuenoDocumento(DOC, '1.1')).toMatchObject({ ok: false, error: 'version_desactualizada' })
+  })
+
+  it('un visto bueno repetido muestra el texto que escribió la BD', async () => {
+    const error = { code: '22023', message: 'Esta versión ya tiene el visto bueno del equipo' }
+    const { cliente } = crearClienteDoble({ 'dar_visto_bueno_documento.rpc': { data: null, error } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.darVistoBuenoDocumento(DOC, '1.1')).toEqual({
+      ok: false, error: 'datos_invalidos', detalle: 'Esta versión ya tiene el visto bueno del equipo',
+    })
   })
 })
 

@@ -16,6 +16,8 @@ export interface PermisosGestion {
   puedeArchivarEmpresa: boolean
   // Reactivar es el mismo UPDATE de "activa" que archivar (política "admins editan empresas"): O2.
   puedeReactivarEmpresa: boolean
+  // Editar los datos de una empresa ya creada (O2): misma política y mismas columnas que el alta.
+  puedeEditarEmpresa: boolean
   puedeCrearProyecto: boolean
   // Por qué no puede (para mostrarlo en pantalla); null si puede.
   motivo: string | null
@@ -27,6 +29,7 @@ export function permisosGestion(rol: Rol): PermisosGestion {
     puedeCrearEmpresa: esAdmin,
     puedeArchivarEmpresa: esAdmin,
     puedeReactivarEmpresa: esAdmin,
+    puedeEditarEmpresa: esAdmin,
     puedeCrearProyecto: esAdmin,
     motivo: esAdmin ? null : AVISO_SOLO_ADMIN,
   }

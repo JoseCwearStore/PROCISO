@@ -7,6 +7,7 @@ import {
   MessageSquare,
   RotateCcw,
   Search,
+  ThumbsUp,
   XCircle,
 } from 'lucide-react'
 import { useApp } from '../context/AppContext'
@@ -15,8 +16,8 @@ import { mensajeDeError } from '../lib/escrituras'
 import { documentoCambio } from '../lib/refresco'
 import { formatearFecha } from '../lib/datos'
 import {
-  filtrarBandeja, historialParaMostrar, mensajeAprobacion, mensajeSinDecision, puedeDecidir, reemplazadosAlAprobar, textosDeDecision,
-  type VistaBandeja,
+  filtrarBandeja, historialParaMostrar, mensajeAprobacion, mensajeSinDecision, puedeDarVistoBueno, puedeDecidir, reemplazadosAlAprobar, textosDeDecision,
+  vistoBuenoVigente, type VistaBandeja,
 } from '../lib/aprobacion'
 import { hayFiltrosActivos } from '../lib/filtros'
 import { Button } from '../components/ui/Button'
@@ -60,7 +61,35 @@ export default function Revisiones() {
   const [decidiendo, setDecidiendo] = useState(false)
   const [confirmandoAprobacion, setConfirmandoAprobacion] = useState(false)
 
-  async function decidir(estado: 'Aprobado' | 'En corrección' | 'Rechazado') {
+  // O23: el equipo deja su visto bueno a esta versión. No cambia el estado ni bloquea al cliente.
+  async function darVistoBueno() {
+    if (!documento || decidiendo) return
+    setDecidiendo(true)
+    const resultado = await servicioEscritura.darVistoBuenoDocumento(documento.id, documento.version)
+    setDecidiendo(false)
+    if (!resultado.ok) {
+      setError(mensajeDeError(resultado))
+      return
+    }
+    const fecha = formatearFecha(new Date().toISOString())
+    const usuarioId = state.currentUser?.id ?? ''
+    dispatch({
+      type: 'SET_DOCUMENTOS',
+      documentos: state.documentos.map((item) => item.id !== documento.id ? item : {
+        ...item,
+        vistoBuenoPorId: usuarioId,
+        vistoBuenoEn: fecha,
+        vistoBuenoVersion: item.version,
+        historial: [...(item.historial || []), {
+          id: crypto.randomUUID(), fecha, autorId: usuarioId, accion: 'Visto bueno del equipo', detalle: `Versión ${item.version}.`,
+        }],
+      }),
+    })
+    setError('')
+    showToast('Visto bueno registrado.', 'success')
+  }
+
+  async function decidir(estado:'Aprobado' | 'En corrección' | 'Rechazado') {
     if (!documento || decidiendo) return
     if ((estado === 'Rechazado' || estado === 'En corrección') && (!seccionId || !comentario.trim())) {
       setError('Selecciona una sección y agrega el comentario que fundamenta la decisión.')
@@ -201,7 +230,7 @@ export default function Revisiones() {
     <div className="p-4 sm:p-6">
       <Button variant="ghost" size="sm" onClick={() => { setSeleccionadoId(null); setError('') }} icon={<ArrowLeft className="h-4 w-4" />}>Volver a la bandeja</Button>
       <div className="mt-3 flex flex-wrap items-start justify-between gap-3">
-        <div><div className="mb-2 flex items-center gap-2"><StatusBadge status={documento.estado} /><span className="text-xs text-slate-400">{documento.codigo} · Versión {documento.version}</span></div><h2 className="text-2xl font-bold text-navy">{documento.nombre}</h2><p className="mt-1 text-sm text-slate-500">Elaborado por {getUsuario(documento.creadoPorId)?.nombre || documento.creadoPorId}</p></div>
+        <div><div className="mb-2 flex items-center gap-2"><StatusBadge status={documento.estado} /><span className="text-xs text-slate-400">{documento.codigo} · Versión {documento.version}</span></div><h2 className="text-2xl font-bold text-navy">{documento.nombre}</h2><p className="mt-1 text-sm text-slate-500">Elaborado por {getUsuario(documento.creadoPorId)?.nombre || documento.creadoPorId}</p>{vistoBuenoVigente(documento) && <p className="mt-1 flex items-center gap-1.5 text-sm font-medium text-emerald-700"><ThumbsUp className="h-4 w-4" />Visto bueno del equipo: {getUsuario(documento.vistoBuenoPorId || '')?.nombre || 'Equipo'}{documento.vistoBuenoEn ? ` · ${documento.vistoBuenoEn}` : ''}</p>}</div>
       </div>
 
       <div className="mt-5 grid gap-5 xl:grid-cols-[minmax(0,1fr)_360px]">
@@ -216,7 +245,7 @@ export default function Revisiones() {
         </main>
 
         <aside className="h-fit space-y-4 xl:sticky xl:top-20">
-          {!hayDecision && <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">Sin decisión pendiente</p><p className="mt-1 text-xs text-slate-500">{mensajeSinDecision(documento.estado)}</p></div>}{hayDecision && <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">{textos.titulo}</p><p className="mt-1 text-xs text-slate-500">{textos.ayuda}</p><select className={`${inputClass} mt-4`} value={seccionId} onChange={(event) => setSeccionId(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea ref={comentarioRef} rows={4} className={`${inputClass} mt-3`} value={comentario} onChange={(event) => setComentario(event.target.value)} placeholder="Comentario de revisión..." />{error && <div className="mt-3 flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}<div className="mt-4 space-y-2">{esCliente && <Button className="w-full" variant="success" disabled={decidiendo} onClick={() => setConfirmandoAprobacion(true)} icon={<CheckCircle2 className="h-4 w-4" />}>Aprobar y fijar versión</Button>}<Button className="w-full" variant="outline" disabled={decidiendo} onClick={() => decidir('En corrección')} icon={<RotateCcw className="h-4 w-4" />}>Solicitar corrección</Button>{!esCliente && <Button className="w-full" variant="danger" disabled={decidiendo} onClick={() => decidir('Rechazado')} icon={<XCircle className="h-4 w-4" />}>Rechazar</Button>}</div></div>}
+          {!hayDecision && <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">Sin decisión pendiente</p><p className="mt-1 text-xs text-slate-500">{mensajeSinDecision(documento.estado)}</p></div>}{hayDecision && <div className="rounded-xl border border-line bg-white p-4"><p className="font-semibold text-slate-800">{textos.titulo}</p><p className="mt-1 text-xs text-slate-500">{textos.ayuda}</p><select className={`${inputClass} mt-4`} value={seccionId} onChange={(event) => setSeccionId(event.target.value)}><option value="">Selecciona una sección</option>{documento.secciones?.map((item) => <option key={item.id} value={item.id}>{item.titulo || 'Sin título'}</option>)}</select><textarea ref={comentarioRef} rows={4} className={`${inputClass} mt-3`} value={comentario} onChange={(event) => setComentario(event.target.value)} placeholder="Comentario de revisión..." />{error && <div className="mt-3 flex gap-2 rounded-lg bg-red-50 p-3 text-xs text-red-700"><AlertCircle className="h-4 w-4 shrink-0" />{error}</div>}<div className="mt-4 space-y-2">{esCliente && <Button className="w-full" variant="success" disabled={decidiendo} onClick={() => setConfirmandoAprobacion(true)} icon={<CheckCircle2 className="h-4 w-4" />}>Aprobar y fijar versión</Button>}{puedeDarVistoBueno(esCliente, documento) && <Button className="w-full" variant="outline" disabled={decidiendo} onClick={darVistoBueno} icon={<ThumbsUp className="h-4 w-4" />}>Dar visto bueno</Button>}<Button className="w-full" variant="outline" disabled={decidiendo} onClick={() => decidir('En corrección')} icon={<RotateCcw className="h-4 w-4" />}>Solicitar corrección</Button>{!esCliente && <Button className="w-full" variant="danger" disabled={decidiendo} onClick={() => decidir('Rechazado')} icon={<XCircle className="h-4 w-4" />}>Rechazar</Button>}</div></div>}
           <div className="rounded-xl border border-line bg-white p-4"><p className="mb-3 text-sm font-semibold text-slate-700">Historial completo</p><div className="space-y-3">{eventos.length === 0 ? <p className="text-xs text-slate-400">Sin eventos registrados.</p> : eventos.map((item) => <div key={item.id} className="border-l-2 border-violet-200 pl-3"><p className="text-xs font-medium text-slate-700">{item.accion}</p><p className="text-[10px] text-slate-400">{item.fecha}</p><p className="mt-1 text-xs text-slate-500">{item.detalle}</p></div>)}</div></div>
         </aside>
       </div>

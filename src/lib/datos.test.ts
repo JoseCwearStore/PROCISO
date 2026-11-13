@@ -131,6 +131,7 @@ function filasBase(): FilasSesion {
         secciones: [{ id: 's1', titulo: 'Objetivo', tipo: 'texto', contenido: 'Comprar bien' }],
         referencia_normativa: 'ISO 9001:2026', motivo_cambio: 'Creación', bloqueado: false, contenido_pendiente: false,
         creado_por: ROBERTO, revisado_por: null, aprobado_por: null, fecha_revision: null, fecha_aprobacion: null,
+        visto_bueno_por: null, visto_bueno_en: null, visto_bueno_version: null,
         creado_en: '2024-06-01T10:00:00+00:00', actualizado_en: '2024-07-15T10:00:00+00:00',
       },
     ],
@@ -475,6 +476,21 @@ describe('combinarDatosSesion', () => {
       historial: [{ id: '9', fecha: '25/03/2024', autorId: ROBERTO, accion: 'Enviado a revisión', detalle: 'Versión 1.0' }],
     })
     expect(documentos[0].aprobadoPorId).toBeUndefined()
+    // Sin visto bueno del equipo: los tres campos quedan sin definir (no cadenas vacías).
+    expect(documentos[0].vistoBuenoPorId).toBeUndefined()
+    expect(documentos[0].vistoBuenoEn).toBeUndefined()
+    expect(documentos[0].vistoBuenoVersion).toBeUndefined()
+  })
+
+  it('traduce el visto bueno del equipo (O23): quién, cuándo y de qué versión', () => {
+    const filas = filasBase()
+    filas.documentos[0] = {
+      ...filas.documentos[0],
+      visto_bueno_por: ROBERTO, visto_bueno_en: '2024-07-16T10:00:00+00:00', visto_bueno_version: '1.0',
+    }
+    const { documentos } = combinarDatosSesion(filas)
+
+    expect(documentos[0]).toMatchObject({ vistoBuenoPorId: ROBERTO, vistoBuenoEn: '16/07/2024', vistoBuenoVersion: '1.0' })
   })
 
   it('traduce las notificaciones calculadas por la BD (la clave es el id)', () => {

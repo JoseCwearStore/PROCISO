@@ -20,6 +20,7 @@ import { Button } from "../components/ui/Button"
 import { ConfirmDialog } from "../components/ui/ConfirmDialog"
 import { Modal } from "../components/ui/Modal"
 import { ProgressBar } from "../components/ui/ProgressBar"
+import { opcionesDeResponsable } from "../lib/opcionesResponsable"
 import { avisoDelPaso, faltantesVisibles, type AvisoPaso } from "../lib/avisoLevantamiento"
 import {
   avanceLevantamiento,
@@ -510,16 +511,15 @@ export default function LevantamientoProcesos() {
                     }
                   >
                     <option value="">Selecciona</option>
-                    {state.proyectos
-                      .find((p) => p.id === borrador.proyectoId)
-                      ?.equipoIds.map((id) => {
-                        const usuario = getUsuario(id)
-                        return usuario ? (
-                          <option key={id} value={id}>
-                            {usuario.nombre}
-                          </option>
-                        ) : null
-                      })}
+                    {opcionesDeResponsable(
+                      state.proyectos.find((p) => p.id === borrador.proyectoId),
+                      borrador.responsableId,
+                      state.usuarios,
+                    ).map((opcion) => (
+                      <option key={opcion.id} value={opcion.id}>
+                        {opcion.etiqueta}
+                      </option>
+                    ))}
                   </select>
                 </label>
                 <div className="sm:col-span-2">

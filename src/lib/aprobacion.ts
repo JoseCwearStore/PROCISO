@@ -39,9 +39,20 @@ export function textosDeDecision(esCliente: boolean): { titulo: string; ayuda: s
       }
     : {
         titulo: 'Decisión de revisión',
-        ayuda: 'El equipo revisa; la aprobación final la da el cliente. Los comentarios de corrección o rechazo deben quedar anclados a una sección.',
+        ayuda: 'El equipo revisa; la aprobación final la da el cliente. Puedes dejar tu visto bueno a esta versión: no decide ni bloquea al cliente. Los comentarios de corrección o rechazo deben quedar anclados a una sección.',
       }
 }
+
+// O23: el visto bueno del equipo es de UNA versión. Al corregir y reenviar sale otra versión y el anterior deja de
+// valer; tampoco vale si el documento ya se decidió. (Espejo de lo que guarda dar_visto_bueno_documento.)
+type DocumentoConVistoBueno = Pick<Documento, 'estado' | 'version' | 'vistoBuenoVersion'>
+
+export const vistoBuenoVigente = (documento: DocumentoConVistoBueno): boolean =>
+  documento.estado === 'Pendiente de revisión' && !!documento.vistoBuenoVersion && documento.vistoBuenoVersion === documento.version
+
+// El botón «Dar visto bueno»: solo el equipo (no el cliente), con decisión pendiente y sin visto bueno vigente.
+export const puedeDarVistoBueno = (esCliente: boolean, documento: DocumentoConVistoBueno): boolean =>
+  !esCliente && puedeDecidir(documento) && !vistoBuenoVigente(documento)
 
 // El historial de un documento, lo más nuevo primero (O24). Siempre una lista: así la pantalla puede decidir con
 // `.length` si avisa "Sin eventos registrados". Antes usaba `lista.map(...) || aviso`, que nunca llegaba al aviso

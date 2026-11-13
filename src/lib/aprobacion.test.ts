@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  filtrarBandeja, historialParaMostrar, mensajeAprobacion, mensajeSinDecision, puedeDecidir, reemplazadosAlAprobar, textosDeDecision,
+  filtrarBandeja, historialParaMostrar, mensajeAprobacion, mensajeSinDecision, puedeDarVistoBueno, puedeDecidir, reemplazadosAlAprobar,
+  textosDeDecision, vistoBuenoVigente,
   type DocumentoAprobable,
 } from './aprobacion'
 
@@ -211,6 +212,55 @@ describe('textosDeDecision (el panel de la derecha de Revisiones, O22)', () => {
     expect(t.ayuda).toMatch(/la aprobación final la da el cliente/i)
     expect(t.ayuda).toMatch(/correcci[oó]n o rechazo/i)
     expect(t.ayuda).toMatch(/anclad/i)
+  })
+
+  it('al equipo se le explica el visto bueno (O23): deja constancia y no bloquea al cliente', () => {
+    const t = textosDeDecision(false)
+    expect(t.ayuda).toMatch(/visto bueno/i)
+    expect(t.ayuda).toMatch(/no (decide|bloquea)/i)
+  })
+
+  it('al cliente no se le habla del visto bueno en el panel (lo ve como una línea aparte)', () => {
+    expect(textosDeDecision(true).ayuda).not.toMatch(/visto bueno/i)
+  })
+})
+
+// O23: el visto bueno es de UNA versión; al reenviar sale otra y deja de valer.
+describe('vistoBuenoVigente', () => {
+  const base: Parameters<typeof vistoBuenoVigente>[0] = { estado: 'Pendiente de revisión', version: '1.1', vistoBuenoVersion: '1.1' }
+
+  it('vale cuando es de la versión actual y el documento sigue pendiente', () => {
+    expect(vistoBuenoVigente(base)).toBe(true)
+  })
+  it('no vale si es de una versión anterior (se reenvió con una versión nueva)', () => {
+    expect(vistoBuenoVigente({ ...base, vistoBuenoVersion: '1.0' })).toBe(false)
+  })
+  it('no vale si nunca se dio', () => {
+    expect(vistoBuenoVigente({ ...base, vistoBuenoVersion: undefined })).toBe(false)
+  })
+  it('no vale si el documento ya no está pendiente (se decidió)', () => {
+    expect(vistoBuenoVigente({ ...base, estado: 'En corrección' })).toBe(false)
+    expect(vistoBuenoVigente({ ...base, estado: 'Aprobado' })).toBe(false)
+  })
+})
+
+describe('puedeDarVistoBueno', () => {
+  const pendiente: Parameters<typeof puedeDarVistoBueno>[1] = { estado: 'Pendiente de revisión', version: '1.1', vistoBuenoVersion: undefined }
+
+  it('el equipo puede cuando hay decisión pendiente y aún no se dio', () => {
+    expect(puedeDarVistoBueno(false, pendiente)).toBe(true)
+  })
+  it('el cliente nunca', () => {
+    expect(puedeDarVistoBueno(true, pendiente)).toBe(false)
+  })
+  it('no si ya se dio para esta versión', () => {
+    expect(puedeDarVistoBueno(false, { ...pendiente, vistoBuenoVersion: '1.1' })).toBe(false)
+  })
+  it('sí si el visto bueno guardado es de una versión anterior', () => {
+    expect(puedeDarVistoBueno(false, { ...pendiente, vistoBuenoVersion: '1.0' })).toBe(true)
+  })
+  it('no si no hay decisión pendiente', () => {
+    expect(puedeDarVistoBueno(false, { ...pendiente, estado: 'En corrección' })).toBe(false)
   })
 })
 

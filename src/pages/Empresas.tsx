@@ -10,6 +10,8 @@ import { servicioEscritura } from '../lib/servicios'
 import { mensajeDeError } from '../lib/escrituras'
 import { etiquetaEstadoEmpresa } from '../lib/estadoEmpresa'
 import { historialDeEmpresa } from '../lib/historialEmpresa'
+import { empresaAFormulario, opcionesConActual } from '../lib/empresaFormulario'
+import { iniciales } from '../lib/datos'
 import { StatusBadge } from '../components/ui/StatusBadge'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -140,7 +142,7 @@ function EmpresaForm({
             <label className="block text-xs font-medium text-fg/70 mb-1">Sector<span className="text-red-500 ml-0.5">*</span></label>
             <select value={form.sector} onChange={(e) => set('sector', e.target.value)} className={`w-full px-3 py-2 border rounded-lg text-sm text-fg bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 transition ${errors.sector ? 'border-red-300' : 'border-line'}`}>
               <option value="">Seleccionar...</option>
-              {SECTORES.map((s) => <option key={s} value={s}>{s}</option>)}
+              {opcionesConActual(SECTORES, form.sector).map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             {errors.sector && <p className="text-xs text-red-500 mt-0.5">{errors.sector}</p>}
           </div>
@@ -148,7 +150,7 @@ function EmpresaForm({
             <label className="block text-xs font-medium text-fg/70 mb-1">Tamaño<span className="text-red-500 ml-0.5">*</span></label>
             <select value={form.tamano} onChange={(e) => set('tamano', e.target.value)} className={`w-full px-3 py-2 border rounded-lg text-sm text-fg bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 transition ${errors.tamano ? 'border-red-300' : 'border-line'}`}>
               <option value="">Seleccionar...</option>
-              {TAMANOS.map((t) => <option key={t} value={t}>{t}</option>)}
+              {opcionesConActual(TAMANOS, form.tamano).map((t) => <option key={t} value={t}>{t}</option>)}
             </select>
             {errors.tamano && <p className="text-xs text-red-500 mt-0.5">{errors.tamano}</p>}
           </div>
@@ -163,7 +165,7 @@ function EmpresaForm({
             <label className="block text-xs font-medium text-fg/70 mb-1">Estado<span className="text-red-500 ml-0.5">*</span></label>
             <select value={form.estado} onChange={(e) => set('estado', e.target.value)} className={`w-full px-3 py-2 border rounded-lg text-sm text-fg bg-white focus:outline-none focus:ring-2 focus:ring-navy/20 transition ${errors.estado ? 'border-red-300' : 'border-line'}`}>
               <option value="">Seleccionar...</option>
-              {ESTADOS_MX.map((s) => <option key={s} value={s}>{s}</option>)}
+              {opcionesConActual(ESTADOS_MX, form.estado).map((s) => <option key={s} value={s}>{s}</option>)}
             </select>
             {errors.estado && <p className="text-xs text-red-500 mt-0.5">{errors.estado}</p>}
           </div>
@@ -255,6 +257,7 @@ export function EmpresaDetalle() {
   const permisos = useAccionesGestion()
 
   const [showArchive, setShowArchive] = useState(false)
+  const [showEditar, setShowEditar] = useState(false)
 
   if (!empresa) {
     return (
@@ -283,6 +286,43 @@ export function EmpresaDetalle() {
     dispatch({ type: 'UPDATE_EMPRESA', id: empresa!.id, updates: { activa: false } })
     showToast(`"${empresa!.nombre}" fue archivada.`, 'success')
     navigate('empresas')
+  }
+
+  // O2: corregir los datos de la empresa con el mismo formulario del alta.
+  async function handleEditar(form: FormData) {
+    const resultado = await servicioEscritura.actualizarEmpresa(empresa!.id, form)
+    if (!resultado.ok) {
+      showToast(mensajeDeError(resultado), 'error')
+      return
+    }
+    const opcional = (texto: string) => texto.trim() || undefined
+    dispatch({
+      type: 'UPDATE_EMPRESA',
+      id: empresa!.id,
+      updates: {
+        nombre: form.nombre.trim(),
+        nombreComercial: opcional(form.nombreComercial),
+        rfc: form.rfc.trim(),
+        sector: form.sector,
+        tamano: form.tamano,
+        trabajadores: opcional(form.trabajadores),
+        ciudad: form.ciudad.trim(),
+        estado: form.estado,
+        direccion: opcional(form.direccion),
+        contactoPrincipal: form.contactoPrincipal.trim(),
+        cargoContacto: form.cargoContacto.trim(),
+        emailContacto: form.emailContacto.trim(),
+        telefonoContacto: form.telefonoContacto.trim(),
+        procesosprincipales: opcional(form.procesosprincipales),
+        alcanceInicial: opcional(form.alcanceInicial),
+        normaInteres: form.normaInteres,
+        consultorAsignadoId: form.consultorAsignadoId || undefined,
+        observaciones: opcional(form.observaciones),
+        logoInicial: iniciales(opcional(form.nombreComercial) ?? form.nombre.trim()),
+      },
+    })
+    showToast(`Se guardaron los cambios de "${form.nombre.trim()}".`, 'success')
+    setShowEditar(false)
   }
 
   // O2: el diálogo de archivar promete que se puede reactivar. Se queda en la ficha para ver el cambio.
@@ -339,6 +379,11 @@ export function EmpresaDetalle() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            {permisos.puedeEditarEmpresa && (
+              <Button variant="outline" size="sm" icon={<Edit3 className="w-4 h-4" />} onClick={() => setShowEditar(true)}>
+                Editar
+              </Button>
+            )}
             {empresa.activa && permisos.puedeArchivarEmpresa && (
               <Button variant="ghost" size="sm" icon={<Archive className="w-4 h-4" />} onClick={() => setShowArchive(true)}>
                 Archivar
@@ -352,6 +397,10 @@ export function EmpresaDetalle() {
           </div>
         </div>
       </div>
+
+      <Modal open={showEditar} title="Editar empresa" size="lg" onClose={() => setShowEditar(false)}>
+        <EmpresaForm initial={empresaAFormulario(empresa)} onSubmit={handleEditar} onCancel={() => setShowEditar(false)} submitLabel="Guardar cambios" />
+      </Modal>
 
       {/* Archive confirm modal */}
       <Modal open={showArchive} title="Archivar empresa" size="sm" onClose={() => setShowArchive(false)}>
