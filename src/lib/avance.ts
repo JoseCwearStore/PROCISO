@@ -11,16 +11,18 @@ function terminadoAl(terminado: boolean, fecha: string | undefined, corte: strin
   return fecha ? fechaISO(fecha) <= corte : corte >= hoy
 }
 
-// La misma fórmula que calcularAvance (70 % tareas completadas + 30 % entregables
-// aprobados), pero mirando solo lo que estaba terminado a la fecha de corte.
+// El avance de un proyecto: 70 % tareas completadas + 30 % entregables aprobados, mirando solo lo que estaba
+// terminado a la fecha de corte. Si falta una de las dos partes (O4), su peso se reparte en la que sí hay: un proyecto
+// sin tareas y con todos sus entregables aprobados está al 100 %, no al 30 % (el 70 % de las tareas contaba como 0
+// aunque no hubiera tareas). Sin ninguna de las dos, 0 %.
 // Aproximación: el total es el de hoy (una tarea creada después cuenta como pendiente antes).
 export function avanceAl(tareas: TareaAvance[], entregables: EntregableAvance[], corte: string, hoy: string): number {
   if (tareas.length === 0 && entregables.length === 0) return 0
   const completadas = tareas.filter((t) => terminadoAl(t.estado === 'Completada', t.fechaCompletada, corte, hoy)).length
   const aprobados = entregables.filter((e) => terminadoAl(e.estado === 'Aprobado', e.fechaAprobacion, corte, hoy)).length
-  const pTareas = tareas.length > 0 ? completadas / tareas.length : 0
-  const pEntregables = entregables.length > 0 ? aprobados / entregables.length : 0
-  return Math.round(0.7 * pTareas * 100 + 0.3 * pEntregables * 100)
+  if (entregables.length === 0) return Math.round((completadas / tareas.length) * 100)
+  if (tareas.length === 0) return Math.round((aprobados / entregables.length) * 100)
+  return Math.round(0.7 * (completadas / tareas.length) * 100 + 0.3 * (aprobados / entregables.length) * 100)
 }
 
 // Propias y no de Intl: las abreviaturas de Intl cambian según la versión de ICU ("sep"/"sept").

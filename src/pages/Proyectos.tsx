@@ -55,7 +55,8 @@ const NORMAS: Array<{ value: Proyecto['edicionNorma']; label: string }> = [
 ]
 
 const FORMULA_TOOLTIP =
-  'Avance = 70% × (tareas completadas / tareas totales) + 30% × (entregables aprobados / entregables totales)'
+  'Avance = 70% × (tareas completadas / tareas totales) + 30% × (entregables aprobados / entregables totales). ' +
+  'Si el proyecto no tiene tareas (o no tiene entregables), cuenta solo la parte que sí tiene.'
 
 type ViewMode = 'lista' | 'tarjetas' | 'kanban' | 'cronograma'
 
