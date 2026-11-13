@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { buscarDocumentos, ordenarDocumentos, siguienteOrden, type Orden } from '../lib/listadoDocumentos'
 import {
   AlertTriangle,
   ArrowLeft,
@@ -10,6 +11,7 @@ import {
   MessageSquare,
   Plus,
   Save,
+  Search,
   Send,
   Table2,
   Trash2,
@@ -93,6 +95,13 @@ const GENERADOR_VACIO: Generador = {
   edicionNorma: 'ISO 9001:2026',
 }
 
+const COLUMNAS = [
+  { label: 'Código', clave: 'codigo' }, { label: 'Título', clave: 'nombre' }, { label: 'Tipo', clave: 'tipo' }, { label: 'Empresa', clave: 'empresa' },
+  { label: 'Proyecto', clave: 'proyecto' }, { label: 'Referencia normativa', clave: 'referencia' }, { label: 'Proceso', clave: 'proceso' },
+  { label: 'Elaborador', clave: 'elaborador' }, { label: 'Creación', clave: 'fecha' }, { label: 'Versión', clave: 'version' },
+  { label: 'Estado', clave: 'estado' }, { label: 'Revisión', clave: 'revision' }, { label: 'Aprobador', clave: 'aprobador' },
+]
+
 export default function Documentacion() {
   const { state, dispatch, getEmpresa, getProyecto, getUsuario, showToast } = useApp()
   const [vista, setVista] = useState<'lista' | 'editor'>('lista')
@@ -110,6 +119,9 @@ export default function Documentacion() {
   const [errores, setErrores] = useState<string[]>([])
   const [comentarioSeccion, setComentarioSeccion] = useState('')
   const [comentarioTexto, setComentarioTexto] = useState('')
+  // O16: búsqueda por texto y orden por columna del listado.
+  const [busqueda, setBusqueda] = useState('')
+  const [orden, setOrden] = useState<Orden | null>(null)
   const [filtros, setFiltros] = useState({
     empresa: '',
     proyecto: '',
@@ -145,7 +157,7 @@ export default function Documentacion() {
     setGenerador({ ...generador, plantilla: id, procesoId: '', respuestas: {}, codigo })
   }
 
-  const documentos = useMemo(() => documentosDisponibles.filter((item) => {
+  const documentosFiltrados = useMemo(() => documentosDisponibles.filter((item) => {
     const proyecto = getProyecto(item.proyectoId)
     const empresaId = item.empresaId || proyecto?.empresaId
     if (filtros.empresa && empresaId !== filtros.empresa) return false
@@ -157,6 +169,38 @@ export default function Documentacion() {
     if (filtros.hasta && fechaISO(item.fechaCreacion) > filtros.hasta) return false
     return true
   }), [documentosDisponibles, filtros, getProyecto])
+
+  // Qué texto de cada documento busca el cuadro de búsqueda, y cómo se lee cada columna al ordenar.
+  const nombreEmpresaDe = (item: Documento) => {
+    const empresa = getEmpresa(item.empresaId || getProyecto(item.proyectoId)?.empresaId || '')
+    return empresa?.nombreComercial || empresa?.nombre || ''
+  }
+  const nombreProcesoDe = (item: Documento) => state.procesos.find((procesoItem) => procesoItem.id === item.procesoId)?.nombre || ''
+  const isoONada = (fecha?: string) => (fecha ? fechaISO(fecha) : '')
+  const LECTORES: Record<string, (item: Documento) => string> = {
+    codigo: (item) => item.codigo || '',
+    nombre: (item) => item.nombre,
+    tipo: (item) => item.tipo,
+    empresa: nombreEmpresaDe,
+    proyecto: (item) => getProyecto(item.proyectoId)?.nombre || '',
+    referencia: (item) => item.referenciaNormativa || getProyecto(item.proyectoId)?.edicionNorma || '',
+    proceso: nombreProcesoDe,
+    elaborador: (item) => getUsuario(item.creadoPorId)?.nombre || '',
+    fecha: (item) => isoONada(item.fechaCreacion),
+    version: (item) => item.version,
+    estado: (item) => item.estado,
+    revision: (item) => isoONada(item.fechaRevision),
+    aprobador: (item) => (item.aprobadoPorId ? getUsuario(item.aprobadoPorId)?.nombre || '' : ''),
+  }
+  const documentos = useMemo(
+    () => ordenarDocumentos(
+      buscarDocumentos(documentosFiltrados, busqueda, (item) => [item.codigo, item.nombre, item.tipo, nombreEmpresaDe(item), getProyecto(item.proyectoId)?.nombre, nombreProcesoDe(item), getUsuario(item.creadoPorId)?.nombre].filter(Boolean).join(' ')),
+      orden,
+      (clave) => LECTORES[clave] ?? (() => ''),
+    ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [documentosFiltrados, busqueda, orden, state.empresas, state.procesos, state.usuarios, getProyecto],
+  )
 
   async function generar() {
     const plantilla = plantillaPorId(generador.plantilla)
@@ -506,6 +550,11 @@ export default function Documentacion() {
         </div>
       </div>
 
+      <div className="mb-3 relative">
+        <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+        <input type="search" className={`${inputClass} pl-9`} value={busqueda} onChange={(event) => setBusqueda(event.target.value)} placeholder="Buscar por código, título, tipo, empresa, proyecto, proceso o elaborador..." aria-label="Buscar documentos" />
+      </div>
+
       <div className="mb-4 grid gap-2 rounded-xl border border-line bg-white p-4 sm:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7">
         <select className={inputClass} value={filtros.empresa} onChange={(event) => setFiltros({ ...filtros, empresa: event.target.value, proyecto: '' })}><option value="">Empresa</option>{empresasDisponibles.map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select>
         <select className={inputClass} value={filtros.proyecto} onChange={(event) => setFiltros({ ...filtros, proyecto: event.target.value })}><option value="">Proyecto</option>{proyectosDisponibles.filter((item) => !filtros.empresa || item.empresaId === filtros.empresa).map((item) => <option key={item.id} value={item.id}>{item.nombre}</option>)}</select>
@@ -518,7 +567,7 @@ export default function Documentacion() {
 
       <div className="overflow-x-auto rounded-xl border border-line bg-white">
         <table className="min-w-[1500px] w-full text-sm">
-          <thead><tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">{['Código', 'Título', 'Tipo', 'Empresa', 'Proyecto', 'Referencia normativa', 'Proceso', 'Elaborador', 'Creación', 'Versión', 'Estado', 'Revisión', 'Aprobador'].map((label) => <th key={label} className="px-4 py-3">{label}</th>)}</tr></thead>
+          <thead><tr className="border-b border-line bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">{COLUMNAS.map(({ label, clave }) => <th key={clave} className="px-4 py-3" aria-sort={orden?.clave === clave ? (orden.direccion === 'asc' ? 'ascending' : 'descending') : 'none'}><button type="button" className="inline-flex items-center gap-1 text-left uppercase tracking-wide hover:text-slate-800" onClick={() => setOrden(siguienteOrden(orden, clave))}>{label}<span aria-hidden="true" className="text-[10px]">{orden?.clave === clave ? (orden.direccion === 'asc' ? '▲' : '▼') : ''}</span></button></th>)}</tr></thead>
           <tbody>{documentos.map((item) => {
             const proyecto = getProyecto(item.proyectoId)
             const empresa = getEmpresa(item.empresaId || proyecto?.empresaId || '')

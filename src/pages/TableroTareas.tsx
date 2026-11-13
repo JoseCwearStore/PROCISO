@@ -19,7 +19,9 @@ import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
 import { useAccionesTarea } from '../hooks/useAccionesTarea'
 import type { CambiosTarea } from '../lib/escrituras'
-import { ESTADOS_TAREA, estaVencida } from '../lib/tareas'
+import {
+  ESTADOS_TAREA, estaVencida, hayCambiosTarea, ordenarListaTareas, proyectosParaNuevaTarea, puedeMoverTarea, usuariosConTareas,
+} from '../lib/tareas'
 import type { EstadoTarea, PrioridadTarea, Tarea } from '../types'
 
 // ─── Constants ────────────────────────────────────────────────────────────────
@@ -109,14 +111,16 @@ interface KanbanCardProps {
   proyectoNombre: string
   onClick: () => void
   onDragStart: (e: React.DragEvent) => void
+  // O32: solo se arrastra lo que esa persona puede mover (al cliente no su tarea completada).
+  movible: boolean
 }
 
-function KanbanCard({ tarea, proyectoNombre, onClick, onDragStart }: KanbanCardProps) {
+function KanbanCard({ tarea, proyectoNombre, onClick, onDragStart, movible }: KanbanCardProps) {
   const vencida = estaVencida(tarea)
 
   return (
     <div
-      draggable
+      draggable={movible}
       onDragStart={onDragStart}
       onClick={onClick}
       className="bg-white rounded-lg border border-line shadow-sm hover:shadow-md transition-shadow cursor-pointer select-none group"
@@ -149,7 +153,7 @@ function KanbanCard({ tarea, proyectoNombre, onClick, onDragStart }: KanbanCardP
               </span>
             )}
           </div>
-          <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab flex-shrink-0" />
+          {movible && <GripVertical className="w-3.5 h-3.5 text-slate-300 group-hover:text-slate-400 cursor-grab flex-shrink-0" />}
         </div>
       </div>
     </div>
@@ -164,9 +168,10 @@ interface KanbanColumnProps {
   getProyectoNombre: (id: string) => string
   onDrop: (estado: EstadoTarea, taskId: string) => void
   onCardClick: (tarea: Tarea) => void
+  puedeMover: (tarea: Tarea) => boolean
 }
 
-function KanbanColumn({ estado, tareas, getProyectoNombre, onDrop, onCardClick }: KanbanColumnProps) {
+function KanbanColumn({ estado, tareas, getProyectoNombre, onDrop, onCardClick, puedeMover }: KanbanColumnProps) {
   const [dragOver, setDragOver] = useState(false)
 
   const handleDragOver = (e: React.DragEvent) => {
@@ -214,6 +219,7 @@ function KanbanColumn({ estado, tareas, getProyectoNombre, onDrop, onCardClick }
             proyectoNombre={getProyectoNombre(t.proyectoId)}
             onClick={() => onCardClick(t)}
             onDragStart={(e) => e.dataTransfer.setData('text/plain', t.id)}
+            movible={puedeMover(t)}
           />
         ))}
       </div>
@@ -249,12 +255,16 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
   const puedeEditar = acciones.esEquipo
   const estadosPosibles = [tarea.estado, ...acciones.permitidas(tarea)]
   const asignables = acciones.asignables(localTarea.proyectoId)
+  // O30: sin nada que guardar el botón no se puede usar; O29: el título (solo el equipo) no puede quedar vacío.
+  const hayCambios = hayCambiosTarea(localTarea, tarea)
+  const tituloValido = localTarea.titulo.trim().length > 0
 
   // Tres operaciones distintas en la BD: editar datos (equipo), cambiar estado (RPC
   // con historial) y comentar (inmediato, abajo).
   async function handleGuardar() {
     if (!localTarea || !tarea || guardando) return
     const cambios: CambiosTarea = {}
+    if (localTarea.titulo.trim() !== tarea.titulo.trim()) cambios.titulo = localTarea.titulo
     if (localTarea.descripcion !== tarea.descripcion) cambios.descripcion = localTarea.descripcion
     if (localTarea.prioridad !== tarea.prioridad) cambios.prioridad = localTarea.prioridad
     if (localTarea.asignadoAId !== tarea.asignadoAId) cambios.asignadoAId = localTarea.asignadoAId
@@ -290,12 +300,12 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
     <Modal
       open
       onClose={onClose}
-      title={localTarea.titulo}
+      title={tarea.titulo}
       size="lg"
       footer={
         <>
           <Button variant="outline" onClick={onClose}>Cancelar</Button>
-          <Button variant="primary" onClick={handleGuardar} disabled={guardando}>
+          <Button variant="primary" onClick={handleGuardar} disabled={guardando || !hayCambios || !tituloValido}>
             {guardando ? 'Guardando…' : 'Guardar cambios'}
           </Button>
         </>
@@ -309,6 +319,20 @@ function TareaDetailModal({ tarea, onClose }: TareaDetailModalProps) {
             Al marcar como Completada, se actualizará el avance del proyecto.
           </div>
         )}
+
+        {/* Título (O29) */}
+        <div>
+          <label className="block text-xs font-semibold text-slate-500 mb-1" htmlFor="titulo-tarea">Título</label>
+          <input
+            id="titulo-tarea"
+            type="text"
+            className="w-full border border-line rounded-lg px-3 py-2 text-sm text-fg focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:bg-slate-50 disabled:text-slate-500"
+            value={localTarea.titulo}
+            disabled={!puedeEditar}
+            onChange={(e) => setLocalTarea({ ...localTarea, titulo: e.target.value })}
+          />
+          {!tituloValido && <p className="text-xs text-red-500 mt-1">El título no puede quedar vacío.</p>}
+        </div>
 
         {/* Description */}
         <div>
@@ -593,7 +617,7 @@ function NuevaTareaModal({ open, onClose }: NuevaTareaModalProps) {
             }}
           >
             <option value="">Seleccionar proyecto...</option>
-            {state.proyectos.map((p) => (
+            {proyectosParaNuevaTarea(state.proyectos).map((p) => (
               <option key={p.id} value={p.id}>{p.nombre}</option>
             ))}
           </select>
@@ -692,20 +716,8 @@ export default function TableroTareas() {
     [getProyecto]
   )
 
-  // Sort for list view
-  const PRIORIDAD_ORDER: Record<PrioridadTarea, number> = { Alta: 0, Media: 1, Baja: 2 }
-  const ESTADO_ORDER: Record<EstadoTarea, number> = {
-    'En proceso': 1, 'En revisión': 2, 'Requiere corrección': 3, Pendiente: 4, Completada: 5,
-  }
-  // Las vencidas primero (como antes la "columna" Vencida), después por estado.
-  const rangoEstado = (t: Tarea) => (estaVencida(t) ? 0 : ESTADO_ORDER[t.estado])
-
-  const tareasOrdenadas = [...tareasFiltradas].sort((a, b) => {
-    if (sortBy === 'prioridad') return PRIORIDAD_ORDER[a.prioridad] - PRIORIDAD_ORDER[b.prioridad]
-    if (sortBy === 'estado') return rangoEstado(a) - rangoEstado(b)
-    // fechaVencimiento asc
-    return parseFecha(a.fechaVencimiento).localeCompare(parseFecha(b.fechaVencimiento))
-  })
+  // Orden de la lista (O27): lo que urge primero y las completadas al final; ver ordenarListaTareas.
+  const tareasOrdenadas = ordenarListaTareas(tareasFiltradas, sortBy)
 
   async function handleDrop(estado: EstadoTarea, taskId: string) {
     const tarea = state.tareas.find((t) => t.id === taskId)
@@ -800,7 +812,7 @@ export default function TableroTareas() {
             onChange={(e) => setFiltros({ ...filtros, asignadoAId: e.target.value })}
           >
             <option value="">Todos los usuarios</option>
-            {state.usuarios.filter((u) => u.activo).map((u) => (
+            {usuariosConTareas(state.tareas, state.usuarios).map((u) => (
               <option key={u.id} value={u.id}>{u.nombre}</option>
             ))}
           </select>
@@ -865,10 +877,11 @@ export default function TableroTareas() {
                 <div key={estado} className="flex-1 min-w-[210px]">
                   <KanbanColumn
                     estado={estado}
-                    tareas={tareasFiltradas.filter((t) => t.estado === estado)}
+                    tareas={ordenarListaTareas(tareasFiltradas.filter((t) => t.estado === estado), 'fechaVencimiento')}
                     getProyectoNombre={getProyectoNombre}
                     onDrop={handleDrop}
                     onCardClick={setTareaDetalle}
+                    puedeMover={(tarea) => puedeMoverTarea(tarea, state.currentUser?.id, acciones.esEquipo)}
                   />
                 </div>
               ))}
@@ -955,6 +968,11 @@ export default function TableroTareas() {
                             <span className={`text-xs whitespace-nowrap ${vencida ? 'text-red-600 font-semibold' : 'text-slate-500'}`}>
                               {formatFecha(tarea.fechaVencimiento)}
                             </span>
+                            {vencida && (
+                              <span className="ml-1.5 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 border border-red-200">
+                                Vencida
+                              </span>
+                            )}
                           </td>
                           <td className="px-4 py-3">
                             <Button
