@@ -67,14 +67,34 @@ function Docker-Corriendo {
   return ($LASTEXITCODE -eq 0)
 }
 
-function Abrir-Docker {
-  $candidatos = @((Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'))
+function Buscar-DockerDesktop {
+  $candidatos = @(
+    (Join-Path $env:LOCALAPPDATA 'Programs\DockerDesktop\Docker Desktop.exe'),
+    (Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe')
+  )
   if (${env:ProgramFiles(x86)}) {
     $candidatos += (Join-Path ${env:ProgramFiles(x86)} 'Docker\Docker\Docker Desktop.exe')
   }
-  $exe = $candidatos | Where-Object { Test-Path $_ } | Select-Object -First 1
+  foreach ($c in $candidatos) {
+    if ($c -and (Test-Path $c)) { return $c }
+  }
+  # Instalacion por usuario: docker.exe vive en ...\DockerDesktop\resources\bin
+  $docker = Get-Command docker -ErrorAction SilentlyContinue
+  if ($docker) {
+    $raiz = Split-Path (Split-Path (Split-Path $docker.Source -Parent) -Parent) -Parent
+    $exe = Join-Path $raiz 'Docker Desktop.exe'
+    if (Test-Path $exe) { return $exe }
+  }
+  # Ultimo recurso: el proceso, si ya esta corriendo
+  $proc = Get-Process 'Docker Desktop' -ErrorAction SilentlyContinue | Select-Object -First 1
+  if ($proc -and $proc.Path) { return $proc.Path }
+  return $null
+}
+
+function Abrir-Docker {
+  $exe = Buscar-DockerDesktop
   if (-not $exe) { return $false }
-  Aviso 'Docker Desktop esta cerrado. Abriendolo (puede tardar ~1 min)...'
+  Aviso "Docker Desktop esta cerrado. Abriendolo: $exe"
   Start-Process $exe | Out-Null
   for ($i = 0; $i -lt 60; $i++) {
     Start-Sleep -Seconds 2
