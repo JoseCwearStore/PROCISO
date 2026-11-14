@@ -144,3 +144,9 @@
 *.stl                filter=lfs diff=lfs merge=lfs -text
 *.nc                 filter=lfs diff=lfs merge=lfs -text
 *.mat                filter=lfs diff=lfs merge=lfs -text
+
+# ---------------------------------------------------------------------------
+# Scripts: los de Unix deben viajar con LF o el shebang se rompe (bad interpreter)
+# ---------------------------------------------------------------------------
+*.sh                text eol=lf
+*.ps1               text eol=crlf
