@@ -83,7 +83,7 @@ function Escribir-EnvLocal($ip) {
 function Asegurar-Key($projectId) {
   $ruta = Join-Path $Raiz '.env.local'
   $contenido = Get-Content $ruta -Raw
-  if ($contenido -match '(?m)^VITE_SUPABASE_PUBLISHABLE_KEY=\s*\S') { return }
+  if ($contenido -match '(?m)^VITE_SUPABASE_PUBLISHABLE_KEY=[ \t]*\S') { return }
   $json = npx -y supabase@2.122.1 status -o json 2>$null | ConvertFrom-Json
   $key = $json.PUBLISHABLE_KEY
   if (-not $key) { Start-Sleep -Seconds 5; $json = npx -y supabase@2.122.1 status -o json 2>$null | ConvertFrom-Json; $key = $json.PUBLISHABLE_KEY }
@@ -108,16 +108,11 @@ function Escribir-Config($siteUrl) {
 }
 
 function Arrancar-Supabase {
-  # npx escribe avisos en stderr. Con ErrorActionPreference=Stop eso se vuelve
-  # error terminante cuando la salida esta capturada, asi que lo bajamos solo aqui.
-  $anterior = $ErrorActionPreference
-  $ErrorActionPreference = 'Continue'
-  try {
-    npx -y supabase@2.122.1 start 2>&1 | ForEach-Object { Write-Host $_ }
-    $codigo = $LASTEXITCODE
-  } finally {
-    $ErrorActionPreference = $anterior
-  }
+  # cmd /c fusiona stderr en stdout: PowerShell solo ve texto y no convierte
+  # los avisos de npx en errores terminantes (pasa en consola y en logs).
+  $salida = & cmd /c "npx -y supabase@2.122.1 start 2>&1"
+  $codigo = $LASTEXITCODE
+  $salida | ForEach-Object { Write-Host $_ }
   if ($codigo -ne 0) {
     Error2 'Supabase no pudo arrancar. Revisa los mensajes de arriba.'
     Aviso 'Causas tipicas: Docker apagado, puertos 54321-54324 ocupados o .env.local corrupto.'
@@ -130,7 +125,8 @@ function Asegurar-Funciones {
   $ejemplo = Join-Path $Raiz 'supabase\functions\.env.example'
   if (-not (Test-Path $ruta)) { Copy-Item $ejemplo $ruta }
   $contenido = Get-Content $ruta -Raw
-  return ($contenido -match '(?m)^IA_API_KEY=\s*\S')
+  # [ \t]* y no \s*: \s incluye el salto de linea y daria falso positivo con la linea siguiente.
+  return ($contenido -match '(?m)^IA_API_KEY=[ \t]*\S')
 }
 
 function Asegurar-Firewall($puerto) {
@@ -201,7 +197,8 @@ $ocupado = Get-NetTCPConnection -LocalPort $Puerto -State Listen -ErrorAction Si
 if ($ocupado) {
   $proceso = Get-Process -Id $ocupado.OwningProcess -ErrorAction SilentlyContinue
   Error2 "El puerto $Puerto ya esta en uso por $($proceso.ProcessName) (PID $($ocupado.OwningProcess))."
-  Aviso "Cerralo o usa: .\iniciar-red.ps1 -Puerto $($Puerto + 1)"
+  Aviso "Si es una instancia vieja de PROCISO: Stop-Process -Id $($ocupado.OwningProcess) -Force"
+  Aviso "O usa otro puerto: .\iniciar-red.ps1 -Puerto $($Puerto + 1)"
   exit 1
 }
 
@@ -215,8 +212,8 @@ if (-not $corriendo) {
   Info 'Levantando Supabase local (puede tardar la primera vez)...'
   Arrancar-Supabase
 } elseif ($cambioConfig) {
-  Info 'La IP cambio: reiniciando Supabase para aplicar los redirects de auth...'
-  npx -y supabase@2.122.1 stop 2>$null | Out-Null
+  Info 'La configuracion de red cambio: reiniciando Supabase para aplicar los redirects de auth...'
+  & cmd /c "npx -y supabase@2.122.1 stop 2>&1" | Out-Null
   Arrancar-Supabase
 } else {
   Ok 'Supabase ya estaba corriendo con esta IP'
