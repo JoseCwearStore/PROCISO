@@ -264,13 +264,33 @@ main() {
     fi
   done
   if ! docker info >/dev/null 2>&1; then
-    error 'Docker no esta corriendo.'
-    if [ "$(uname -s)" = "Darwin" ]; then
-      aviso 'Abri Docker Desktop y espera a que termine de iniciar.'
+    if [ "$(uname -s)" = "Darwin" ] && [ -d "/Applications/Docker.app" ]; then
+      aviso 'Docker Desktop esta cerrado. Abriendolo (puede tardar ~1 min)...'
+      open -a Docker
+      i=0
+      listo=0
+      while [ "$i" -lt 60 ]; do
+        sleep 2
+        if docker info >/dev/null 2>&1; then listo=1; break; fi
+        i=$((i + 1))
+        printf '.'
+      done
+      printf '\n'
+      if [ "$listo" -eq 0 ]; then
+        error 'Docker no arranco.'
+        aviso 'Abri Docker Desktop a mano, espera a que diga "Engine running" y volve a intentar.'
+        exit 1
+      fi
+      ok 'Docker Desktop arranco'
     else
-      aviso 'sudo systemctl start docker'
+      error 'Docker no esta corriendo.'
+      if [ "$(uname -s)" = "Darwin" ]; then
+        aviso 'Abri Docker Desktop y espera a que termine de iniciar.'
+      else
+        aviso 'sudo systemctl start docker'
+      fi
+      exit 1
     fi
-    exit 1
   fi
   ok 'Node, pnpm y Docker disponibles'
 

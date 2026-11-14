@@ -178,7 +178,7 @@ Opciones (mismos nombres en ambos, cambiando `--` por `-` en PowerShell):
 
 **Qué hace, en orden:**
 
-1. Verifica Node, pnpm y que Docker esté corriendo.
+1. Verifica Node y pnpm. Si Docker está cerrado, intenta abrir Docker Desktop y espera hasta 2 minutos a que arranque.
 2. Detecta la IP de la red local (ignora WSL, Docker y adaptadores virtuales).
 3. Instala dependencias si falta `node_modules`.
 4. Comprueba que el puerto de la app esté libre.
@@ -300,7 +300,8 @@ El correo de prueba (invitaciones, recuperar contraseña) llega a la bandeja loc
 | `La configuracion de red cambio: reiniciando Supabase` | cambió tu IP o el puerto | es normal: esperá ~1 min |
 | `A new version of Supabase CLI is available: v3.1.0` | aviso de `npx` | ignoralo y seguí usando `@2.122.1` |
 | `No such container: supabase_auth_…` | el stack está apagado | `npx -y supabase@2.122.1 start` |
-| `supabase start` falla | Docker apagado, CLI 3.x o puertos ocupados | `docker ps`; usá `@2.122.1`; liberá 54321–54324 |
+| `failed to connect to the docker API …` | Docker Desktop está cerrado | el script intenta abrirlo solo; si no lo encuentra, abrilo y esperá «Engine running» |
+| `supabase start` falla | CLI 3.x o puertos ocupados | usá `@2.122.1`; liberá 54321–54324 |
 | `Faltan VITE_SUPABASE_URL o VITE_SUPABASE_PUBLISHABLE_KEY` | no existe `.env.local` | corré el script, o copiá `.env.example` y completá la key |
 | No puedo iniciar sesión con un usuario de prueba | la semilla no se cargó | `npx -y supabase@2.122.1 db reset --local` |
 | Un botón de IA devuelve 401 o «clave» | falta o es inválida `IA_API_KEY` | cargala y reiniciá `functions serve` |

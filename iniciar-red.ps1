@@ -59,10 +59,54 @@ function Leer-ProjectId {
   return 'prociso'
 }
 
+function Docker-Corriendo {
+  # cmd /c fusiona stderr en stdout. Con ErrorActionPreference=Stop, docker info
+  # escribe en stderr y PowerShell lo convierte en error terminante ANTES de que
+  # podamos dar un mensaje util (fue el error que veia el usuario).
+  & cmd /c "docker info 2>&1" | Out-Null
+  return ($LASTEXITCODE -eq 0)
+}
+
+function Abrir-Docker {
+  $candidatos = @((Join-Path $env:ProgramFiles 'Docker\Docker\Docker Desktop.exe'))
+  if (${env:ProgramFiles(x86)}) {
+    $candidatos += (Join-Path ${env:ProgramFiles(x86)} 'Docker\Docker\Docker Desktop.exe')
+  }
+  $exe = $candidatos | Where-Object { Test-Path $_ } | Select-Object -First 1
+  if (-not $exe) { return $false }
+  Aviso 'Docker Desktop esta cerrado. Abriendolo (puede tardar ~1 min)...'
+  Start-Process $exe | Out-Null
+  for ($i = 0; $i -lt 60; $i++) {
+    Start-Sleep -Seconds 2
+    if (Docker-Corriendo) { return $true }
+    if ($i % 5 -eq 4) { Write-Host '  .' -NoNewline }
+  }
+  Write-Host ''
+  return $false
+}
+
+function Asegurar-Docker {
+  if (Docker-Corriendo) { return }
+  if (Abrir-Docker) {
+    Ok 'Docker Desktop arranco'
+    return
+  }
+  Error2 'Docker no esta corriendo.'
+  Aviso 'Abri Docker Desktop, espera a que diga "Engine running" y volve a correr el script.'
+  Aviso 'Verificacion rapida: docker ps'
+  exit 1
+}
+
 function Supabase-Corriendo($projectId) {
-  $db = docker ps --filter "name=supabase_db_$projectId" --format '{{.Names}}' 2>$null
-  $kong = docker ps --filter "name=supabase_kong_$projectId" --format '{{.Names}}' 2>$null
+  $db = & cmd /c "docker ps --filter name=supabase_db_$projectId --format {{.Names}} 2>&1"
+  $kong = & cmd /c "docker ps --filter name=supabase_kong_$projectId --format {{.Names}} 2>&1"
   return (($db -match "supabase_db_$projectId") -and ($kong -match "supabase_kong_$projectId"))
+}
+
+function Leer-Status {
+  $salida = & cmd /c "npx -y supabase@2.122.1 status -o json 2>&1"
+  if ($LASTEXITCODE -ne 0) { return $null }
+  try { return ($salida | ConvertFrom-Json) } catch { return $null }
 }
 
 function Escribir-EnvLocal($ip) {
@@ -84,9 +128,9 @@ function Asegurar-Key($projectId) {
   $ruta = Join-Path $Raiz '.env.local'
   $contenido = Get-Content $ruta -Raw
   if ($contenido -match '(?m)^VITE_SUPABASE_PUBLISHABLE_KEY=[ \t]*\S') { return }
-  $json = npx -y supabase@2.122.1 status -o json 2>$null | ConvertFrom-Json
+  $json = Leer-Status
   $key = $json.PUBLISHABLE_KEY
-  if (-not $key) { Start-Sleep -Seconds 5; $json = npx -y supabase@2.122.1 status -o json 2>$null | ConvertFrom-Json; $key = $json.PUBLISHABLE_KEY }
+  if (-not $key) { Start-Sleep -Seconds 5; $json = Leer-Status; $key = $json.PUBLISHABLE_KEY }
   if (-not $key) { throw 'No pude leer la publishable key desde Supabase.' }
   $contenido = ($contenido -replace '(?m)^VITE_SUPABASE_PUBLISHABLE_KEY=.*$', "VITE_SUPABASE_PUBLISHABLE_KEY=$key").TrimEnd()
   Guardar-SinBom $ruta ($contenido + "`r`n")
@@ -152,8 +196,9 @@ if ($Restaurar) {
   Info 'Restaurando site_url a localhost...'
   $cambio = Escribir-Config 'http://localhost:8443'
   if ($cambio) {
-    npx -y supabase@2.122.1 stop 2>$null | Out-Null
-    npx -y supabase@2.122.1 start 2>$null | Out-Null
+    Asegurar-Docker
+    & cmd /c "npx -y supabase@2.122.1 stop 2>&1" | Out-Null
+    Arrancar-Supabase
   }
   Ok 'Listo. La app vuelve a usar localhost:8443'
   exit 0
@@ -169,8 +214,7 @@ foreach ($cmd in @('node', 'pnpm', 'docker')) {
 }
 $nodeMayor = [int]((node --version) -replace '^v(\d+)\..*', '$1')
 if ($nodeMayor -lt 20) { Aviso "Node $nodeMayor detectado. Se recomienda Node 22." }
-docker info 2>$null | Out-Null
-if ($LASTEXITCODE -ne 0) { Error2 'Docker no esta corriendo. Abri Docker Desktop y espera a que termine de iniciar.'; exit 1 }
+Asegurar-Docker
 Ok 'Node, pnpm y Docker disponibles'
 
 # 2. IP
