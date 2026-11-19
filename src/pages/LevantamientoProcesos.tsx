@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { randomUUID } from "../lib/uuid"
 import {
   ArrowLeft,
   ArrowRight,
@@ -256,7 +257,7 @@ export default function LevantamientoProcesos() {
 
   async function guardar(esFinal = false) {
     // UUID desde el navegador: el mismo id sirve para crear y para volver a guardar (upsert).
-    const id = borrador.id || crypto.randomUUID()
+    const id = borrador.id || randomUUID()
     const proceso: Proceso = borradorAProceso(borrador, {
       id,
       estado: esFinal ? "Documentado" : "En levantamiento",
@@ -317,7 +318,7 @@ export default function LevantamientoProcesos() {
             ...actual.actividades,
             {
               ...actividad,
-              id: crypto.randomUUID(),
+              id: randomUUID(),
               orden: actual.actividades.length + 1,
             },
           ]

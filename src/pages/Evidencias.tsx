@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react"
+import { randomUUID } from "../lib/uuid"
 import {
   Camera,
   File,
@@ -202,7 +203,7 @@ export default function Evidencias() {
 
     const resultado = await servicioEscritura.subirEvidencia(
       {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         consultoriaId: state.currentUser?.consultoriaId ?? null,
         empresaId: form.empresaId,
         proyectoId: form.proyectoId,
@@ -282,7 +283,7 @@ export default function Evidencias() {
         historial: [
           ...(evidencia.historial || []),
           {
-            id: crypto.randomUUID(),
+            id: randomUUID(),
             fecha: formatearFecha(new Date().toISOString()),
             autor: state.currentUser?.nombre ?? "",
             estadoAnterior: evidencia.estado,

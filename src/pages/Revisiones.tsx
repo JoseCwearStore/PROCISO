@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { randomUUID } from '../lib/uuid'
 import {
   AlertCircle,
   ArrowLeft,
@@ -81,7 +82,7 @@ export default function Revisiones() {
         vistoBuenoEn: fecha,
         vistoBuenoVersion: item.version,
         historial: [...(item.historial || []), {
-          id: crypto.randomUUID(), fecha, autorId: usuarioId, accion: 'Visto bueno del equipo', detalle: `Versión ${item.version}.`,
+          id: randomUUID(), fecha, autorId: usuarioId, accion: 'Visto bueno del equipo', detalle: `Versión ${item.version}.`,
         }],
       }),
     })
@@ -117,7 +118,7 @@ export default function Revisiones() {
     const fechaHora = fecha
     const usuarioId = state.currentUser?.id ?? ''
     const comentarioNuevo = seccionId && comentario.trim() ? {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       seccionId,
       autorId: usuarioId,
       fecha: fechaHora,
@@ -138,7 +139,7 @@ export default function Revisiones() {
         version.version === documento.version ? { ...version, estado } : version
       ),
       historial: [...(documento.historial || []), {
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         fecha: fechaHora,
         autorId: usuarioId,
         accion,
@@ -156,7 +157,7 @@ export default function Revisiones() {
         estado: 'Obsoleto' as const,
         bloqueado: true,
         historial: [...(item.historial || []), {
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           fecha: fechaHora,
           autorId: usuarioId,
           accion: 'Documento reemplazado',

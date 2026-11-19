@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { AlertTriangle, CheckSquare2, Plus, Save } from 'lucide-react'
+import { randomUUID } from '../lib/uuid'
 import { useApp } from '../context/AppContext'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -19,14 +20,14 @@ const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text
 const labelClass = 'mb-1.5 block text-sm font-medium text-slate-700'
 
 const nuevaPregunta = (): PreguntaVerificacion => ({
-  id: crypto.randomUUID(),
+  id: randomUUID(),
   pregunta: '',
   estado: 'Pendiente de verificar',
   referenciaRequisito: '',
 })
 
 const listaVacia = (): ListaVerificacion => ({
-  id: crypto.randomUUID(),
+  id: randomUUID(),
   nombre: '',
   empresaId: '',
   proyectoId: '',

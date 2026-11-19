@@ -1,6 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { usuariosAsignables } from '../lib/asignables'
 import { formatearFecha } from '../lib/datos'
+import { randomUUID } from '../lib/uuid'
 import { type CambiosTarea, type NuevaTarea, mensajeDeError, type FallaEscritura } from '../lib/escrituras'
 import { servicioEscritura } from '../lib/servicios'
 import { fechaISO, hoyLocal, transicionesPermitidas } from '../lib/tareas'
@@ -31,7 +32,7 @@ export function useAccionesTarea() {
     asignables: (proyectoId: string): Usuario[] => usuariosAsignables(state.usuarios, proyectoId),
 
     async crear(nueva: Omit<NuevaTarea, 'id'>): Promise<Tarea | null> {
-      const resultado = await servicioEscritura.crearTarea(consultoriaId, { ...nueva, id: crypto.randomUUID() })
+      const resultado = await servicioEscritura.crearTarea(consultoriaId, { ...nueva, id: randomUUID() })
       if (!resultado.ok) return fallo(resultado)
       dispatch({ type: 'ADD_TAREA', tarea: resultado.valor })
       return resultado.valor
@@ -62,7 +63,7 @@ export function useAccionesTarea() {
         fechaCompletada: estado === 'Completada' ? fecha : undefined,
         historial: [...tarea.historial, { fecha, autorId: usuarioId ?? '', de: tarea.estado, a: estado }],
         comentarios: texto
-          ? [...tarea.comentarios, { id: crypto.randomUUID(), autorId: usuarioId ?? '', fecha, texto }]
+          ? [...tarea.comentarios, { id: randomUUID(), autorId: usuarioId ?? '', fecha, texto }]
           : tarea.comentarios,
       }
       dispatch({ type: 'UPDATE_TAREA', id: tarea.id, updates })

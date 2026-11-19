@@ -2,6 +2,7 @@ import { useApp } from '../context/AppContext'
 import { usuariosAsignables } from '../lib/asignables'
 import { formatearFecha } from '../lib/datos'
 import { type DatosNC, type TratamientoNC, mensajeDeError, type FallaEscritura } from '../lib/escrituras'
+import { randomUUID } from '../lib/uuid'
 import { accionesNC, lineasDeAccion, tratamientoEditable } from '../lib/noConformidades'
 import { servicioEscritura } from '../lib/servicios'
 import { fechaISO, hoyLocal } from '../lib/tareas'
@@ -22,7 +23,7 @@ export function useAccionesNC() {
     return null
   }
   const evento = (accion: string, detalle: string) => ({
-    id: crypto.randomUUID(),
+    id: randomUUID(),
     fecha: formatearFecha(hoyLocal()),
     autorId: usuarioId,
     accion,
@@ -55,7 +56,7 @@ export function useAccionesNC() {
 
     // Solo el equipo registra. Si además trae tratamiento, se guarda a continuación.
     async registrar(datos: DatosNC, t: TratamientoNC): Promise<NoConformidad | null> {
-      const resultado = await servicioEscritura.registrarNoConformidad(consultoriaId, crypto.randomUUID(), datos)
+      const resultado = await servicioEscritura.registrarNoConformidad(consultoriaId, randomUUID(), datos)
       if (!resultado.ok) return fallo(resultado)
       let nc: NoConformidad = {
         ...resultado.valor,

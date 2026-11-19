@@ -1,6 +1,7 @@
 import { useApp } from '../context/AppContext'
 import { formatearFecha } from '../lib/datos'
 import { accionesEntregable, documentoListo } from '../lib/entregables'
+import { randomUUID } from '../lib/uuid'
 import { type NuevoEntregable, mensajeDeError, type FallaEscritura } from '../lib/escrituras'
 import { entregableCambio } from '../lib/refresco'
 import { servicioEscritura } from '../lib/servicios'
@@ -29,7 +30,7 @@ export function useAccionesEntregable() {
     async registrar(datos: NuevoEntregable): Promise<Entregable | null> {
       const resultado = await servicioEscritura.registrarEntregable(
         state.currentUser?.consultoriaId ?? null,
-        crypto.randomUUID(),
+        randomUUID(),
         datos,
       )
       if (!resultado.ok) return fallo(resultado)

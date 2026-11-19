@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { BarChart3, Building2, Plus, Settings2 } from 'lucide-react'
+import { randomUUID } from '../lib/uuid'
 import { useApp } from '../context/AppContext'
 import { Button } from '../components/ui/Button'
 import { Modal } from '../components/ui/Modal'
@@ -10,7 +11,7 @@ import type { IndicadorGestion } from '../types'
 const inputClass = 'w-full rounded-lg border border-line bg-white px-3 py-2 text-sm focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100 disabled:bg-slate-50 disabled:text-slate-500'
 const labelClass = 'mb-1.5 block text-sm font-medium text-slate-700'
 const vacio = (ambito: IndicadorGestion['ambito']): IndicadorGestion => ({
-  id: crypto.randomUUID(),
+  id: randomUUID(),
   ambito,
   empresaId: '',
   proyectoId: '',

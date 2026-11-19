@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
+import { randomUUID } from '../lib/uuid'
 import { buscarDocumentos, ordenarDocumentos, siguienteOrden, type Orden } from '../lib/listadoDocumentos'
 import {
   AlertTriangle,
@@ -251,7 +252,7 @@ export default function Documentacion() {
     }
     const ahora = formatearFecha(new Date().toISOString())
     const nuevo: Documento = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       codigo: generador.codigo.trim(),
       nombre: generador.titulo.trim(),
       tipo: plantilla.tipoDocumento,
@@ -304,7 +305,7 @@ export default function Documentacion() {
     }
     firmasGuardadas.current[doc.id] = firmaDeContenido(doc.secciones)
     const evento = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       fecha: formatearFecha(new Date().toISOString()),
       autorId: state.currentUser?.id ?? '',
       ...opciones.evento,
@@ -391,7 +392,7 @@ export default function Documentacion() {
       return
     }
     const evento = {
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       fecha: formatearFecha(new Date().toISOString()),
       autorId: state.currentUser?.id ?? '',
       accion: 'Documento retirado de revisión',
@@ -415,7 +416,7 @@ export default function Documentacion() {
     if (!documento) return
     const nueva: Documento = {
       ...documento,
-      id: crypto.randomUUID(),
+      id: randomUUID(),
       version: siguienteVersion(documento.version),
       estado: 'Borrador',
       bloqueado: false,
