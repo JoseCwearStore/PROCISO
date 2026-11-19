@@ -50,7 +50,7 @@ import {
 } from '../_compartido/video.ts'
 import { crearCors, estadoDe, huboConsumo, mensajeDeBD, motivoSaneado, responderCon } from '../_compartido/http.ts'
 import { esMediaTranscribible, fuenteDeTranscripcion } from '../_compartido/transcripcion.ts'
-import { extraerArchivo, extraerDocumento } from './extractores.ts'
+import { extraerArchivo, extraerDocumento, precargarPdf } from './extractores.ts'
 
 const CORS = crearCors(Deno.env.get('CORS_ORIGEN'))
 const responder = responderCon(CORS)
@@ -75,6 +75,13 @@ Deno.serve(async (req) => {
   if (req.method !== 'POST') return responder(405, { error: 'Método no permitido' })
   const token = req.headers.get('Authorization')
   if (!token) return responder(401, { error: 'Sesión requerida' })
+
+  // Precalentamiento (lo pide iniciar-red al arrancar): carga pdf.js para que el primer análisis real no
+  // falle por arranque en frío. No lee el cuerpo, no toca la BD ni descuenta cupo de IA.
+  if (req.headers.get('x-prociso-precalentar') === '1') {
+    await precargarPdf()
+    return responder(200, { precalentado: true })
+  }
 
   // 0. La forma del pedido, antes de tocar la BD (AUD04-B2: 400 claro, sin texto interno).
   let pedido

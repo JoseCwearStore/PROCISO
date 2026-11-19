@@ -192,6 +192,39 @@ pid_del_puerto() {
   fi
 }
 
+leer_puerto_api() {
+  awk '/^\[api\]/{a=1;next} /^\[/{a=0} a && /^[[:space:]]*port[[:space:]]*=/{gsub(/[^0-9]/,"");print;exit}' \
+    "$RAIZ/supabase/config.toml"
+}
+
+# El primer analisis de PDF compila pdf.js en un worker frio y puede caer por WORKER_LIMIT.
+# Se le pide a analizar-ia que lo cargue ya (no toca la BD ni gasta cupo de IA).
+precalentar_funciones() {
+  local json key puerto i
+  json="$(npx -y supabase@2.122.1 status -o json 2>/dev/null || true)"
+  key="$(printf '%s' "$json" | sed -n 's/.*"ANON_KEY"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' | head -n 1)"
+  if [ -z "$key" ]; then
+    aviso 'No pude leer la ANON_KEY: me salto el precalentamiento de la IA.'
+    return 0
+  fi
+  puerto="$(leer_puerto_api)"
+  puerto="${puerto:-54321}"
+  printf '  Precalentando funciones de IA (la primera vez puede tardar ~1 min)'
+  for i in $(seq 1 30); do
+    if curl -fsS -m 60 -o /dev/null -X POST "http://127.0.0.1:${puerto}/functions/v1/analizar-ia" \
+      -H "Authorization: Bearer $key" -H 'x-prociso-precalentar: 1' \
+      -H 'Content-Type: application/json' -d '{}' 2>/dev/null; then
+      printf '\n'
+      ok 'Funciones de IA precalentadas'
+      return 0
+    fi
+    printf '.'
+    sleep 4
+  done
+  printf '\n'
+  aviso 'No pude precalentar las funciones de IA: si el primer analisis falla, reintentalo.'
+}
+
 hint_firewall() {
   local puerto="$1"
   case "$(uname -s)" in
@@ -373,6 +406,7 @@ main() {
       FUNCIONES_PID=$!
       ok "Funciones IA: PID $FUNCIONES_PID (log: $log)"
       gris "  Se cierran solas al cortar la app con Ctrl+C."
+      precalentar_funciones
     else
       aviso 'Sin IA_API_KEY en supabase/functions/.env: los botones de IA van a fallar (la app anda igual).'
     fi

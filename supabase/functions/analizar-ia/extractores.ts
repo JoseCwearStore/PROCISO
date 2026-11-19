@@ -5,7 +5,7 @@
 // Audio y video NO pasan por acá: se analizan sobre la transcripción GUARDADA (que el equipo pudo
 // corregir), que arma index.ts con fuenteDeTranscripcion. Si un audio llegara hasta acá es un error.
 
-import { extractText, getDocumentProxy } from 'npm:unpdf@0.12.1'
+import { extractText, getDocumentProxy, getResolvedPDFJS } from 'npm:unpdf@0.12.1'
 import { ErrorIA, MAX_IMAGEN_BYTES, textoDeSecciones, type FuenteIA } from '../_compartido/analisis.ts'
 import { esMediaTranscribible } from '../_compartido/transcripcion.ts'
 
@@ -22,6 +22,12 @@ export function extraerDocumento(secciones: unknown): FuenteIA {
     throw new ErrorIA('El documento no tiene contenido para analizar (sus secciones están vacías).')
   }
   return { texto, imagenes: [] }
+}
+
+// unpdf importa pdf.js (~1.7 MB) recién al leer el primer PDF. Compilarlo en un worker frío puede pasar el
+// límite de recursos (WORKER_LIMIT, 546) y tumbar el primer análisis. El precalentamiento lo carga antes.
+export async function precargarPdf(): Promise<void> {
+  await getResolvedPDFJS()
 }
 
 export async function extraerArchivo(bytes: Uint8Array, mime: string, aceptaImagenes: boolean): Promise<FuenteIA> {

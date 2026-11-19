@@ -193,6 +193,38 @@ function Asegurar-Funciones {
   return ($contenido -match '(?m)^IA_API_KEY=[ \t]*\S')
 }
 
+function Leer-PuertoApi {
+  $config = Get-Content (Join-Path $Raiz 'supabase\config.toml') -Raw
+  $m = [regex]::Match($config, '(?ms)^\[api\].*?^\s*port\s*=\s*(\d+)')
+  if ($m.Success) { return [int]$m.Groups[1].Value }
+  return 54321
+}
+
+# El primer analisis de PDF compila pdf.js en un worker frio y puede caer por WORKER_LIMIT.
+# Se le pide a analizar-ia que lo cargue ya (no toca la BD ni gasta cupo de IA).
+function Precalentar-Funciones {
+  $json = Leer-Status
+  $key = $json.ANON_KEY
+  if (-not $key) { Aviso 'No pude leer la ANON_KEY: me salto el precalentamiento de la IA.'; return }
+  $url = "http://127.0.0.1:$(Leer-PuertoApi)/functions/v1/analizar-ia"
+  $headers = @{ Authorization = "Bearer $key"; 'x-prociso-precalentar' = '1' }
+  Write-Host '  Precalentando funciones de IA (la primera vez puede tardar ~1 min)' -NoNewline
+  for ($i = 0; $i -lt 30; $i++) {
+    try {
+      $r = Invoke-WebRequest -UseBasicParsing -Method Post -Uri $url -Headers $headers -Body '{}' -ContentType 'application/json' -TimeoutSec 60
+      if ($r.StatusCode -eq 200) {
+        Write-Host ''
+        Ok 'Funciones de IA precalentadas'
+        return
+      }
+    } catch { }
+    Write-Host '.' -NoNewline
+    Start-Sleep -Seconds 4
+  }
+  Write-Host ''
+  Aviso 'No pude precalentar las funciones de IA: si el primer analisis falla, reintentalo.'
+}
+
 function Asegurar-Firewall($puerto) {
   $nombre = "PROCISO dev $puerto"
   if (Get-NetFirewallRule -DisplayName $nombre -ErrorAction SilentlyContinue) { return }
@@ -297,6 +329,7 @@ if (-not $SinFunciones) {
       '-NoExit', '-Command',
       "Set-Location '$Raiz'; Write-Host 'Funciones IA - PROCISO' -ForegroundColor Cyan; npx -y supabase@2.122.1 functions serve --env-file supabase/functions/.env"
     ) | Out-Null
+    Precalentar-Funciones
   } else {
     Aviso 'Sin IA_API_KEY en supabase/functions/.env: los botones de IA van a fallar (la app anda igual).'
   }
