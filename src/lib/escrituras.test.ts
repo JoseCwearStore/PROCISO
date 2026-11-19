@@ -1552,6 +1552,39 @@ describe('analizarConIA', () => {
     expect(llamadas).toEqual([{ tabla: 'analizar-ia', operacion: 'invoke', datos: pedido }])
   })
 
+  it('antes de analizar una evidencia en modo texto precalienta la función (no gasta cupo) y luego pide el análisis', async () => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error: null }, { data: RESPUESTA, error: null })
+    const pedido = { ...PEDIDO, fuenteTipo: 'evidencia' as const, documentoId: undefined, evidenciaId: 'ev-1' }
+
+    const resultado = await crearServicioEscritura(cliente).analizarConIA(pedido, ROBERTO, '06/11/2026')
+
+    expect(llamadas).toEqual([
+      { tabla: 'analizar-ia', operacion: 'invoke', datos: { precalentar: true } },
+      { tabla: 'analizar-ia', operacion: 'invoke', datos: pedido },
+    ])
+    expect(resultado.ok).toBe(true)
+  })
+
+  it('si el precalentamiento falla, el análisis se pide igual', async () => {
+    const { cliente, llamadas } = crearClienteDoble({}, { error: null }, { data: RESPUESTA, error: null })
+    const invocar = cliente.functions.invoke
+    let primera = true
+    cliente.functions.invoke = (nombre, opciones) => {
+      if (primera) {
+        primera = false
+        llamadas.push({ tabla: nombre, operacion: 'invoke', datos: opciones.body })
+        return Promise.reject(new Error('546 WORKER_LIMIT'))
+      }
+      return invocar(nombre, opciones)
+    }
+    const pedido = { ...PEDIDO, fuenteTipo: 'evidencia' as const, documentoId: undefined, evidenciaId: 'ev-1' }
+
+    const resultado = await crearServicioEscritura(cliente).analizarConIA(pedido, ROBERTO, '06/11/2026')
+
+    expect(llamadas).toHaveLength(2)
+    expect(resultado.ok).toBe(true)
+  })
+
   it('sin criterios no llama a la función', async () => {
     const { cliente, llamadas } = crearClienteDoble()
 

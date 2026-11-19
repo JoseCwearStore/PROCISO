@@ -138,9 +138,14 @@ function Supabase-Corriendo($projectId) {
 }
 
 function Leer-Status {
-  $salida = & cmd /c "npx -y supabase@2.122.1 status -o json 2>&1"
+  # Solo stdout (2>nul): los avisos de npx y del CLI ("A new version...") van a stderr y,
+  # mezclados con el JSON, hacian fallar ConvertFrom-Json. Ademas se recorta al primer { y al ultimo }.
+  $salida = (& cmd /c "npx -y supabase@2.122.1 status -o json 2>nul") -join "`n"
   if ($LASTEXITCODE -ne 0) { return $null }
-  try { return ($salida | ConvertFrom-Json) } catch { return $null }
+  $inicio = $salida.IndexOf('{')
+  $fin = $salida.LastIndexOf('}')
+  if ($inicio -lt 0 -or $fin -le $inicio) { return $null }
+  try { return ($salida.Substring($inicio, $fin - $inicio + 1) | ConvertFrom-Json) } catch { return $null }
 }
 
 function Escribir-EnvLocal($ip) {

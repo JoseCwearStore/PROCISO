@@ -468,6 +468,11 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
     // estado Error con su motivo: es un resultado para mostrar, no una falla de escritura.
     async analizarConIA(pedido: PedidoAnalisisIA, solicitadoPorId: string, fecha: string): Promise<ResultadoEscritura<AnalisisIA>> {
       if (!pedido.criterioIds.length) return { ok: false, error: 'datos_invalidos' }
+      // Un worker frío que carga pdf.js y lee el archivo en la misma petición puede caer por WORKER_LIMIT (546):
+      // fallaba el primer análisis y aun así gastaba cupo. Se precalienta antes (no gasta cupo); si falla, se sigue.
+      if (pedido.fuenteTipo === 'evidencia' && (pedido.modo ?? 'texto') === 'texto') {
+        await Promise.resolve(cliente.functions.invoke('analizar-ia', { body: { precalentar: true } })).catch(() => undefined)
+      }
       const { data, error } = await cliente.functions.invoke('analizar-ia', { body: { ...pedido } })
       if (error) return { ok: false, error: errorDeFuncionIA(error.status) }
       const r = data as RespuestaAnalisisIA

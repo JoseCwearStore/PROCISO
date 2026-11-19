@@ -76,9 +76,19 @@ Deno.serve(async (req) => {
   const token = req.headers.get('Authorization')
   if (!token) return responder(401, { error: 'Sesión requerida' })
 
-  // Precalentamiento (lo pide iniciar-red al arrancar): carga pdf.js para que el primer análisis real no
-  // falle por arranque en frío. No lee el cuerpo, no toca la BD ni descuenta cupo de IA.
-  if (req.headers.get('x-prociso-precalentar') === '1') {
+  let cuerpo: unknown = null
+  let cuerpoInvalido = false
+  try {
+    cuerpo = await req.json()
+  } catch {
+    cuerpoInvalido = true
+  }
+
+  // Precalentamiento: carga pdf.js para que el análisis no falle por arranque en frío (WORKER_LIMIT, 546).
+  // Lo pide la app antes de analizar una evidencia ({ precalentar: true }) y iniciar-red al arrancar (cabecera).
+  // No toca la BD ni descuenta cupo de IA.
+  const esPrecalentar = (cuerpo as { precalentar?: unknown } | null)?.precalentar === true
+  if (req.headers.get('x-prociso-precalentar') === '1' || esPrecalentar) {
     await precargarPdf()
     return responder(200, { precalentado: true })
   }
@@ -86,7 +96,8 @@ Deno.serve(async (req) => {
   // 0. La forma del pedido, antes de tocar la BD (AUD04-B2: 400 claro, sin texto interno).
   let pedido
   try {
-    pedido = validarPedidoAnalisis(await req.json())
+    if (cuerpoInvalido) throw new Error('Cuerpo inválido')
+    pedido = validarPedidoAnalisis(cuerpo)
   } catch (e) {
     return responder(400, { error: e instanceof ErrorIA ? e.message : 'Cuerpo inválido' })
   }
