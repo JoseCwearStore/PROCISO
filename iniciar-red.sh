@@ -94,7 +94,7 @@ supabase_corriendo() {
 arrancar_supabase() {
   if ! npx -y supabase@2.122.1 start; then
     error 'Supabase no pudo arrancar. Revisa los mensajes de arriba.'
-    aviso 'Causas tipicas: Docker apagado, puertos 54321-54324 ocupados o .env.local corrupto.'
+    aviso 'Causas tipicas: Docker apagado, puertos de supabase/config.toml ocupados o .env.local corrupto.'
     exit 1
   fi
 }
@@ -102,9 +102,26 @@ arrancar_supabase() {
 # ---------------------------------------------------------------------------
 # Archivos de configuracion
 # ---------------------------------------------------------------------------
+# Puerto de una seccion de supabase/config.toml: leer_puerto DEFECTO SECCION [SECCION...].
+# Asi el script respeta los puertos de cada maquina; si no lo encuentra, usa el estandar.
+leer_puerto() {
+  local defecto="$1" seccion p
+  shift
+  for seccion in "$@"; do
+    p="$(awk -v s="[$seccion]" '
+      { sub(/\r$/, "") }
+      $0 == s { a = 1; next }
+      /^\[/ { a = 0 }
+      a && /^[[:space:]]*port[[:space:]]*=/ { gsub(/[^0-9]/, ""); print; exit }
+    ' "$RAIZ/supabase/config.toml" 2>/dev/null)"
+    if [ -n "$p" ]; then printf '%s' "$p"; return 0; fi
+  done
+  printf '%s' "$defecto"
+}
+
 escribir_env_local() {
   local ip="$1" ruta="$RAIZ/.env.local" url tmp
-  url="http://${ip}:54321"
+  url="http://${ip}:$(leer_puerto 54321 api)"
   if [ ! -f "$ruta" ]; then
     cp "$RAIZ/.env.example" "$ruta"
   fi
@@ -192,10 +209,6 @@ pid_del_puerto() {
   fi
 }
 
-leer_puerto_api() {
-  awk '/^\[api\]/{a=1;next} /^\[/{a=0} a && /^[[:space:]]*port[[:space:]]*=/{gsub(/[^0-9]/,"");print;exit}' \
-    "$RAIZ/supabase/config.toml"
-}
 
 # El primer analisis de PDF compila pdf.js en un worker frio y puede caer por WORKER_LIMIT.
 # Se le pide a analizar-ia que lo cargue ya (no toca la BD ni gasta cupo de IA).
@@ -207,8 +220,7 @@ precalentar_funciones() {
     aviso 'No pude leer la ANON_KEY: me salto el precalentamiento de la IA.'
     return 0
   fi
-  puerto="$(leer_puerto_api)"
-  puerto="${puerto:-54321}"
+  puerto="$(leer_puerto 54321 api)"
   printf '  Precalentando funciones de IA (la primera vez puede tardar ~1 min)'
   for i in $(seq 1 30); do
     if curl -fsS -m 60 -o /dev/null -X POST "http://127.0.0.1:${puerto}/functions/v1/analizar-ia" \
@@ -226,14 +238,15 @@ precalentar_funciones() {
 }
 
 hint_firewall() {
-  local puerto="$1"
+  local puerto="$1" api
+  api="$(leer_puerto 54321 api)"
   case "$(uname -s)" in
     Darwin)
       aviso "Si el celular no conecta: Ajustes del Sistema > Red > Firewall, y permiti las conexiones entrantes de node."
-      aviso "El celular necesita el puerto $puerto (app) y el 54321 (API)."
+      aviso "El celular necesita el puerto $puerto (app) y el $api (API)."
       ;;
     Linux)
-      aviso "Si el celular no conecta: sudo ufw allow $puerto/tcp && sudo ufw allow 54321/tcp"
+      aviso "Si el celular no conecta: sudo ufw allow $puerto/tcp && sudo ufw allow $api/tcp"
       ;;
   esac
 }
@@ -345,7 +358,7 @@ main() {
   ok "IP de red detectada: $ip"
 
   app_url="http://${ip}:${puerto}"
-  api_url="http://${ip}:54321"
+  api_url="http://${ip}:$(leer_puerto 54321 api)"
 
   # 3. Dependencias
   if [ ! -d "$RAIZ/node_modules" ]; then
@@ -416,8 +429,8 @@ main() {
   info ''
   info '==============================  PROCISO EN RED  =============================='
   printf '  %sApp:        %s%s\n' "$C_OK" "$app_url" "$C_OFF"
-  gris "  Studio:     http://${ip}:54323"
-  gris "  Correo:     http://${ip}:54324"
+  gris "  Studio:     http://${ip}:$(leer_puerto 54323 studio)"
+  gris "  Correo:     http://${ip}:$(leer_puerto 54324 local_smtp inbucket)"
   gris "  API:        $api_url"
   printf '\n'
   gris '  Usuarios:   ana@cowin.test / Prociso2026!'

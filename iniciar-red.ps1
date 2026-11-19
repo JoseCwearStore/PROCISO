@@ -59,6 +59,20 @@ function Leer-ProjectId {
   return 'prociso'
 }
 
+# Puerto de una seccion de supabase/config.toml ([api], [studio], [local_smtp]...).
+# Asi el script respeta los puertos de cada maquina; si no lo encuentra, usa el estandar.
+function Leer-Puerto([string[]]$secciones, [int]$defecto) {
+  $config = Get-Content (Join-Path $Raiz 'supabase\config.toml') -Raw
+  foreach ($seccion in $secciones) {
+    $patron = '(?ms)^\[' + [regex]::Escape($seccion) + '\][ \t]*\r?$(.*?)(?=^\[|\z)'
+    $bloque = [regex]::Match($config, $patron)
+    if (-not $bloque.Success) { continue }
+    $m = [regex]::Match($bloque.Groups[1].Value, '(?m)^[ \t]*port[ \t]*=[ \t]*(\d+)')
+    if ($m.Success) { return [int]$m.Groups[1].Value }
+  }
+  return $defecto
+}
+
 function Docker-Corriendo {
   # cmd /c fusiona stderr en stdout. Con ErrorActionPreference=Stop, docker info
   # escribe en stderr y PowerShell lo convierte en error terminante ANTES de que
@@ -134,7 +148,7 @@ function Escribir-EnvLocal($ip) {
   $ejemplo = Join-Path $Raiz '.env.example'
   if (-not (Test-Path $ruta)) { Copy-Item $ejemplo $ruta }
   $lineas = @(Get-Content $ruta)
-  $url = "http://${ip}:54321"
+  $url = "http://${ip}:$(Leer-Puerto 'api' 54321)"
   $indice = -1
   for ($i = 0; $i -lt $lineas.Count; $i++) {
     if ($lineas[$i] -match '^VITE_SUPABASE_URL=') { $indice = $i; break }
@@ -179,7 +193,7 @@ function Arrancar-Supabase {
   $salida | ForEach-Object { Write-Host $_ }
   if ($codigo -ne 0) {
     Error2 'Supabase no pudo arrancar. Revisa los mensajes de arriba.'
-    Aviso 'Causas tipicas: Docker apagado, puertos 54321-54324 ocupados o .env.local corrupto.'
+    Aviso 'Causas tipicas: Docker apagado, puertos de supabase/config.toml ocupados o .env.local corrupto.'
     exit 1
   }
 }
@@ -193,12 +207,6 @@ function Asegurar-Funciones {
   return ($contenido -match '(?m)^IA_API_KEY=[ \t]*\S')
 }
 
-function Leer-PuertoApi {
-  $config = Get-Content (Join-Path $Raiz 'supabase\config.toml') -Raw
-  $m = [regex]::Match($config, '(?ms)^\[api\].*?^\s*port\s*=\s*(\d+)')
-  if ($m.Success) { return [int]$m.Groups[1].Value }
-  return 54321
-}
 
 # El primer analisis de PDF compila pdf.js en un worker frio y puede caer por WORKER_LIMIT.
 # Se le pide a analizar-ia que lo cargue ya (no toca la BD ni gasta cupo de IA).
@@ -206,7 +214,7 @@ function Precalentar-Funciones {
   $json = Leer-Status
   $key = $json.ANON_KEY
   if (-not $key) { Aviso 'No pude leer la ANON_KEY: me salto el precalentamiento de la IA.'; return }
-  $url = "http://127.0.0.1:$(Leer-PuertoApi)/functions/v1/analizar-ia"
+  $url = "http://127.0.0.1:$(Leer-Puerto 'api' 54321)/functions/v1/analizar-ia"
   $headers = @{ Authorization = "Bearer $key"; 'x-prociso-precalentar' = '1' }
   Write-Host '  Precalentando funciones de IA (la primera vez puede tardar ~1 min)' -NoNewline
   for ($i = 0; $i -lt 30; $i++) {
@@ -277,7 +285,10 @@ if (-not $enInterfaz) { Aviso "La IP $Ip no esta configurada en esta maquina: no
 Ok "IP de red detectada: $Ip"
 
 $appUrl = "http://${Ip}:${Puerto}"
-$apiUrl = "http://${Ip}:54321"
+$puertoApi = Leer-Puerto 'api' 54321
+$puertoStudio = Leer-Puerto 'studio' 54323
+$puertoCorreo = Leer-Puerto @('local_smtp', 'inbucket') 54324
+$apiUrl = "http://${Ip}:${puertoApi}"
 
 # 3. Dependencias
 if (-not (Test-Path (Join-Path $Raiz 'node_modules'))) {
@@ -339,8 +350,8 @@ if (-not $SinFunciones) {
 Info ''
 Info '==============================  PROCISO EN RED  =============================='
 Write-Host "  App:        $appUrl" -ForegroundColor Green
-Write-Host "  Studio:     http://${Ip}:54323" -ForegroundColor Gray
-Write-Host "  Correo:     http://${Ip}:54324" -ForegroundColor Gray
+Write-Host "  Studio:     http://${Ip}:${puertoStudio}" -ForegroundColor Gray
+Write-Host "  Correo:     http://${Ip}:${puertoCorreo}" -ForegroundColor Gray
 Write-Host "  API:        $apiUrl" -ForegroundColor Gray
 Write-Host ''
 Write-Host '  Usuarios:   ana@cowin.test / Prociso2026!' -ForegroundColor Gray
