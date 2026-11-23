@@ -11,10 +11,45 @@ vi.mock('../lib/servicios', () => ({
 }))
 
 import { estadoInicial, reducer } from './AppContext'
-import type { NoConformidad, Notificacion } from '../types'
+import type { Evidencia, NoConformidad, Notificacion } from '../types'
 
 const base = estadoInicial()
 const nc = (id: string, titulo = 'x') => ({ id, titulo }) as unknown as NoConformidad
+
+describe('reducer: evidencias eliminadas', () => {
+  const evidencia = (id: string) => ({ id, nombre: id, proyectoId: 'p1' }) as unknown as Evidencia
+  const conDos = { ...base, evidencias: [evidencia('a'), evidencia('b')], evidenciasEliminadas: [] as Evidencia[] }
+
+  it('EVIDENCIA_ELIMINADA la saca de la galería y la guarda con quién, cuándo y por qué', () => {
+    const s = reducer(conDos, {
+      type: 'EVIDENCIA_ELIMINADA',
+      id: 'a',
+      eliminadaEn: '02/04/2024',
+      eliminadaPor: 'Roberto',
+      motivo: 'Subida por error',
+    })
+
+    expect(s.evidencias.map((e) => e.id)).toEqual(['b'])
+    expect(s.evidenciasEliminadas).toEqual([
+      { id: 'a', nombre: 'a', proyectoId: 'p1', eliminadaEn: '02/04/2024', eliminadaPor: 'Roberto', motivoEliminacion: 'Subida por error' },
+    ])
+  })
+
+  it('EVIDENCIA_REACTIVADA la devuelve a la galería sin rastro de eliminación', () => {
+    const eliminada = reducer(conDos, { type: 'EVIDENCIA_ELIMINADA', id: 'a', eliminadaEn: 'x', eliminadaPor: 'y', motivo: 'z' })
+
+    const s = reducer(eliminada, { type: 'EVIDENCIA_REACTIVADA', id: 'a' })
+
+    expect(s.evidenciasEliminadas).toEqual([])
+    expect(s.evidencias.map((e) => e.id).sort()).toEqual(['a', 'b'])
+    expect(s.evidencias.find((e) => e.id === 'a')).toEqual({ id: 'a', nombre: 'a', proyectoId: 'p1' })
+  })
+
+  it('ignora un id que no existe', () => {
+    expect(reducer(conDos, { type: 'EVIDENCIA_ELIMINADA', id: 'nope', eliminadaEn: 'x', eliminadaPor: 'y', motivo: 'z' })).toEqual(conDos)
+    expect(reducer(conDos, { type: 'EVIDENCIA_REACTIVADA', id: 'nope' })).toEqual(conDos)
+  })
+})
 
 describe('reducer: sesión', () => {
   it('LOGOUT vacía TODOS los datos cargados y vuelve al login', () => {
@@ -45,7 +80,7 @@ describe('reducer: sesión', () => {
     const colecciones = [
       'empresas', 'proyectos', 'tareas', 'entregables', 'procesos', 'evidencias', 'documentos',
       'usuarios', 'noConformidades', 'listasVerificacion', 'indicadores', 'comentariosGlobales',
-      'criterios', 'analisisIA', 'auditoria', 'consultorias', 'notificaciones',
+      'criterios', 'analisisIA', 'auditoria', 'consultorias', 'notificaciones', 'evidenciasEliminadas',
     ] as const
     for (const clave of colecciones) expect(despues[clave], clave).toEqual([])
   })

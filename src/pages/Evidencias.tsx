@@ -12,7 +12,9 @@ import {
   Play,
   Plus,
   RefreshCw,
+  RotateCcw,
   Search,
+  Trash2,
   Upload,
   X,
 } from "lucide-react"
@@ -79,7 +81,7 @@ function IconoTipo({ tipo }: { tipo: TipoEvidencia }) {
 }
 
 export default function Evidencias() {
-  const { state, dispatch, getUsuario, showToast } = useApp()
+  const { state, dispatch, getUsuario, showToast, refrescarDatos } = useApp()
   const [modalCaptura, setModalCaptura] = useState(false)
   const [form, setForm] = useState<Formulario>(FORM_VACIO)
   const [archivo, setArchivo] = useState<globalThis.File | null>(null)
@@ -100,9 +102,18 @@ export default function Evidencias() {
   const [filtroTipo, setFiltroTipo] = useState("")
   const [filtroEstado, setFiltroEstado] = useState("")
   const [filtroProyecto, setFiltroProyecto] = useState("")
+  // Eliminación lógica: solo el Admin PROCISO elimina y reactiva (la BD lo vuelve a comprobar).
+  const [porEliminar, setPorEliminar] = useState<Evidencia | null>(null)
+  const [motivo, setMotivo] = useState("")
+  const [procesandoEliminacion, setProcesandoEliminacion] = useState(false)
   const timerRef = useRef<number | null>(null)
   const recorderRef = useRef<MediaRecorder | null>(null)
   const chunksRef = useRef<Blob[]>([])
+
+  const esAdminProciso = state.currentRole === "Admin PROCISO"
+  // Las eliminadas solo llegan al Admin PROCISO (el RLS se las esconde al resto).
+  const todasLasEvidencias = [...state.evidencias, ...state.evidenciasEliminadas]
+  const buscarEvidencia = (id: string) => todasLasEvidencias.find((item) => item.id === id)
 
   const usuarioSesion = state.usuarios.find((item) => item.email === state.currentUser?.email)
   const usuarioCliente = usuarioSesion?.empresaId ? usuarioSesion : state.usuarios.find((item) => item.rol === "Usuario Cliente" && item.activo)
@@ -129,13 +140,16 @@ export default function Evidencias() {
   }, [])
 
   const hayFiltros = hayFiltrosActivos({ busqueda, tipo: filtroTipo, estado: filtroEstado, proyecto: filtroProyecto })
-  const evidencias = state.evidencias.filter((evidencia) => {
+  const evidencias = todasLasEvidencias.filter((evidencia) => {
     if (!proyectoIdsDisponibles.has(evidencia.proyectoId)) return false
     const texto =
       `${evidencia.nombre} ${evidencia.descripcion} ${evidencia.categoria || ""}`.toLowerCase()
     if (busqueda && !texto.includes(busqueda.toLowerCase())) return false
     if (filtroTipo && evidencia.tipo !== filtroTipo) return false
-    if (filtroEstado && evidencia.estado !== filtroEstado) return false
+    // "Eliminada" es un filtro aparte: cualquier otro estado habla solo de las activas.
+    if (filtroEstado === "Eliminada") {
+      if (!evidencia.eliminadaEn) return false
+    } else if (filtroEstado && (evidencia.eliminadaEn || evidencia.estado !== filtroEstado)) return false
     if (filtroProyecto && evidencia.proyectoId !== filtroProyecto) return false
     return true
   })
@@ -298,6 +312,55 @@ export default function Evidencias() {
     showToast(`Estado actualizado a “${estadoNuevo}”.`, "success")
   }
 
+  // Documentos que usan la evidencia: los aprobados o en revisión bloquean el borrado (lo decide la BD; acá se avisa antes).
+  const documentosVinculados = porEliminar
+    ? state.documentos.filter((documento) => documento.evidenciasVinculadas?.includes(porEliminar.id))
+    : []
+  const documentosQueBloquean = documentosVinculados.filter(
+    (documento) => documento.estado === "Aprobado" || documento.estado === "Pendiente de revisión",
+  )
+
+  function abrirEliminar(evidencia: Evidencia) {
+    setMotivo("")
+    setPorEliminar(evidencia)
+  }
+
+  async function confirmarEliminacion() {
+    if (!porEliminar || !motivo.trim() || procesandoEliminacion) return
+    setProcesandoEliminacion(true)
+    const resultado = await servicioEscritura.eliminarEvidencia(porEliminar.id, motivo)
+    setProcesandoEliminacion(false)
+    if (!resultado.ok) {
+      showToast(mensajeDeError(resultado), "error")
+      return
+    }
+    dispatch({
+      type: "EVIDENCIA_ELIMINADA",
+      id: porEliminar.id,
+      eliminadaEn: formatearFecha(new Date().toISOString()),
+      eliminadaPor: state.currentUser?.nombre ?? "",
+      motivo: motivo.trim(),
+    })
+    setVistaPrevia((actual) => (actual?.id === porEliminar.id ? null : actual))
+    setPorEliminar(null)
+    setMotivo("")
+    showToast("Evidencia eliminada. Puedes reactivarla cuando quieras.", "success")
+    // Trae el historial con el evento de la BD.
+    void refrescarDatos()
+  }
+
+  async function reactivar(evidencia: Evidencia) {
+    const resultado = await servicioEscritura.reactivarEvidencia(evidencia.id)
+    if (!resultado.ok) {
+      showToast(mensajeDeError(resultado), "error")
+      return
+    }
+    dispatch({ type: "EVIDENCIA_REACTIVADA", id: evidencia.id })
+    setVistaPrevia((actual) => (actual?.id === evidencia.id ? null : actual))
+    showToast("Evidencia reactivada.", "success")
+    void refrescarDatos()
+  }
+
   return (
     <div className="p-4 sm:p-6">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
@@ -312,12 +375,15 @@ export default function Evidencias() {
             Archivos y referencias vinculados al levantamiento de procesos.
           </p>
         </div>
-        <Button
-          onClick={() => setModalCaptura(true)}
-          icon={<Plus className="h-4 w-4" />}
-        >
-          Agregar evidencia
-        </Button>
+        {/* El Admin PROCISO no pertenece a una consultoría: no sube evidencias, solo las elimina y reactiva. */}
+        {!esAdminProciso && (
+          <Button
+            onClick={() => setModalCaptura(true)}
+            icon={<Plus className="h-4 w-4" />}
+          >
+            Agregar evidencia
+          </Button>
+        )}
       </div>
 
 
@@ -359,7 +425,7 @@ export default function Evidencias() {
           onChange={(event) => setFiltroEstado(event.target.value)}
         >
           <option value="">Todos los estados</option>
-          {[...ESTADOS, "Cargada"].map((estado) => (
+          {[...ESTADOS, "Cargada", ...(esAdminProciso ? ["Eliminada"] : [])].map((estado) => (
             <option key={estado}>{estado}</option>
           ))}
         </select>
@@ -391,7 +457,7 @@ export default function Evidencias() {
           {evidencias.map((evidencia) => (
             <article
               key={evidencia.id}
-              className="overflow-hidden rounded-xl border border-line bg-white shadow-sm"
+              className={`overflow-hidden rounded-xl border bg-white shadow-sm ${evidencia.eliminadaEn ? "border-red-200 opacity-80" : "border-line"}`}
             >
               <button
                 onClick={() => {
@@ -421,29 +487,67 @@ export default function Evidencias() {
                       {evidencia.fechaCarga ? ` · ${evidencia.fechaCarga}` : ""}
                     </p>
                   </div>
-                  <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                    {evidencia.estado}
-                  </span>
+                  {evidencia.eliminadaEn ? (
+                    <span className="rounded-full bg-red-50 px-2 py-1 text-[10px] font-semibold text-red-700">
+                      Eliminada
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
+                      {evidencia.estado}
+                    </span>
+                  )}
                 </div>
                 <p className="mt-2 line-clamp-2 text-xs text-slate-500">
                   {evidencia.descripcion || "Sin descripción"}
                 </p>
-                <select
-                  className="mt-3 w-full rounded-lg border border-line bg-white px-2 py-1.5 text-xs"
-                  disabled={state.currentRole === "Usuario Cliente"}
-                  value={evidencia.estado}
-                  onChange={(event) =>
-                    cambiarEstado(
-                      evidencia,
-                      event.target.value as EstadoEvidencia,
-                    )
-                  }
-                >
-                  {ESTADOS.map((estado) => (
-                    <option key={estado}>{estado}</option>
-                  ))}
-                  {evidencia.estado === "Cargada" && <option>Cargada</option>}
-                </select>
+                {evidencia.eliminadaEn ? (
+                  <>
+                    <p className="mt-2 text-xs text-red-700">
+                      Eliminada el {evidencia.eliminadaEn}
+                      {evidencia.eliminadaPor ? ` por ${evidencia.eliminadaPor}` : ""}
+                      {evidencia.motivoEliminacion ? ` · Motivo: ${evidencia.motivoEliminacion}` : ""}
+                    </p>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="mt-3 w-full"
+                      onClick={() => reactivar(evidencia)}
+                      icon={<RotateCcw className="h-4 w-4" />}
+                    >
+                      Reactivar
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <select
+                      className="mt-3 w-full rounded-lg border border-line bg-white px-2 py-1.5 text-xs"
+                      disabled={state.currentRole === "Usuario Cliente"}
+                      value={evidencia.estado}
+                      onChange={(event) =>
+                        cambiarEstado(
+                          evidencia,
+                          event.target.value as EstadoEvidencia,
+                        )
+                      }
+                    >
+                      {ESTADOS.map((estado) => (
+                        <option key={estado}>{estado}</option>
+                      ))}
+                      {evidencia.estado === "Cargada" && <option>Cargada</option>}
+                    </select>
+                    {esAdminProciso && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="mt-2 w-full text-red-700"
+                        onClick={() => abrirEliminar(evidencia)}
+                        icon={<Trash2 className="h-4 w-4" />}
+                      >
+                        Eliminar
+                      </Button>
+                    )}
+                  </>
+                )}
               </div>
             </article>
           ))}
@@ -719,6 +823,27 @@ export default function Evidencias() {
       >
         {vistaPrevia && (
           <div className="space-y-5">
+            {vistaPrevia.eliminadaEn && (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <p className="font-semibold">Evidencia eliminada</p>
+                <p className="mt-1 text-xs">
+                  {vistaPrevia.eliminadaEn}
+                  {vistaPrevia.eliminadaPor ? ` · ${vistaPrevia.eliminadaPor}` : ""}
+                  {vistaPrevia.motivoEliminacion ? ` · Motivo: ${vistaPrevia.motivoEliminacion}` : ""}
+                </p>
+                {esAdminProciso && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="mt-2"
+                    onClick={() => reactivar(vistaPrevia)}
+                    icon={<RotateCcw className="h-4 w-4" />}
+                  >
+                    Reactivar
+                  </Button>
+                )}
+              </div>
+            )}
             <div className="flex min-h-52 items-center justify-center rounded-xl bg-slate-950 text-white">
               {!vistaPrevia.archivoUrl && (
                 <div className="text-center text-slate-400">
@@ -788,7 +913,7 @@ export default function Evidencias() {
               </p>
               <select
                 className={inputClass}
-                disabled={state.currentRole === "Usuario Cliente"}
+                disabled={state.currentRole === "Usuario Cliente" || !!vistaPrevia.eliminadaEn}
                 value={vistaPrevia.estado}
                 onChange={(event) =>
                   cambiarEstado(
@@ -808,7 +933,7 @@ export default function Evidencias() {
                 Historial
               </p>
               {(
-                state.evidencias.find((item) => item.id === vistaPrevia.id)
+                buscarEvidencia(vistaPrevia.id)
                   ?.historial || []
               ).length === 0 ? (
                 <p className="text-sm text-slate-400">
@@ -816,8 +941,7 @@ export default function Evidencias() {
                 </p>
               ) : (
                 <div className="space-y-2">
-                  {state.evidencias
-                    .find((item) => item.id === vistaPrevia.id)
+                  {buscarEvidencia(vistaPrevia.id)
                     ?.historial?.map((item) => (
                       <div
                         key={item.id}
@@ -827,8 +951,11 @@ export default function Evidencias() {
                           {item.estadoAnterior
                             ? `${item.estadoAnterior} → `
                             : ""}
-                          {item.estadoNuevo}
+                          {item.estadoNuevo ?? item.accion}
                         </p>
+                        {item.comentario && (
+                          <p className="mt-1 text-slate-500">{item.comentario}</p>
+                        )}
                         <p className="mt-1 text-slate-400">
                           {item.fecha} · {item.autor}
                         </p>
@@ -837,13 +964,80 @@ export default function Evidencias() {
                 </div>
               )}
             </div>
-            <PanelAnalisisIA
-              key={vistaPrevia.id}
-              fuente={{ tipo: "evidencia", id: vistaPrevia.id, proyectoId: vistaPrevia.proyectoId, nombre: vistaPrevia.nombre }}
-              tipoEvidencia={vistaPrevia.tipo}
-              tieneArchivo={!!vistaPrevia.archivoRuta}
-              duracionSegundos={duracionVideo}
-            />
+            {!vistaPrevia.eliminadaEn && (
+              <PanelAnalisisIA
+                key={vistaPrevia.id}
+                fuente={{ tipo: "evidencia", id: vistaPrevia.id, proyectoId: vistaPrevia.proyectoId, nombre: vistaPrevia.nombre }}
+                tipoEvidencia={vistaPrevia.tipo}
+                tieneArchivo={!!vistaPrevia.archivoRuta}
+                duracionSegundos={duracionVideo}
+              />
+            )}
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!porEliminar}
+        onClose={() => {
+          if (!procesandoEliminacion) setPorEliminar(null)
+        }}
+        title="Eliminar evidencia"
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setPorEliminar(null)} disabled={procesandoEliminacion}>
+              Cancelar
+            </Button>
+            <Button
+              variant="danger"
+              onClick={confirmarEliminacion}
+              disabled={procesandoEliminacion || !motivo.trim() || documentosQueBloquean.length > 0}
+              icon={<Trash2 className="h-4 w-4" />}
+            >
+              Eliminar evidencia
+            </Button>
+          </>
+        }
+      >
+        {porEliminar && (
+          <div className="space-y-4 text-sm">
+            <p className="text-slate-700">
+              Vas a eliminar <span className="font-semibold">{porEliminar.nombre}</span>. Dejará de verse para los demás usuarios,
+              pero no se borra: puedes reactivarla cuando quieras y vuelve con el mismo estado de revisión.
+            </p>
+            {documentosQueBloquean.length > 0 ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-red-700">
+                <p className="font-semibold">No se puede eliminar</p>
+                <p className="mt-1 text-xs">
+                  Está vinculada a documentos aprobados o en revisión:{" "}
+                  {documentosQueBloquean.map((documento) => documento.nombre).join(", ")}. Su contenido está congelado.
+                </p>
+              </div>
+            ) : (
+              documentosVinculados.length > 0 && (
+                <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-amber-800">
+                  <p className="text-xs">
+                    Está vinculada a {documentosVinculados.length}{" "}
+                    {documentosVinculados.length === 1 ? "documento" : "documentos"} (
+                    {documentosVinculados.map((documento) => documento.nombre).join(", ")}). Seguirá apareciendo como vinculada
+                    ahí, aunque los demás usuarios ya no la vean en la galería.
+                  </p>
+                </div>
+              )
+            )}
+            <label className="block">
+              <span className={labelClass}>
+                Motivo <span className="text-red-500">*</span>
+              </span>
+              <textarea
+                rows={3}
+                className={inputClass}
+                value={motivo}
+                maxLength={500}
+                onChange={(event) => setMotivo(event.target.value)}
+                placeholder="Por ejemplo: subida por error, archivo duplicado…"
+              />
+            </label>
           </div>
         )}
       </Modal>

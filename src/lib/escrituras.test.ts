@@ -452,6 +452,43 @@ describe('revisarEvidencia', () => {
   })
 })
 
+describe('eliminarEvidencia / reactivarEvidencia', () => {
+  const EVIDENCIA = '44444444-0000-0000-0000-000000000001'
+
+  it('elimina con el motivo recortado en una sola llamada', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.eliminarEvidencia(EVIDENCIA, '  Subida por error  ')).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([
+      { tabla: 'eliminar_evidencia', operacion: 'rpc', datos: { p_id: EVIDENCIA, p_motivo: 'Subida por error' } },
+    ])
+  })
+
+  it('traduce el rechazo del servidor a "sin permiso"', async () => {
+    const { cliente } = crearClienteDoble({ 'eliminar_evidencia.rpc': { data: null, error: ERROR_RLS } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.eliminarEvidencia(EVIDENCIA, 'x')).toEqual({ ok: false, error: 'sin_permiso' })
+  })
+
+  it('muestra la frase de la regla de negocio cuando está vinculada a un documento', async () => {
+    const frase = 'La evidencia está vinculada a un documento aprobado o en revisión: no se puede eliminar.'
+    const { cliente } = crearClienteDoble({ 'eliminar_evidencia.rpc': { data: null, error: { message: frase, code: '22023' } } })
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.eliminarEvidencia(EVIDENCIA, 'x')).toEqual({ ok: false, error: 'datos_invalidos', detalle: frase })
+  })
+
+  it('reactiva con una sola llamada', async () => {
+    const { cliente, llamadas } = crearClienteDoble()
+    const escrituras = crearServicioEscritura(cliente)
+
+    expect(await escrituras.reactivarEvidencia(EVIDENCIA)).toEqual({ ok: true, valor: undefined })
+    expect(llamadas).toEqual([{ tabla: 'reactivar_evidencia', operacion: 'rpc', datos: { p_id: EVIDENCIA } }])
+  })
+})
+
 describe('subirEvidencia', () => {
   const ID = '44444444-0000-0000-0000-0000000000aa'
   const archivo = (nombre: string, tipo = 'image/jpeg') => new File(['contenido'], nombre, { type: tipo })

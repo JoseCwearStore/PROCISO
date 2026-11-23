@@ -48,6 +48,7 @@ const SIN_DATOS: SinDatos = {
   entregables: [],
   procesos: [],
   evidencias: [],
+  evidenciasEliminadas: [],
   documentos: [],
   usuarios: [],
   noConformidades: [],
@@ -88,6 +89,7 @@ interface AppState {
   entregables: Entregable[]
   procesos: Proceso[]
   evidencias: Evidencia[]
+  evidenciasEliminadas: Evidencia[]
   documentos: Documento[]
   usuarios: Usuario[]
   noConformidades: NoConformidad[]
@@ -133,6 +135,8 @@ type Action =
   | { type: 'UPSERT_PROCESO'; proceso: Proceso }
   | { type: 'ADD_EVIDENCIA'; evidencia: Evidencia }
   | { type: 'UPDATE_EVIDENCIA'; id: string; updates: Partial<Evidencia> }
+  | { type: 'EVIDENCIA_ELIMINADA'; id: string; eliminadaEn: string; eliminadaPor: string; motivo: string }
+  | { type: 'EVIDENCIA_REACTIVADA'; id: string }
   | { type: 'UPSERT_DOCUMENTO'; documento: Documento }
   | { type: 'SET_DOCUMENTOS'; documentos: Documento[] }
   | { type: 'UPSERT_USUARIO'; usuario: Usuario }
@@ -256,6 +260,28 @@ export function reducer(state: AppState, action: Action): AppState {
           evidencia.id === action.id ? { ...evidencia, ...action.updates } : evidencia
         ),
       }
+    case 'EVIDENCIA_ELIMINADA': {
+      const evidencia = state.evidencias.find((item) => item.id === action.id)
+      if (!evidencia) return state
+      return {
+        ...state,
+        evidencias: state.evidencias.filter((item) => item.id !== action.id),
+        evidenciasEliminadas: [
+          { ...evidencia, eliminadaEn: action.eliminadaEn, eliminadaPor: action.eliminadaPor, motivoEliminacion: action.motivo },
+          ...state.evidenciasEliminadas,
+        ],
+      }
+    }
+    case 'EVIDENCIA_REACTIVADA': {
+      const evidencia = state.evidenciasEliminadas.find((item) => item.id === action.id)
+      if (!evidencia) return state
+      const { eliminadaEn: _en, eliminadaPor: _por, motivoEliminacion: _motivo, ...activa } = evidencia
+      return {
+        ...state,
+        evidencias: [activa, ...state.evidencias],
+        evidenciasEliminadas: state.evidenciasEliminadas.filter((item) => item.id !== action.id),
+      }
+    }
     case 'UPSERT_DOCUMENTO': {
       const exists = state.documentos.some((documento) => documento.id === action.documento.id)
       return {
@@ -384,7 +410,11 @@ async function cargarDatosDeSesion(rol: Rol): Promise<DatosSesion | null> {
   const resultado = await cargarFilasDeSesion(rol)
   if (!resultado.ok) return null
   const datos = combinarDatosSesion(resultado.filas)
-  return { ...datos, evidencias: await servicioArchivos.firmarEvidencias(datos.evidencias) }
+  const [evidencias, evidenciasEliminadas] = await Promise.all([
+    servicioArchivos.firmarEvidencias(datos.evidencias),
+    servicioArchivos.firmarEvidencias(datos.evidenciasEliminadas),
+  ])
+  return { ...datos, evidencias, evidenciasEliminadas }
 }
 
 export function AppProvider({ children }: { children: React.ReactNode }) {

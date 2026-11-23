@@ -446,6 +446,39 @@ describe('combinarDatosSesion', () => {
     ])
   })
 
+  it('separa las evidencias eliminadas de las activas y las traduce con quién y por qué', () => {
+    const filas = filasBase()
+    filas.evidencias.push({
+      ...filas.evidencias[0],
+      id: 'ev-borrada',
+      nombre: 'Audio duplicado',
+      eliminada_en: '2024-04-02T15:30:00+00:00',
+      eliminada_por: ROBERTO,
+      motivo_eliminacion: 'Subida por error',
+    })
+
+    const datos = combinarDatosSesion(filas)
+
+    expect(datos.evidencias.map((e) => e.id)).toEqual(['ev-p1'])
+    expect(datos.evidenciasEliminadas).toHaveLength(1)
+    expect(datos.evidenciasEliminadas[0]).toMatchObject({
+      id: 'ev-borrada',
+      eliminadaEn: '02/04/2024',
+      eliminadaPor: 'Roberto',
+      motivoEliminacion: 'Subida por error',
+    })
+    expect(datos.evidencias[0].eliminadaEn).toBeUndefined()
+  })
+
+  it('una evidencia eliminada no cuenta entre las evidencias de su proceso', () => {
+    const filas = filasBase()
+    filas.evidencias.push({ ...filas.evidencias[0], id: 'ev-borrada', eliminada_en: '2024-04-02T15:30:00+00:00' })
+
+    const { procesos } = combinarDatosSesion(filas)
+
+    expect(procesos.find((p) => p.id === PROC1)?.evidenciasIds).toEqual(['ev-p1'])
+  })
+
   it('traduce los documentos de la BD con versiones, evidencias vinculadas e historial', () => {
     const { documentos } = combinarDatosSesion(filasBase())
 

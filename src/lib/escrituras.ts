@@ -107,6 +107,8 @@ export interface ClienteEscritura {
     funcion:
       | 'guardar_proceso'
       | 'revisar_evidencia'
+      | 'eliminar_evidencia'
+      | 'reactivar_evidencia'
       | 'guardar_documento'
       | 'decidir_documento'
       | 'dar_visto_bueno_documento'
@@ -664,6 +666,17 @@ export function crearServicioEscritura(cliente: ClienteEscritura) {
         p_estado: estado,
         p_comentario: comentario?.trim() || null,
       })
+      return error ? falla(error) : { ok: true, valor: undefined }
+    },
+
+    // Eliminación lógica (solo Admin PROCISO): marca la evidencia con motivo y deja historial. No toca el archivo.
+    async eliminarEvidencia(id: string, motivo: string): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('eliminar_evidencia', { p_id: id, p_motivo: motivo.trim() })
+      return error ? falla(error) : { ok: true, valor: undefined }
+    },
+
+    async reactivarEvidencia(id: string): Promise<ResultadoEscritura<void>> {
+      const { error } = await cliente.rpc('reactivar_evidencia', { p_id: id })
       return error ? falla(error) : { ok: true, valor: undefined }
     },
 

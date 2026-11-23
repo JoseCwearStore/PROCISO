@@ -4,6 +4,8 @@ const TODOS: Rol[] = ['Admin PROCISO', 'Admin Consultoría', 'Consultor', 'Usuar
 const EQUIPO: Rol[] = ['Admin Consultoría', 'Consultor']
 const OPERACION: Rol[] = ['Admin Consultoría', 'Consultor']
 const COLABORACION_CLIENTE: Rol[] = ['Admin Consultoría', 'Consultor', 'Usuario Cliente']
+// El Admin PROCISO entra a Evidencias solo para eliminarlas y reactivarlas (eliminación lógica, 23/11).
+const EVIDENCIAS: Rol[] = ['Admin PROCISO', ...COLABORACION_CLIENTE]
 
 export const PAGE_PERMISSIONS: Partial<Record<PageId, Rol[]>> = {
   inicio: TODOS,
@@ -13,7 +15,7 @@ export const PAGE_PERMISSIONS: Partial<Record<PageId, Rol[]>> = {
   'proyecto-detalle': OPERACION,
   levantamiento: OPERACION,
   procesos: OPERACION,
-  evidencias: COLABORACION_CLIENTE,
+  evidencias: EVIDENCIAS,
   documentacion: COLABORACION_CLIENTE,
   // El equipo revisa y el cliente aprueba (decisión de negocio).
   revisiones: COLABORACION_CLIENTE,

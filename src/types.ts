@@ -231,7 +231,9 @@ export interface HistorialEvidencia {
   fecha: string
   autor: string
   estadoAnterior?: EstadoEvidencia
-  estadoNuevo: EstadoEvidencia
+  // Vacío en los eventos que no son un cambio de estado (eliminada, reactivada): ahí va `accion`.
+  estadoNuevo?: EstadoEvidencia
+  accion?: string
   comentario?: string
 }
 
@@ -254,6 +256,10 @@ export interface Evidencia {
   archivoRuta?: string
   archivoUrl?: string
   archivoMime?: string
+  // Eliminación lógica: solo el Admin PROCISO ve las eliminadas (lo decide el RLS).
+  eliminadaEn?: string
+  eliminadaPor?: string
+  motivoEliminacion?: string
   historial?: HistorialEvidencia[]
 }
 

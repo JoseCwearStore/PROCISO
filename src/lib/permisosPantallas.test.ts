@@ -43,6 +43,15 @@ describe('matrizDePermisos', () => {
     expect(fila('Configuración')?.roles).toMatchObject({ 'Consultor': false, 'Admin Consultoría': true })
   })
 
+  it('Evidencias la ven los cuatro roles: solo el Admin PROCISO elimina y reactiva, y necesita entrar a la pantalla', () => {
+    expect(fila('Evidencias')?.roles).toEqual({
+      'Admin PROCISO': true,
+      'Admin Consultoría': true,
+      'Consultor': true,
+      'Usuario Cliente': true,
+    })
+  })
+
   it('las pantallas de todos (Inicio, Notificaciones, Ayuda) aparecen para los cuatro roles', () => {
     for (const nombre of ['Inicio', 'Notificaciones', 'Ayuda y soporte']) {
       expect(Object.values(fila(nombre)?.roles ?? {}), nombre).toEqual([true, true, true, true])

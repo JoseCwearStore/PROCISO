@@ -174,6 +174,9 @@ export interface FilaEvidencia {
   archivo_nombre: string | null
   archivo_mime: string | null
   creado_en: string
+  eliminada_en?: string | null
+  eliminada_por?: string | null
+  motivo_eliminacion?: string | null
 }
 
 export interface FilaDocumento {
@@ -429,6 +432,9 @@ export interface DatosSesion {
   proyectos: Proyecto[]
   procesos: Proceso[]
   evidencias: Evidencia[]
+  // Solo llegan para el Admin PROCISO (el RLS las esconde al resto). Van aparte para que no se cuenten en
+  // el tablero, el buscador ni los procesos.
+  evidenciasEliminadas: Evidencia[]
   documentos: Documento[]
 }
 
@@ -450,7 +456,7 @@ const CONSULTAS = {
   miembros: ['proyecto_miembros', 'proyecto_id, usuario_id'],
   procesos: ['procesos', '*'],
   actividades: ['actividades', 'id, proceso_id, responsable_id, tipo, descripcion, entradas, recursos, controles, resultado, orden'],
-  evidencias: ['evidencias', 'id, proyecto_id, proceso_id, actividad_id, subido_por, nombre, tipo, estado, descripcion, categoria, archivo_ruta, archivo_nombre, archivo_mime, creado_en'],
+  evidencias: ['evidencias', 'id, proyecto_id, proceso_id, actividad_id, subido_por, nombre, tipo, estado, descripcion, categoria, archivo_ruta, archivo_nombre, archivo_mime, creado_en, eliminada_en, eliminada_por, motivo_eliminacion'],
   historial: ['historial', 'id, entidad_tipo, entidad_id, proyecto_id, autor_id, accion, descripcion, estado_anterior, estado_nuevo, creado_en'],
   documentos: ['documentos', '*'],
   versiones: ['documento_versiones', 'documento_id, version, autor_id, comentario, motivo, secciones, estado, creado_en'],
@@ -693,6 +699,9 @@ export function traducirEvidencia(
     autor: nombreDe(fila.subido_por),
     fechaCarga,
     fecha: fechaCarga,
+    eliminadaEn: fila.eliminada_en ? formatearFecha(fila.eliminada_en) : undefined,
+    eliminadaPor: nombreDe(fila.eliminada_por ?? null),
+    motivoEliminacion: opcional(fila.motivo_eliminacion ?? null),
     historial: historial
       .filter((h) => h.entidad_tipo === 'evidencia' && h.entidad_id === fila.id)
       .sort((a, b) => a.creado_en.localeCompare(b.creado_en))
@@ -701,7 +710,9 @@ export function traducirEvidencia(
         fecha: formatearFecha(h.creado_en),
         autor: nombreDe(h.autor_id) ?? '',
         estadoAnterior: opcional(h.estado_anterior) as Evidencia['estado'] | undefined,
-        estadoNuevo: h.estado_nuevo as Evidencia['estado'],
+        estadoNuevo: opcional(h.estado_nuevo) as Evidencia['estado'] | undefined,
+        // Eventos sin cambio de estado (eliminada, reactivada): se muestra la acción.
+        accion: h.estado_nuevo ? undefined : h.accion,
         comentario: opcional(h.descripcion),
       })),
   }
@@ -1030,7 +1041,9 @@ export function traducirHistorial(filas: FilaHistorial[]): EntradaHistorial[] {
 
 export function combinarDatosSesion(filas: FilasSesion): DatosSesion {
 
-  const evidencias = filas.evidencias.map((fila) => traducirEvidencia(fila, filas.proyectos, filas.perfiles, filas.historial))
+  const todasLasEvidencias = filas.evidencias.map((fila) => traducirEvidencia(fila, filas.proyectos, filas.perfiles, filas.historial))
+  const evidencias = todasLasEvidencias.filter((e) => !e.eliminadaEn)
+  const evidenciasEliminadas = todasLasEvidencias.filter((e) => !!e.eliminadaEn)
   const documentos = filas.documentos.map((fila) =>
     traducirDocumento(fila, filas.proyectos, filas.versiones, filas.vinculos, filas.historial, filas.comentarios),
   )
@@ -1043,6 +1056,7 @@ export function combinarDatosSesion(filas: FilasSesion): DatosSesion {
     proyectos: filas.proyectos.map((fila) => traducirProyecto(fila, filas.fases, filas.miembros)),
     procesos: filas.procesos.map((fila) => traducirProceso(fila, filas.actividades, evidencias, documentos)),
     evidencias,
+    evidenciasEliminadas,
     documentos,
     tareas,
     entregables: filas.entregables.map(traducirEntregable),
