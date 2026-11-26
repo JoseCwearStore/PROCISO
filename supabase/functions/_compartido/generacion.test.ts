@@ -52,13 +52,13 @@ describe('validarPedido', () => {
     ['no es un objeto', null],
     ['sin plantilla', { ...PEDIDO, plantilla: '' }],
     ['sin campos', { ...PEDIDO, campos: [] }],
-    ['con demasiados campos', { ...PEDIDO, campos: Array.from({ length: 7 }, (_, i) => ({ id: `c${i}`, instruccion: 'x' })) }],
+    ['con demasiados campos', { ...PEDIDO, campos: Array.from({ length: 13 }, (_, i) => ({ id: `c${i}`, instruccion: 'x' })) }],
     ['con un campo sin instrucción', { ...PEDIDO, campos: [{ id: 'a', instruccion: '' }] }],
     ['con ids de campo repetidos', { ...PEDIDO, campos: [CAMPO, CAMPO] }],
     ['con una instrucción enorme', { ...PEDIDO, campos: [{ id: 'a', instruccion: 'x'.repeat(1501) }] }],
     ['con un ejemplo enorme', { ...PEDIDO, campos: [{ id: 'a', instruccion: 'x', ejemplo: 'x'.repeat(3001) }] }],
     ['con respuestas que no son una lista', { ...PEDIDO, respuestas: 'hola' }],
-    ['con demasiadas respuestas', { ...PEDIDO, respuestas: Array.from({ length: 21 }, () => ({ pregunta: 'p', respuesta: 'r' })) }],
+    ['con demasiadas respuestas', { ...PEDIDO, respuestas: Array.from({ length: 41 }, () => ({ pregunta: 'p', respuesta: 'r' })) }],
     ['con una respuesta enorme', { ...PEDIDO, respuestas: [{ pregunta: 'p', respuesta: 'x'.repeat(2001) }] }],
   ])('rechaza un pedido %s', (_caso, pedido) => {
     expect(() => validarPedido(pedido)).toThrow(ErrorIA)

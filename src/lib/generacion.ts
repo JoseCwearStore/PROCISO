@@ -112,6 +112,42 @@ export function armarPedidoIA(
 
 // ─── Lectura de filas ───────────────────────────────────────────────────────
 
+// El pedido COMPLETO: los campos propios de la plantilla (política, alcance, objetivos) más
+// los huecos a completar (ver completarIA.ts), con contexto extra (proceso levantado o el
+// propio documento). Devuelve null si no hay nada que pedir. Los topes coinciden con los de
+// la Edge Function (12 campos, 40 respuestas).
+export const MAX_CAMPOS_PEDIDO = 12
+export const MAX_RESPUESTAS_PEDIDO = 40
+
+export function armarPedidoCompleto(
+  plantilla: { id: string; nombre: string; preguntas?: { id: string; texto: string }[] },
+  datos: {
+    consultoriaId: string | null
+    proyectoId: string
+    organizacion?: string
+    respuestas: Record<string, string>
+    procesos: string[]
+  },
+  extra: { campos?: CampoGeneracion[]; contexto?: { pregunta: string; respuesta: string }[]; registro?: string } = {},
+): PedidoGeneracionIA | null {
+  const campos = [...camposIA(plantilla.id), ...(extra.campos ?? [])].slice(0, MAX_CAMPOS_PEDIDO)
+  if (!campos.length) return null
+  const guiadas = (plantilla.preguntas ?? [])
+    .map((p) => ({ pregunta: p.texto, respuesta: (datos.respuestas[p.id] ?? '').trim() }))
+    .filter((r) => r.respuesta)
+  return {
+    consultoriaId: datos.consultoriaId,
+    proyectoId: datos.proyectoId,
+    // Lo que se registra en generaciones_ia.plantilla (1 a 40 caracteres).
+    plantillaId: (extra.registro ?? plantilla.id).slice(0, 40),
+    plantilla: plantilla.nombre,
+    ...(datos.organizacion ? { organizacion: datos.organizacion } : {}),
+    respuestas: [...guiadas, ...(extra.contexto ?? [])].filter((r) => r.respuesta.trim()).slice(0, MAX_RESPUESTAS_PEDIDO),
+    procesos: datos.procesos,
+    campos,
+  }
+}
+
 const MAX_FILAS = 8
 
 // "a | b | c" por línea → filas de `columnas.length` celdas. Tolera viñetas y numeración,
@@ -141,6 +177,11 @@ const DESTINOS: Record<string, Record<string, Destino>> = {
     matriz: { seccion: 'Matriz de objetivos', tipo: 'filas', conId: true },
     plan: { seccion: 'Plan para alcanzar los objetivos', tipo: 'filas', conId: true },
   },
+}
+
+// Las secciones que redactan los campos propios de la plantilla (no se piden otra vez como hueco).
+export function seccionesRedactadas(plantillaId: string): string[] {
+  return Object.values(DESTINOS[plantillaId] ?? {}).map((d) => d.seccion)
 }
 
 const idObjetivo = (i: number) => `OC-${String(i + 1).padStart(2, '0')}`

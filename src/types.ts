@@ -281,6 +281,9 @@ export interface SeccionDocumento {
   contenido: string
   tipo: 'texto' | 'tabla'
   filas?: string[][]
+  // Lo que propuso la IA y todavía no revisó una persona (ver src/lib/completarIA.ts):
+  // el texto de la sección y/o celdas de la tabla ("fila:columna", la fila 0 es el encabezado).
+  sugeridoIA?: { contenido?: boolean; celdas?: string[] }
 }
 
 export interface ComentarioDocumento {

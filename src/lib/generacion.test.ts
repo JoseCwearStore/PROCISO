@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aplicarTextos, armarPedidoIA, camposIA, parsearFilas } from './generacion'
+import { aplicarTextos, armarPedidoCompleto, armarPedidoIA, camposIA, MAX_CAMPOS_PEDIDO, MAX_RESPUESTAS_PEDIDO, parsearFilas } from './generacion'
 import { crearSecciones, plantillaPorId } from './plantillas'
 
 const contexto = { codigo: 'SGC-TST-001', edicionNorma: 'ISO 9001:2026', nuevoId: (() => { let n = 0; return () => `s${++n}` })() }
@@ -124,5 +124,36 @@ describe('aplicarTextos', () => {
     const original = secciones('objetivos')
     const nuevas = aplicarTextos(plantillaPorId('objetivos')!, original, { matriz: 'Texto sin estructura de tabla.' })
     expect(contenido(nuevas, 'Matriz de objetivos')).toEqual(contenido(original, 'Matriz de objetivos'))
+  })
+})
+
+describe('armarPedidoCompleto', () => {
+  const datos = { consultoriaId: 'c1', proyectoId: 'p1', organizacion: 'Marketino', respuestas: { productos: 'Marketing digital' }, procesos: ['Ventas'] }
+
+  it('suma los campos propios de la plantilla, los huecos a completar y el contexto', () => {
+    const politica = plantillaPorId('politica')!
+    const pedido = armarPedidoCompleto(politica, datos, {
+      campos: [{ id: 's1', instruccion: 'Completa la tabla de comunicación' }],
+      contexto: [{ pregunta: 'Sección «Encabezado»', respuesta: 'Código SGC-POL-001' }, { pregunta: 'Vacía', respuesta: '  ' }],
+    })!
+    expect(pedido.campos.map((c) => c.id)).toEqual(['declaracion', 's1'])
+    expect(pedido.respuestas).toEqual([
+      { pregunta: '¿Qué productos o servicios ofrece la empresa?', respuesta: 'Marketing digital' },
+      { pregunta: 'Sección «Encabezado»', respuesta: 'Código SGC-POL-001' },
+    ])
+    expect(pedido.plantillaId).toBe('politica')
+  })
+
+  it('respeta los topes de la Edge Function y el registro de 40 caracteres', () => {
+    const muchos = Array.from({ length: 20 }, (_, i) => ({ id: `s${i}`, instruccion: 'x' }))
+    const contexto = Array.from({ length: 60 }, (_, i) => ({ pregunta: `p${i}`, respuesta: 'r' }))
+    const pedido = armarPedidoCompleto({ id: 'completar', nombre: 'Procedimiento' }, { ...datos, respuestas: {} }, { campos: muchos, contexto, registro: 'completar:'.padEnd(60, 'x') })!
+    expect(pedido.campos).toHaveLength(MAX_CAMPOS_PEDIDO)
+    expect(pedido.respuestas).toHaveLength(MAX_RESPUESTAS_PEDIDO)
+    expect(pedido.plantillaId).toHaveLength(40)
+  })
+
+  it('sin campos no hay pedido', () => {
+    expect(armarPedidoCompleto({ id: 'mapa', nombre: 'Mapa' }, datos, {})).toBeNull()
   })
 })

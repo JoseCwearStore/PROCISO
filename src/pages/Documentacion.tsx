@@ -14,6 +14,7 @@ import {
   Save,
   Search,
   Send,
+  Sparkles,
   Table2,
   Trash2,
   Undo2,
@@ -33,7 +34,11 @@ import {
   versionParaEnviar,
 } from '../lib/documentos'
 import { PENDIENTE, PLANTILLAS, crearSecciones, plantillaPorId } from '../lib/plantillas'
-import { aplicarTextos, armarPedidoIA, camposIA } from '../lib/generacion'
+import { aplicarTextos, armarPedidoCompleto, camposIA, seccionesRedactadas } from '../lib/generacion'
+import {
+  aceptarSeccion, aplicarCompletado, camposCompletar, contextoDeProceso, contextoDeProcesos, contextoDelDocumento,
+  cuantosHuecos, esCeldaSugerida, huecosDe, marcarSugeridas, quitarMarcaCelda, quitarMarcaTexto, sugerenciasPendientes,
+} from '../lib/completarIA'
 import { useAccionesGeneracion } from '../hooks/useAccionesGeneracion'
 import { descargar } from '../lib/descarga'
 import { armarModelo, nombreArchivo } from '../lib/exportacion'
@@ -103,6 +108,9 @@ const COLUMNAS = [
   { label: 'Estado', clave: 'estado' }, { label: 'Revisión', clave: 'revision' }, { label: 'Aprobador', clave: 'aprobador' },
 ]
 
+// Marcador que deja la IA cuando le falta un dato (bloquea el envío a revisión).
+const POR_CONFIRMAR = /\[\s*por confirmar\s*\]/i
+
 export default function Documentacion() {
   const { state, dispatch, getEmpresa, getProyecto, getUsuario, showToast } = useApp()
   const [vista, setVista] = useState<'lista' | 'editor'>('lista')
@@ -112,6 +120,7 @@ export default function Documentacion() {
   const [generadorOpen, setGeneradorOpen] = useState(false)
   const [generador, setGenerador] = useState<Generador>(GENERADOR_VACIO)
   const [generandoIA, setGenerandoIA] = useState(false)
+  const [completandoIA, setCompletandoIA] = useState(false)
   const [exportando, setExportando] = useState<'pdf' | 'word' | null>(null)
   const { redactar, usoIA, estadoUsoIA } = useAccionesGeneracion()
   const [compararOpen, setCompararOpen] = useState(false)
@@ -226,25 +235,44 @@ export default function Documentacion() {
     let detalle = `Creado con la plantilla ${plantilla.nombre}.`
     let aviso: { texto: string; tipo: 'success' | 'warning' } = { texto: 'Borrador generado con la información disponible.', tipo: 'success' }
     // Con el tope diario agotado el borrador se genera igual, sin IA (el mismo plan B de siempre).
+    // La IA redacta los campos propios de la plantilla (política, alcance, objetivos) y PROPONE lo
+    // que quedó pendiente (completarIA.ts), con el proceso levantado o los procesos como contexto.
+    const nombreUsuario = (id?: string) => (id ? getUsuario(id)?.nombre ?? '' : '')
+    const redactadas = seccionesRedactadas(plantilla.id)
+    const huecos = huecosDe(secciones).filter((h) => !redactadas.includes(h.titulo))
     const pedido = generador.usarIA && !estadoUsoIA?.agotado
-      ? armarPedidoIA(plantilla, {
-          consultoriaId: state.currentUser?.consultoriaId ?? null,
-          proyectoId: generador.proyectoId,
-          organizacion,
-          respuestas: generador.respuestas,
-          procesos: procesosDelProyecto.map((item) => item.nombre),
-        })
+      ? armarPedidoCompleto(
+          plantilla,
+          {
+            consultoriaId: state.currentUser?.consultoriaId ?? null,
+            proyectoId: generador.proyectoId,
+            organizacion,
+            respuestas: generador.respuestas,
+            procesos: procesosDelProyecto.map((item) => item.nombre),
+          },
+          {
+            campos: camposCompletar(secciones, huecos, plantilla.proposito),
+            contexto: [
+              ...contextoDeProceso(proceso, nombreUsuario),
+              ...(plantilla.requiereProcesosDelProyecto ? contextoDeProcesos(procesosDelProyecto) : []),
+              ...contextoDelDocumento(secciones),
+            ],
+          },
+        )
       : null
     if (pedido) {
       setGenerandoIA(true)
       try {
         const redaccion = await redactar(pedido)
         if (redaccion.estado === 'Completado') {
-          secciones = aplicarTextos(plantilla, secciones, redaccion.textos)
-          detalle += ` Redactado con IA${redaccion.modelo ? ` (${redaccion.modelo})` : ''}: requiere revisión humana.`
-          aviso = { texto: 'Borrador redactado con IA. Revísalo antes de enviarlo.', tipo: 'success' }
+          const redactado = marcarSugeridas(secciones, aplicarTextos(plantilla, secciones, redaccion.textos))
+          const completado = aplicarCompletado(redactado, huecos, redaccion.textos)
+          secciones = completado.secciones
+          const propuestas = sugerenciasPendientes(secciones)
+          detalle += ` Redactado con IA${redaccion.modelo ? ` (${redaccion.modelo})` : ''}: ${propuestas} propuesta(s) por revisar.`
+          aviso = { texto: `La IA propuso ${propuestas} dato(s), marcados en violeta. Revísalos: edítalos o acéptalos antes de enviar.`, tipo: 'success' }
         } else {
-          aviso = { texto: `La IA no estuvo disponible (${redaccion.error}). Se generó el borrador con tus respuestas.`, tipo: 'warning' }
+          aviso = { texto: `La IA no estuvo disponible (${redaccion.error}). Se generó el borrador con la información disponible.`, tipo: 'warning' }
         }
       } finally {
         setGenerandoIA(false)
@@ -281,6 +309,68 @@ export default function Documentacion() {
     setGeneradorOpen(false)
     setGenerador(GENERADOR_VACIO)
     showToast(aviso.texto, aviso.tipo)
+  }
+
+  // «Completar con IA»: la IA PROPONE lo que el documento tiene pendiente; queda marcado
+  // hasta que alguien lo edite o lo acepte (completarIA.ts).
+  async function completarConIA() {
+    if (!documento || completandoIA || !puedeRedactarDocumentos(state.currentRole) || !contenidoEditable(documento)) return
+    const secciones = documento.secciones ?? []
+    const huecos = huecosDe(secciones)
+    if (!huecos.length) {
+      showToast('No hay campos pendientes que la IA pueda proponer.', 'info')
+      return
+    }
+    if (estadoUsoIA?.agotado) {
+      showToast('Se agotó el cupo diario de IA. Completa los campos a mano.', 'warning')
+      return
+    }
+    const plantilla = PLANTILLAS.find((item) => item.nombre === documento.plantilla)
+    const proceso = documento.procesoId ? state.procesos.find((item) => item.id === documento.procesoId) : undefined
+    const empresa = state.empresas.find((item) => item.id === documento.empresaId)
+    const procesosDelProyecto = state.procesos.filter((item) => item.proyectoId === documento.proyectoId)
+    const nombreUsuario = (id?: string) => (id ? getUsuario(id)?.nombre ?? '' : '')
+    const pedido = armarPedidoCompleto(
+      { id: 'completar', nombre: `${documento.tipo}: ${documento.nombre}` },
+      {
+        consultoriaId: state.currentUser?.consultoriaId ?? null,
+        proyectoId: documento.proyectoId,
+        organizacion: empresa?.nombreComercial || empresa?.nombre,
+        respuestas: {},
+        procesos: procesosDelProyecto.map((item) => item.nombre),
+      },
+      {
+        campos: camposCompletar(secciones, huecos, plantilla?.proposito ?? `Documento del SGC de tipo ${documento.tipo}.`),
+        contexto: [
+          ...contextoDeProceso(proceso, nombreUsuario),
+          ...(plantilla?.requiereProcesosDelProyecto ? contextoDeProcesos(procesosDelProyecto) : []),
+          ...contextoDelDocumento(secciones),
+        ],
+        registro: `completar:${plantilla?.id ?? documento.tipo}`,
+      },
+    )
+    if (!pedido) return
+    setCompletandoIA(true)
+    try {
+      const redaccion = await redactar(pedido)
+      if (redaccion.estado !== 'Completado') {
+        showToast(`La IA no estuvo disponible (${redaccion.error}).`, 'warning')
+        return
+      }
+      const resultado = aplicarCompletado(secciones, huecos, redaccion.textos)
+      if (!resultado.propuestos) {
+        showToast('La IA no tuvo información suficiente para proponer esos campos. Complétalos a mano.', 'warning')
+        return
+      }
+      actualizar({ secciones: resultado.secciones })
+      const restantes = huecos.length - Math.min(huecos.length, 10)
+      showToast(
+        `La IA propuso ${resultado.propuestos} dato(s), marcados en violeta. Revísalos y guarda.${restantes ? ` Quedan ${restantes} sección(es): vuelve a pulsar «Completar con IA».` : ''}`,
+        'success',
+      )
+    } finally {
+      setCompletandoIA(false)
+    }
   }
 
   // Ediciones en pantalla: se guardan en la BD al pulsar Guardar o Enviar.
@@ -352,6 +442,11 @@ export default function Documentacion() {
     )) {
       faltantes.push('Información pendiente de confirmar')
     }
+    if (documento.secciones?.some((seccion) => POR_CONFIRMAR.test(seccion.contenido + (seccion.filas ?? []).flat().join(' ')))) {
+      faltantes.push('Marcadores [por confirmar] de la IA')
+    }
+    const sugerencias = sugerenciasPendientes(documento.secciones)
+    if (sugerencias) faltantes.push(`${sugerencias} sugerencia(s) de IA sin revisar (edítalas o acéptalas)`)
     setErrores(faltantes)
     if (faltantes.length) return
     const motivo = documento.motivoCambio || 'Envío a revisión'
@@ -500,6 +595,9 @@ export default function Documentacion() {
         retirar={retirarRevision}
         nuevaVersion={nuevaVersion}
         errores={errores}
+        completarIA={completarConIA}
+        completandoIA={completandoIA}
+        cupoAgotado={!!estadoUsoIA?.agotado}
         cambiosSinGuardar={hayCambiosSinGuardar(firmasGuardadas.current[documento.id], firmaDeContenido(documento.secciones))}
         evidencias={state.evidencias.filter((item) => item.proyectoId === documento.proyectoId)}
         usuarioId={state.currentUser?.id ?? ''}
@@ -601,7 +699,7 @@ export default function Documentacion() {
               ))}
             </fieldset>
           )}
-          {camposIA(plantillaElegida?.id ?? '').length > 0 && (
+          {plantillaElegida && (
             <label className="sm:col-span-2 flex items-start gap-2 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900">
               <input
                 type="checkbox"
@@ -611,12 +709,17 @@ export default function Documentacion() {
                 onChange={(event) => setGenerador({ ...generador, usarIA: event.target.checked })}
               />
               <span>
-                <span className="font-medium">Redactar con IA</span> la declaración y las propuestas a partir de tus respuestas.{' '}
-                Es un borrador: requiere tu revisión. Si la IA no responde, el documento se genera igual con tus respuestas.
+                <span className="font-medium">Redactar con IA</span>{' '}
+                {camposIA(plantillaElegida.id).length > 0
+                  ? 'la declaración y las propuestas a partir de tus respuestas, y proponer lo demás que quede pendiente.'
+                  : plantillaElegida.requiereProceso || plantillaElegida.requiereProcesosDelProyecto
+                    ? 'lo que no sale del levantamiento (responsabilidades, definiciones, criterios, registros…) a partir de los datos del proceso.'
+                    : 'una propuesta para las secciones del documento.'}{' '}
+                Lo propuesto queda marcado para tu revisión. Nombres, fechas y firmas los capturas tú. Si la IA no responde, el documento se genera igual.
               </span>
             </label>
           )}
-          {camposIA(plantillaElegida?.id ?? '').length > 0 && (
+          {plantillaElegida && (
             <div className="sm:col-span-2">
               <IndicadorUsoIA uso={usoIA} estado={estadoUsoIA} />
               {estadoUsoIA?.agotado && <p className="mt-1 text-xs text-slate-500">El documento se generará igual, con tus respuestas y sin IA.</p>}
@@ -639,6 +742,10 @@ interface EditorProps {
   retirar: () => void
   nuevaVersion: () => void
   errores: string[]
+  // «Completar con IA» (la IA propone lo pendiente; ver completarIA.ts).
+  completarIA: () => void
+  completandoIA: boolean
+  cupoAgotado: boolean
   // O17: hay cambios en pantalla que todavía no se guardaron (la IA analiza lo guardado).
   cambiosSinGuardar: boolean
   evidencias: ReturnType<typeof useApp>['state']['evidencias']
@@ -670,6 +777,13 @@ function EditorDocumento(props: EditorProps) {
   function actualizarSeccion(id: string, updates: Partial<SeccionDocumento>) {
     actualizar({ secciones: documento.secciones?.map((item) => item.id === id ? { ...item, ...updates } : item) })
   }
+
+  function reemplazarSeccion(nueva: SeccionDocumento) {
+    actualizar({ secciones: documento.secciones?.map((item) => item.id === nueva.id ? nueva : item) })
+  }
+
+  const huecosIA = edicionBloqueada ? 0 : cuantosHuecos(huecosDe(documento.secciones || []))
+  const sugerencias = sugerenciasPendientes(documento.secciones)
 
   function agregarSeccion(tipo: 'texto' | 'tabla') {
     actualizar({
@@ -704,7 +818,7 @@ function EditorDocumento(props: EditorProps) {
           <Button variant="outline" onClick={props.abrirComparacion} disabled={documento.historialVersiones.length < 1} icon={<Columns2 className="h-4 w-4" />}>Comparar versiones</Button>
           <Button variant="outline" onClick={() => props.exportar('pdf')} disabled={props.exportando !== null}>{props.exportando === 'pdf' ? 'Generando PDF…' : 'Exportar PDF'}</Button>
           <Button variant="outline" onClick={() => props.exportar('word')} disabled={props.exportando !== null}>{props.exportando === 'word' ? 'Generando Word…' : 'Exportar Word'}</Button>
-          {props.soloLectura ? null : bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : enRevision ? <Button variant="outline" onClick={props.retirar} icon={<Undo2 className="h-4 w-4" />}>Retirar de revisión</Button> : <><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
+          {props.soloLectura ? null : bloqueado ? <Button onClick={props.nuevaVersion} icon={<FilePlus2 className="h-4 w-4" />}>Crear nueva versión</Button> : enRevision ? <Button variant="outline" onClick={props.retirar} icon={<Undo2 className="h-4 w-4" />}>Retirar de revisión</Button> : <><Button variant="outline" onClick={props.completarIA} disabled={props.completandoIA || !huecosIA || props.cupoAgotado} title={props.cupoAgotado ? 'Se agotó el cupo diario de IA' : huecosIA ? 'La IA propone lo pendiente; tú lo revisas' : 'No hay campos pendientes'} icon={<Sparkles className="h-4 w-4 text-violet-600" />}>{props.completandoIA ? 'Completando con IA…' : `Completar con IA${huecosIA ? ` (${huecosIA})` : ''}`}</Button><Button variant="outline" onClick={props.guardar} icon={<Save className="h-4 w-4" />}>Guardar borrador</Button><Button onClick={props.enviar} icon={<Send className="h-4 w-4" />}>Enviar a revisión</Button></>}
         </div>
       </div>
 
@@ -712,6 +826,7 @@ function EditorDocumento(props: EditorProps) {
       {enRevision && !props.soloLectura && <div className="mb-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">Este documento está en revisión y su contenido está congelado. Para editarlo, retíralo de la revisión: al reenviarlo saldrá como una versión nueva.</div>}
       {bloqueado && !props.soloLectura && <div className="mb-5 rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">La versión aprobada está bloqueada para edición directa. Crea una nueva versión para realizar cambios.</div>}
       {props.errores.length > 0 && <div className="mb-5 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700"><p className="font-semibold">No se puede enviar a revisión:</p><p>{props.errores.join(', ')}.</p></div>}
+      {sugerencias > 0 && !edicionBloqueada && <div className="mb-5 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-violet-200 bg-violet-50 p-3 text-sm text-violet-900"><p><span className="font-semibold">La IA propuso {sugerencias} dato(s), marcados en violeta.</span> Edita lo que haga falta y acepta cada sección, o acepta todas. Mientras haya sugerencias sin revisar no se puede enviar a revisión.</p><Button size="sm" variant="outline" onClick={() => actualizar({ secciones: documento.secciones?.map(aceptarSeccion) })}>Aceptar todas</Button></div>}
       {/* La IA lee el documento desde la BD: analiza la última versión GUARDADA. */}
       <details className="mb-5">
         <summary className="cursor-pointer text-sm font-medium text-violet-700">Preevaluación con IA · analiza la última versión guardada{props.cambiosSinGuardar && <span className="ml-2 rounded-full bg-amber-50 px-2 py-0.5 text-xs font-medium text-amber-700">Cambios sin guardar</span>}</summary>
@@ -734,9 +849,10 @@ function EditorDocumento(props: EditorProps) {
               <div className="mb-3 flex items-center gap-3">
                 <span className="flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-xs font-bold text-blue-600">{index + 1}</span>
                 <input disabled={edicionBloqueada} value={seccion.titulo} onChange={(event) => actualizarSeccion(seccion.id, { titulo: event.target.value })} className="flex-1 border-0 bg-transparent text-base font-semibold text-slate-800 outline-none" placeholder="Título de la sección" />
+                {!edicionBloqueada && (seccion.sugeridoIA?.contenido || !!seccion.sugeridoIA?.celdas?.length) && <><span className="flex items-center gap-1 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-medium text-violet-700"><Sparkles className="h-3 w-3" />Sugerido por IA</span><Button variant="outline" size="sm" onClick={() => reemplazarSeccion(aceptarSeccion(seccion))}>Aceptar</Button></>}
                 {!edicionBloqueada && <Button variant="ghost" size="sm" onClick={() => actualizar({ secciones: documento.secciones?.filter((item) => item.id !== seccion.id) })} aria-label="Eliminar sección" icon={<Trash2 className="h-4 w-4 text-red-500" />} />}
               </div>
-              {seccion.tipo === 'texto' ? <textarea disabled={edicionBloqueada} rows={5} value={seccion.contenido} onChange={(event) => actualizarSeccion(seccion.id, { contenido: event.target.value })} className={`${inputClass} leading-relaxed ${seccion.contenido.includes(PENDIENTE) ? 'border-amber-300 bg-amber-50' : ''}`} /> : <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>{(seccion.filas || []).map((fila, filaIndex) => <tr key={filaIndex}>{fila.map((celda, columnaIndex) => <td key={columnaIndex} className="border border-line p-1"><input disabled={edicionBloqueada} value={celda} onChange={(event) => { const filas = seccion.filas?.map((item) => [...item]) || []; filas[filaIndex][columnaIndex] = event.target.value; actualizarSeccion(seccion.id, { filas }) }} className="w-full px-2 py-1 outline-none" placeholder={PENDIENTE} /></td>)}</tr>)}</tbody></table>{!edicionBloqueada && <Button variant="ghost" size="sm" className="mt-2" onClick={() => actualizarSeccion(seccion.id, { filas: [...(seccion.filas || []), Array(seccion.filas?.[0]?.length || 2).fill('')] })} icon={<Plus className="h-4 w-4" />}>Agregar fila</Button>}</div>}
+              {seccion.tipo === 'texto' ? <><textarea disabled={edicionBloqueada} rows={seccion.sugeridoIA?.contenido ? 8 : 5} value={seccion.contenido} onChange={(event) => reemplazarSeccion(quitarMarcaTexto({ ...seccion, contenido: event.target.value }))} className={`${inputClass} leading-relaxed ${POR_CONFIRMAR.test(seccion.contenido) && !edicionBloqueada ? 'border-amber-400 bg-amber-50' : seccion.sugeridoIA?.contenido && !edicionBloqueada ? 'border-violet-300 bg-violet-50' : seccion.contenido.includes(PENDIENTE) ? 'border-amber-300 bg-amber-50' : ''}`} />{POR_CONFIRMAR.test(seccion.contenido) && !edicionBloqueada && <p className="mt-1 text-xs font-medium text-amber-700">Contiene «[por confirmar]»: la IA no tenía ese dato. Complétalo o bórralo antes de enviar.</p>}</> : <div className="overflow-x-auto"><table className="w-full text-sm"><tbody>{(seccion.filas || []).map((fila, filaIndex) => <tr key={filaIndex}>{fila.map((celda, columnaIndex) => <td key={columnaIndex} className={`border border-line p-1 ${POR_CONFIRMAR.test(celda) && !edicionBloqueada ? 'bg-amber-100' : esCeldaSugerida(seccion, filaIndex, columnaIndex) && !edicionBloqueada ? 'bg-violet-50' : ''}`}><input disabled={edicionBloqueada} value={celda} title={esCeldaSugerida(seccion, filaIndex, columnaIndex) ? 'Sugerido por IA: edítalo o acepta la sección' : undefined} onChange={(event) => { const filas = seccion.filas?.map((item) => [...item]) || []; filas[filaIndex][columnaIndex] = event.target.value; reemplazarSeccion(quitarMarcaCelda({ ...seccion, filas }, filaIndex, columnaIndex)) }} className={`w-full bg-transparent px-2 py-1 outline-none ${esCeldaSugerida(seccion, filaIndex, columnaIndex) && !edicionBloqueada ? 'text-violet-900' : ''}`} placeholder={PENDIENTE} /></td>)}</tr>)}</tbody></table>{!edicionBloqueada && <Button variant="ghost" size="sm" className="mt-2" onClick={() => actualizarSeccion(seccion.id, { filas: [...(seccion.filas || []), Array(seccion.filas?.[0]?.length || 2).fill('')] })} icon={<Plus className="h-4 w-4" />}>Agregar fila</Button>}</div>}
               {(documento.comentarios || []).filter((item) => item.seccionId === seccion.id).map((item) => <div key={item.id} className="mt-3 flex gap-2 rounded-lg bg-violet-50 p-3 text-xs text-violet-800"><MessageSquare className="h-4 w-4 shrink-0" /><span>{item.texto}</span></div>)}
             </section>
           ))}
